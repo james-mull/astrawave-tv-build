@@ -44,11 +44,10 @@ export type SportsEvent = {
   channelId?: string;
 };
 
-const base = process.env.NEXT_PUBLIC_ASTRA_API_BASE?.replace(/\/$/, '') || '';
+const base = process.env.NEXT_PUBLIC_ASTRA_API_BASE?.replace(/\/$/, '') || '/api/astrawave';
 
 async function getJson<T>(path: string): Promise<T> {
-  if (!base) throw new Error('NEXT_PUBLIC_ASTRA_API_BASE is not configured');
-  const response = await fetch(`${base}${path}`, { next: { revalidate: 60 } });
+  const response = await fetch(`${base}${path}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`AstraWave API ${response.status}`);
   return response.json() as Promise<T>;
 }
