@@ -2,8 +2,10 @@ package com.astrawave.app.data
 
 import android.content.Context
 import com.astrawave.app.BuildConfig
+import com.google.android.gms.tasks.Task
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import com.google.firebase.auth.AuthResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -37,6 +39,16 @@ class FirebaseCloudRepository(context: Context) {
     private val db: FirebaseFirestore? get() = if (ready) FirebaseFirestore.getInstance() else null
 
     val currentUserId: String? get() = auth?.currentUser?.uid
+
+    fun signUpWithEmail(email: String, password: String): Task<AuthResult>? =
+        auth?.createUserWithEmailAndPassword(email.trim(), password)
+
+    fun signInWithEmail(email: String, password: String): Task<AuthResult>? =
+        auth?.signInWithEmailAndPassword(email.trim(), password)
+
+    fun signOut() {
+        auth?.signOut()
+    }
 
     fun saveProgress(mediaId: String, kind: String, title: String, positionMs: Long, durationMs: Long) {
         val uid = currentUserId ?: return
