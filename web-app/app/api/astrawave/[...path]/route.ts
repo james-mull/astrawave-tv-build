@@ -24,8 +24,7 @@ async function tmdb(path: string) {
 
 function mapTmdb(items: any[], kind: 'movie' | 'series'): CatalogItem[] {
   return items.slice(0, 30).map((item) => ({
-    id: String(item.id),
-    kind,
+    id: String(item.id), kind,
     title: item.title || item.name || 'Untitled',
     subtitle: item.release_date || item.first_air_date || undefined,
     posterUrl: tmdbImage(item.poster_path),
@@ -42,14 +41,7 @@ function parseM3u(text: string) {
     else if (!line.startsWith('#') && pending) {
       const attr = (name: string) => pending.match(new RegExp(`${name}="([^"]*)"`, 'i'))?.[1];
       const name = pending.split(',').pop()?.trim() || 'Channel';
-      channels.push({
-        id: attr('tvg-id') || `${channels.length}`,
-        name,
-        group: attr('group-title') || undefined,
-        logoUrl: attr('tvg-logo') || undefined,
-        sourceCount: 1,
-        url: line,
-      });
+      channels.push({ id: attr('tvg-id') || `${channels.length}`, name, group: attr('group-title') || undefined, logoUrl: attr('tvg-logo') || undefined, sourceCount: 1, url: line });
       pending = '';
     }
   }
@@ -71,65 +63,91 @@ async function sportsToday() {
   if (!res.ok) return [];
   const body = await res.json();
   return (body.events || []).slice(0, 40).map((event: any) => ({
-    id: String(event.idEvent || event.strEvent),
-    league: event.strLeague || event.strSport || 'Sports',
-    title: event.strEvent || 'Event',
-    startTime: `${event.dateEvent || date}T${event.strTime || '00:00:00'}`,
-    status: event.strStatus || 'scheduled',
-    broadcaster: event.strTVStation || undefined,
+    id: String(event.idEvent || event.strEvent), league: event.strLeague || event.strSport || 'Sports', title: event.strEvent || 'Event',
+    startTime: `${event.dateEvent || date}T${event.strTime || '00:00:00'}`, status: event.strStatus || 'scheduled', broadcaster: event.strTVStation || undefined,
   }));
 }
 
+function allowedArchiveLicense(meta: any) {
+  const license = String(meta?.licenseurl || '').toLowerCase();
+  const rights = String(meta?.rights || '').toLowerCase();
+  return license.includes('creativecommons.org') || rights.includes('public domain') || rights.includes('creative commons');
+}
+
+async function archiveSources(title: string, year?: string) {
+  const q = [`title:("${title.replace(/"/g, '')}")`, 'mediatype:(movies)'];
+  if (year) q.push(`year:${year.slice(0, 4)}`);
+  const search = await fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(q.join(' AND '))}&fl[]=identifier,title,year&rows=6&page=1&output=json`, { cache: 'no-store' });
+  if (!search.ok) return [];
+  const docs = (await search.json())?.response?.docs || [];
+  const resolved: any[] = [];
+  for (const doc of docs) {
+    const identifier = String(doc.identifier || '');
+    if (!identifier) continue;
+    const metaRes = await fetch(`https://archive.org/metadata/${encodeURIComponent(identifier)}`, { cache: 'no-store' });
+    if (!metaRes.ok) continue;
+    const meta = await metaRes.json();
+    if (!allowedArchiveLicense(meta.metadata)) continue;
+    const files = (meta.files || []).filter((f: any) => {
+      const name = String(f.name || '').toLowerCase();
+      const format = String(f.format || '').toLowerCase();
+      return (name.endsWith('.mp4') || format.includes('mpeg4') || format.includes('h.264')) && Number(f.size || 0) > 1_000_000;
+    }).slice(0, 5);
+    for (const file of files) {
+      const quality = /2160|4k/.test(file.name) ? '2160p' : /1080/.test(file.name) ? '1080p' : /720/.test(file.name) ? '720p' : /480/.test(file.name) ? '480p' : undefined;
+      resolved.push({
+        id: `${identifier}:${file.name}`,
+        provider: 'Internet Archive Open Media',
+        url: `https://archive.org/download/${encodeURIComponent(identifier)}/${encodeURIComponent(file.name)}`,
+        quality,
+        direct: true,
+        licenseLabel: meta.metadata.licenseurl || meta.metadata.rights || 'Open media',
+      });
+    }
+  }
+  return resolved.slice(0, 12);
+}
+
+async function sources(kind: string, id: string) {
+  if (kind !== 'movie' && kind !== 'series') return [];
+  const details = await tmdb(kind === 'movie' ? `/movie/${encodeURIComponent(id)}` : `/tv/${encodeURIComponent(id)}`);
+  if (!details) return [];
+  const title = details.title || details.name;
+  const date = details.release_date || details.first_air_date;
+  if (!title) return [];
+  return archiveSources(title, date);
+}
+
 async function homeRows() {
-  const [moviesRaw, showsRaw, sports] = await Promise.all([
-    tmdb('/trending/movie/day'),
-    tmdb('/trending/tv/day'),
-    sportsToday(),
-  ]);
+  const [moviesRaw, showsRaw, sports] = await Promise.all([tmdb('/trending/movie/day'), tmdb('/trending/tv/day'), sportsToday()]);
   const movies = moviesRaw ? mapTmdb(moviesRaw.results || [], 'movie') : [];
   const shows = showsRaw ? mapTmdb(showsRaw.results || [], 'series') : [];
-  return {
-    rows: [
-      { title: 'Trending Movies', items: movies.slice(0, 12) },
-      { title: 'Trending TV', items: shows.slice(0, 12) },
-      { title: 'Sports Today', items: sports.slice(0, 12).map((x: any) => ({ id: x.id, kind: 'sport', title: x.title, subtitle: x.league })) },
-    ].filter((row) => row.items.length),
-  };
+  return { rows: [
+    { title: 'Trending Movies', items: movies.slice(0, 12) },
+    { title: 'Trending TV', items: shows.slice(0, 12) },
+    { title: 'Sports Today', items: sports.slice(0, 12).map((x: any) => ({ id: x.id, kind: 'sport', title: x.title, subtitle: x.league })) },
+  ].filter((row) => row.items.length) };
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   try {
     const { path } = await context.params;
     const route = '/' + path.join('/');
-
     if (route === '/v1/home') return NextResponse.json(await homeRows());
-    if (route === '/v1/catalog/movies/trending') {
-      const data = await tmdb('/trending/movie/day');
-      return NextResponse.json(data ? mapTmdb(data.results || [], 'movie') : []);
-    }
-    if (route === '/v1/catalog/series/trending') {
-      const data = await tmdb('/trending/tv/day');
-      return NextResponse.json(data ? mapTmdb(data.results || [], 'series') : []);
-    }
+    if (route === '/v1/catalog/movies/trending') { const data = await tmdb('/trending/movie/day'); return NextResponse.json(data ? mapTmdb(data.results || [], 'movie') : []); }
+    if (route === '/v1/catalog/series/trending') { const data = await tmdb('/trending/tv/day'); return NextResponse.json(data ? mapTmdb(data.results || [], 'series') : []); }
     if (route === '/v1/search') {
-      const q = request.nextUrl.searchParams.get('q')?.trim();
-      if (!q) return NextResponse.json([]);
-      const data = await tmdb(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false`);
-      if (!data) return NextResponse.json([]);
-      const items: CatalogItem[] = (data.results || []).filter((x: any) => x.media_type === 'movie' || x.media_type === 'tv').slice(0, 30).map((x: any) => ({
-        id: String(x.id),
-        kind: x.media_type === 'movie' ? 'movie' : 'series',
-        title: x.title || x.name || 'Untitled',
-        subtitle: x.release_date || x.first_air_date || undefined,
-        posterUrl: tmdbImage(x.poster_path),
-        backdropUrl: tmdbImage(x.backdrop_path, 'w1280'),
-      }));
-      return NextResponse.json(items);
+      const q = request.nextUrl.searchParams.get('q')?.trim(); if (!q) return NextResponse.json([]);
+      const data = await tmdb(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false`); if (!data) return NextResponse.json([]);
+      return NextResponse.json((data.results || []).filter((x: any) => x.media_type === 'movie' || x.media_type === 'tv').slice(0, 30).map((x: any) => ({
+        id: String(x.id), kind: x.media_type === 'movie' ? 'movie' : 'series', title: x.title || x.name || 'Untitled',
+        subtitle: x.release_date || x.first_air_date || undefined, posterUrl: tmdbImage(x.poster_path), backdropUrl: tmdbImage(x.backdrop_path, 'w1280'),
+      })));
     }
     if (route === '/v1/live/channels' || route === '/v1/live/guide') return NextResponse.json(await liveChannels());
     if (route === '/v1/sports/today') return NextResponse.json(await sportsToday());
-    if (route.startsWith('/v1/sources/')) return NextResponse.json([]);
-
+    const sourceMatch = route.match(/^\/v1\/sources\/([^/]+)\/([^/]+)$/);
+    if (sourceMatch) return NextResponse.json(await sources(decodeURIComponent(sourceMatch[1]), decodeURIComponent(sourceMatch[2])));
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   } catch (error) {
     console.error('AstraWave API error', error);
