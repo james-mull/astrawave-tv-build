@@ -9,6 +9,10 @@ on:
       - "android-app/**"
       - ".github/workflows/build-apk.yml"
 
+concurrency:
+  group: astrwave-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
