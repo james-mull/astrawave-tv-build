@@ -10,7 +10,7 @@ on:
       - ".github/workflows/build-web.yml"
 
 concurrency:
-  group: astrwave-web-${{ github.ref }}
+  group: astrawave-web-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,8 +26,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: web-app/package-lock.json
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Build web app
