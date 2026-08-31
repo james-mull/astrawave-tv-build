@@ -8,7 +8,12 @@
     <application
         android:allowBackup="true"
         android:label="AstraWave"
-        android:theme="@style/Theme.AstraWave">
+        android:theme="@style/Theme.AstraWave"
+        android:usesCleartextTraffic="true">
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
