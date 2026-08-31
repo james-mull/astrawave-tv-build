@@ -1,5 +1,6 @@
 package com.astrawave.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -137,13 +139,13 @@ private fun Screen(destination: Destination, modifier: Modifier) {
 private fun HomeScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 30.dp)) {
         Hero()
-        MediaRow("Continue Watching", listOf("Night Drive", "Northbound", "Signal", "Afterlight"))
+        MediaRow("Continue Watching", listOf("Night Drive", "Northbound", "Signal", "Afterlight"), resolvable = true)
         SportsStrip()
-        MediaRow("Live Now", listOf("Local News", "Weather Live", "Music Live", "World News"), "LIVE")
-        MediaRow("Trending Movies", listOf("Orbit", "The Last Ridge", "Echo City", "Beyond Midnight", "Static"))
-        MediaRow("New Episodes", listOf("Frontier S2:E4", "Signal S1:E8", "Deep Water S3:E2", "Afterlight S1:E5"))
+        MediaRow("Live Now", listOf("Local News", "Weather Live", "Music Live", "World News"), badge = "LIVE")
+        MediaRow("Trending Movies", listOf("Orbit", "The Last Ridge", "Echo City", "Beyond Midnight", "Static"), resolvable = true)
+        MediaRow("New Episodes", listOf("Frontier S2:E4", "Signal S1:E8", "Deep Water S3:E2", "Afterlight S1:E5"), resolvable = true)
         MediaRow("Continue Listening", listOf("Daily Brief", "Road Mix", "Tech Weekly", "True Crime Daily"))
-        MediaRow("Watch Tonight", listOf("Family Pick", "Top Movie", "Big Game", "Hidden Gem"))
+        MediaRow("Watch Tonight", listOf("Family Pick", "Top Movie", "Big Game", "Hidden Gem"), resolvable = true)
     }
 }
 
@@ -174,7 +176,7 @@ private fun CatalogScreen(title: String, sections: List<String>) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 28.dp)) {
         PageHeader(title, "Browse everything in one clean catalog")
         sections.forEachIndexed { index, section ->
-            MediaRow(section, demoTitles(index))
+            MediaRow(section, demoTitles(index), resolvable = true)
         }
     }
 }
@@ -197,11 +199,11 @@ private fun LiveTvScreen() {
             sourceOptions.forEach { item -> FilterChip(selected = source == item, onClick = { source = item }, label = { Text(item) }) }
         }
         StatusCard("AstraWave Free", "842 healthy channels", Success)
-        MediaRow("Recently Watched", listOf("CBS Local", "LiveNOW", "Weather", "Sports Central", "News 24"), "LIVE")
-        MediaRow("Favorites", listOf("Local 7", "Movie Channel", "Kids TV", "World News", "Music TV"), "LIVE")
-        MediaRow("Sports", listOf("Sports Central", "College Sports", "Racing", "Football", "Fight Night"), "LIVE")
-        MediaRow("News & Local", listOf("Local News", "National News", "Weather", "Business", "World News"), "LIVE")
-        MediaRow("Entertainment", listOf("Comedy TV", "Classic TV", "Reality", "Movies", "Lifestyle"), "LIVE")
+        MediaRow("Recently Watched", listOf("CBS Local", "LiveNOW", "Weather", "Sports Central", "News 24"), badge = "LIVE")
+        MediaRow("Favorites", listOf("Local 7", "Movie Channel", "Kids TV", "World News", "Music TV"), badge = "LIVE")
+        MediaRow("Sports", listOf("Sports Central", "College Sports", "Racing", "Football", "Fight Night"), badge = "LIVE")
+        MediaRow("News & Local", listOf("Local News", "National News", "Weather", "Business", "World News"), badge = "LIVE")
+        MediaRow("Entertainment", listOf("Comedy TV", "Classic TV", "Reality", "Movies", "Lifestyle"), badge = "LIVE")
     }
 }
 
@@ -253,8 +255,8 @@ private fun AudioScreen() {
         PageHeader("Music & Podcasts", "Music, podcasts, video podcasts and radio")
         MediaRow("Continue Listening", listOf("Daily Brief", "Tech Weekly", "True Crime Daily", "Road Mix"))
         MediaRow("Made For You", listOf("Focus Mix", "Road Trip", "Chill", "Workout", "Throwbacks"))
-        MediaRow("Video Podcasts", listOf("The Interview", "Sports Desk", "Tech Talk", "Longform"), "VIDEO")
-        MediaRow("Radio", listOf("Local Radio", "Sports Radio", "News Radio", "Classic Rock", "International"), "LIVE")
+        MediaRow("Video Podcasts", listOf("The Interview", "Sports Desk", "Tech Talk", "Longform"), badge = "VIDEO")
+        MediaRow("Radio", listOf("Local Radio", "Sports Radio", "News Radio", "Classic Rock", "International"), badge = "LIVE")
     }
 }
 
@@ -262,7 +264,7 @@ private fun AudioScreen() {
 private fun DiscoverScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 28.dp)) {
         PageHeader("Discover", "Find something great without endless scrolling")
-        MediaRow("Watch Tonight", listOf("Best Movie", "Big Game", "New Episode", "Family Pick", "Something Different"))
+        MediaRow("Watch Tonight", listOf("Best Movie", "Big Game", "New Episode", "Family Pick", "Something Different"), resolvable = true)
         MediaRow("By Mood", listOf("Funny", "Intense", "Feel Good", "Mind-Bending", "Easy Watch"))
         MediaRow("Quick Picks", listOf("Under 90 Min", "One Episode", "Live Now", "Podcast", "Music Mix"))
     }
@@ -284,7 +286,11 @@ private fun SearchScreen() {
         Spacer(Modifier.height(20.dp))
         Text(if (query.isBlank()) "Popular searches" else "Results for “$query”", color = Primary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
-        MediaRow("Across AstraWave", listOf("Movies", "TV Shows", "Live Channels", "Sports", "Music", "Podcasts", "People", "Collections"))
+        if (query.isNotBlank()) {
+            MediaRow("Search this title", listOf(query), resolvable = true)
+        } else {
+            MediaRow("Across AstraWave", listOf("Movies", "TV Shows", "Live Channels", "Sports", "Music", "Podcasts", "People", "Collections"))
+        }
     }
 }
 
@@ -362,11 +368,11 @@ private fun EventRow(text: String) {
 }
 
 @Composable
-private fun MediaRow(title: String, items: List<String>, badge: String? = null) {
+private fun MediaRow(title: String, items: List<String>, badge: String? = null, resolvable: Boolean = false) {
     Column(Modifier.padding(top = 18.dp)) {
         SectionTitle(title)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items.forEach { MediaCard(it, badge) }
+            items.forEach { MediaCard(it, badge, resolvable) }
         }
     }
 }
@@ -381,8 +387,18 @@ private fun SectionTitle(title: String) {
 }
 
 @Composable
-private fun MediaCard(title: String, badge: String?) {
-    Column(Modifier.width(154.dp).clickable { }) {
+private fun MediaCard(title: String, badge: String?, resolvable: Boolean) {
+    val context = LocalContext.current
+    Column(
+        Modifier.width(154.dp).clickable {
+            if (resolvable) {
+                context.startActivity(
+                    Intent(context, TitleDetailsActivity::class.java)
+                        .putExtra(TitleDetailsActivity.EXTRA_TITLE, title)
+                )
+            }
+        }
+    ) {
         Box(Modifier.fillMaxWidth().height(210.dp).background(Brush.verticalGradient(listOf(Color(0xFF252C3B), Color(0xFF171A22))), RoundedCornerShape(17.dp))) {
             Text(title.take(1), color = Color.White.copy(alpha = 0.12f), fontSize = 94.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.Center))
             if (badge != null) {
@@ -391,7 +407,7 @@ private fun MediaCard(title: String, badge: String?) {
         }
         Spacer(Modifier.height(8.dp))
         Text(title, color = Primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("AstraWave", color = Muted, fontSize = 11.sp)
+        Text(if (resolvable) "Find sources" else "AstraWave", color = if (resolvable) Accent else Muted, fontSize = 11.sp)
     }
 }
 
