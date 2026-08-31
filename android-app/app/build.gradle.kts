@@ -14,9 +14,21 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        val firebaseApiKey = providers.gradleProperty("ASTRAWAVE_FIREBASE_API_KEY").orNull ?: ""
+        val firebaseAppId = providers.gradleProperty("ASTRAWAVE_FIREBASE_APP_ID").orNull ?: ""
+        val firebaseProjectId = providers.gradleProperty("ASTRAWAVE_FIREBASE_PROJECT_ID").orNull ?: ""
+        val firebaseSenderId = providers.gradleProperty("ASTRAWAVE_FIREBASE_SENDER_ID").orNull ?: ""
+        buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"$firebaseSenderId\"")
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -37,5 +49,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.6.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.6.1")
     implementation("androidx.media3:media3-ui:1.6.1")
+
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
