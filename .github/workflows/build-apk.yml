@@ -1,20 +1,20 @@
-name: Build AstraWave APK
+name: Build AstraWave Android App
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/android-unified-app
+    paths:
+      - "android-app/**"
+      - ".github/workflows/build-apk.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download project
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Extract source
-        run: |
-          mkdir project
-          unzip -q AstraWave-TV-source.zip -d project
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -26,21 +26,20 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android components
-        run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
-      - name: Build APK
-        working-directory: project
-        run: gradle --no-daemon -Pkotlin.jvm.target.validation.mode=warning assembleDebug
+      - name: Build debug APK
+        working-directory: android-app
+        run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AstraWave-debug-apk
-          path: project/app/build/outputs/apk/debug/app-debug.apk
+          name: AstraWave-Android-debug
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
