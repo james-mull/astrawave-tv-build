@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import com.astrawave.app.core.ScrapeRequest
 import com.astrawave.app.data.ResolvedSource
 import com.astrawave.app.data.SourceDiscoveryRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val DetailsBg = Color(0xFF080A0F)
 private val DetailsPanel = Color(0xFF141924)
@@ -79,7 +81,9 @@ private fun TitleDetailsScreen(
         loading = true
         error = null
         sources = runCatching {
-            repository.discover(ScrapeRequest(title = title, year = year))
+            withContext(Dispatchers.IO) {
+                repository.discover(ScrapeRequest(title = title, year = year))
+            }
         }.onFailure {
             error = it.message ?: "Source discovery failed"
         }.getOrDefault(emptyList())

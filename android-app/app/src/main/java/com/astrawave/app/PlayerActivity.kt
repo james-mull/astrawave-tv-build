@@ -1,8 +1,11 @@
 package com.astrawave.app
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
@@ -15,13 +18,22 @@ class PlayerActivity : ComponentActivity() {
         val playerView = PlayerView(this).apply { useController = true }
         setContentView(playerView)
 
-        if (!streamUrl.isNullOrBlank()) {
-            player = ExoPlayer.Builder(this).build().also { exo ->
-                playerView.player = exo
-                exo.setMediaItem(MediaItem.fromUri(streamUrl))
-                exo.prepare()
-                exo.playWhenReady = true
-            }
+        if (streamUrl.isNullOrBlank()) {
+            Toast.makeText(this, "No playable stream was provided.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        player = ExoPlayer.Builder(this).build().also { exo ->
+            playerView.player = exo
+            exo.addListener(object : Player.Listener {
+                override fun onPlayerError(error: PlaybackException) {
+                    Toast.makeText(this@PlayerActivity, "This stream could not be played.", Toast.LENGTH_LONG).show()
+                }
+            })
+            exo.setMediaItem(MediaItem.fromUri(streamUrl))
+            exo.prepare()
+            exo.playWhenReady = true
         }
     }
 
