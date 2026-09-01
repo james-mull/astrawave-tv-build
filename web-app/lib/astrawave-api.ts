@@ -7,6 +7,7 @@ export type CatalogItem = {
   subtitle?: string;
   posterUrl?: string;
   backdropUrl?: string;
+  streamUrl?: string;
   progressPercent?: number;
 };
 
@@ -29,6 +30,7 @@ export type LiveChannel = {
   name: string;
   group?: string;
   logoUrl?: string;
+  streamUrl?: string;
   now?: string;
   next?: string;
   sourceCount: number;

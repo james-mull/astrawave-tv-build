@@ -7,6 +7,7 @@ type CatalogItem = {
   subtitle?: string;
   posterUrl?: string;
   backdropUrl?: string;
+  streamUrl?: string;
 };
 
 const tmdbImage = (path?: string | null, size = 'w500') => path ? `https://image.tmdb.org/t/p/${size}${path}` : undefined;
@@ -41,7 +42,7 @@ function parseM3u(text: string) {
     else if (!line.startsWith('#') && pending) {
       const attr = (name: string) => pending.match(new RegExp(`${name}="([^"]*)"`, 'i'))?.[1];
       const name = pending.split(',').pop()?.trim() || 'Channel';
-      channels.push({ id: attr('tvg-id') || `${channels.length}`, name, group: attr('group-title') || undefined, logoUrl: attr('tvg-logo') || undefined, sourceCount: 1, url: line });
+      channels.push({ id: attr('tvg-id') || `${channels.length}`, name, group: attr('group-title') || undefined, logoUrl: attr('tvg-logo') || undefined, sourceCount: 1, streamUrl: line });
       pending = '';
     }
   }
@@ -119,12 +120,13 @@ async function sources(kind: string, id: string) {
 }
 
 async function homeRows() {
-  const [moviesRaw, showsRaw, sports] = await Promise.all([tmdb('/trending/movie/day'), tmdb('/trending/tv/day'), sportsToday()]);
+  const [moviesRaw, showsRaw, live, sports] = await Promise.all([tmdb('/trending/movie/day'), tmdb('/trending/tv/day'), liveChannels(), sportsToday()]);
   const movies = moviesRaw ? mapTmdb(moviesRaw.results || [], 'movie') : [];
   const shows = showsRaw ? mapTmdb(showsRaw.results || [], 'series') : [];
   return { rows: [
     { title: 'Trending Movies', items: movies.slice(0, 12) },
     { title: 'Trending TV', items: shows.slice(0, 12) },
+    { title: 'Live TV', items: live.slice(0, 24).map((x: any) => ({ id: x.id, kind: 'live', title: x.name, subtitle: x.group || 'Live channel', posterUrl: x.logoUrl, streamUrl: x.streamUrl })) },
     { title: 'Sports Today', items: sports.slice(0, 12).map((x: any) => ({ id: x.id, kind: 'sport', title: x.title, subtitle: x.league })) },
   ].filter((row) => row.items.length) };
 }
