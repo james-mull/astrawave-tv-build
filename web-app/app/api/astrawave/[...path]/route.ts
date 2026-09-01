@@ -8,6 +8,24 @@ type CatalogItem = {
   posterUrl?: string;
   backdropUrl?: string;
   streamUrl?: string;
+  sources?: LiveStreamSource[];
+};
+
+type LiveStreamSource = {
+  id: string;
+  provider: string;
+  streamUrl: string;
+  group?: string;
+};
+
+type ParsedLiveChannel = {
+  id: string;
+  tvgId?: string;
+  name: string;
+  group?: string;
+  logoUrl?: string;
+  streamUrl: string;
+  sourceName: string;
 };
 
 const tmdbImage = (path?: string | null, size = 'w500') => path ? `https://image.tmdb.org/t/p/${size}${path}` : undefined;
@@ -33,29 +51,88 @@ function mapTmdb(items: any[], kind: 'movie' | 'series'): CatalogItem[] {
   }));
 }
 
-function parseM3u(text: string) {
-  const channels: any[] = [];
+function parseM3u(text: string, sourceName: string) {
+  const channels: ParsedLiveChannel[] = [];
   const lines = text.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   let pending = '';
   for (const line of lines) {
     if (line.startsWith('#EXTINF')) pending = line;
     else if (!line.startsWith('#') && pending) {
       const attr = (name: string) => pending.match(new RegExp(`${name}="([^"]*)"`, 'i'))?.[1];
+      const tvgId = attr('tvg-id') || undefined;
       const name = pending.split(',').pop()?.trim() || 'Channel';
-      channels.push({ id: attr('tvg-id') || `${channels.length}`, name, group: attr('group-title') || undefined, logoUrl: attr('tvg-logo') || undefined, sourceCount: 1, streamUrl: line });
+      channels.push({ id: tvgId || `${sourceName}:${channels.length}`, tvgId, name, group: attr('group-title') || undefined, logoUrl: attr('tvg-logo') || undefined, streamUrl: line, sourceName });
       pending = '';
     }
   }
   return channels;
 }
 
-const freeLiveM3uUrl = 'https://iptv-org.github.io/iptv/index.m3u';
+const freeLiveM3uUrls = [
+  'https://iptv-org.github.io/iptv/index.m3u',
+  'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
+];
+
+function playlistUrls() {
+  const configured = [
+    process.env.ASTRAWAVE_LIVE_M3U_URL,
+    ...(process.env.ASTRAWAVE_LIVE_M3U_URLS || '').split(/[,\n]/),
+  ].map((url) => url?.trim()).filter(Boolean) as string[];
+  return Array.from(new Set(configured.length ? configured : freeLiveM3uUrls));
+}
+
+function playlistLabel(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^raw\.githubusercontent\.com$/i, 'githubusercontent.com');
+  } catch {
+    return 'Playlist';
+  }
+}
+
+function normalizeChannelName(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/\b(uhd|fhd|hd|sd|4k|hevc|h\.?26[45]|60fps|backup|alt|east|west|central|us|usa)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function mergeLiveChannels(channels: ParsedLiveChannel[]) {
+  const groups = new Map<string, ParsedLiveChannel[]>();
+  for (const channel of channels) {
+    const key = channel.tvgId ? `id:${channel.tvgId.toLowerCase()}` : `name:${normalizeChannelName(channel.name) || channel.id}`;
+    groups.set(key, [...(groups.get(key) || []), channel]);
+  }
+  return Array.from(groups.values()).map((items) => {
+    const preferred = items.find((item) => item.tvgId) || items[0];
+    const sources = items.map((item, index) => ({
+      id: `${preferred.id}:${index}`,
+      provider: item.sourceName,
+      streamUrl: item.streamUrl,
+      group: item.group,
+    }));
+    return {
+      id: preferred.tvgId || normalizeChannelName(preferred.name) || preferred.id,
+      name: preferred.name,
+      group: preferred.group || items.find((item) => item.group)?.group,
+      logoUrl: preferred.logoUrl || items.find((item) => item.logoUrl)?.logoUrl,
+      streamUrl: sources[0]?.streamUrl,
+      sources,
+      sourceCount: sources.length,
+    };
+  });
+}
 
 async function liveChannels() {
-  const url = process.env.ASTRAWAVE_LIVE_M3U_URL || freeLiveM3uUrl;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Live feed ${res.status}`);
-  return parseM3u(await res.text());
+  const results = await Promise.allSettled(playlistUrls().map(async (url) => {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Live feed ${res.status}`);
+    return parseM3u(await res.text(), playlistLabel(url));
+  }));
+  const channels = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
+  if (!channels.length) throw new Error('No live channels loaded');
+  return mergeLiveChannels(channels);
 }
 
 async function sportsToday() {
@@ -127,7 +204,7 @@ async function homeRows() {
   return { rows: [
     { title: 'Trending Movies', items: movies.slice(0, 12) },
     { title: 'Trending TV', items: shows.slice(0, 12) },
-    { title: 'Live TV', items: live.slice(0, 24).map((x: any) => ({ id: x.id, kind: 'live', title: x.name, subtitle: x.group || 'Live channel', posterUrl: x.logoUrl, streamUrl: x.streamUrl })) },
+    { title: 'Live TV', items: live.slice(0, 24).map((x: any) => ({ id: x.id, kind: 'live', title: x.name, subtitle: `${x.group || 'Live channel'} • ${x.sourceCount} source${x.sourceCount === 1 ? '' : 's'}`, posterUrl: x.logoUrl, streamUrl: x.streamUrl, sources: x.sources })) },
     { title: 'Sports Today', items: sports.slice(0, 12).map((x: any) => ({ id: x.id, kind: 'sport', title: x.title, subtitle: x.league })) },
   ].filter((row) => row.items.length) };
 }

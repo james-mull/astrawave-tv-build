@@ -48,7 +48,12 @@ firebase deploy --only firestore:rules,firestore:indexes --project astrawave
 
 ## Free live TV data
 
-The web app uses `https://iptv-org.github.io/iptv/index.m3u` as its free default live TV playlist when `ASTRAWAVE_LIVE_M3U_URL` is empty. Set `ASTRAWAVE_LIVE_M3U_URL` only when you want to replace it with your own authorized M3U feed.
+The web app uses public free playlist fallbacks when no live TV env var is set:
+
+- `https://iptv-org.github.io/iptv/index.m3u`
+- `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8`
+
+Set `ASTRAWAVE_LIVE_M3U_URL` to replace the defaults with one authorized M3U feed, or set `ASTRAWAVE_LIVE_M3U_URLS` to a comma-separated list of authorized M3U feeds. AstraWave merges matching channels and keeps multiple stream candidates so viewers can try another source when one link is unavailable.
 
 ## Builds
 

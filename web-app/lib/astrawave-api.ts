@@ -8,7 +8,15 @@ export type CatalogItem = {
   posterUrl?: string;
   backdropUrl?: string;
   streamUrl?: string;
+  sources?: LiveStreamSource[];
   progressPercent?: number;
+};
+
+export type LiveStreamSource = {
+  id: string;
+  provider: string;
+  streamUrl: string;
+  group?: string;
 };
 
 export type SourceCandidate = {
@@ -31,6 +39,7 @@ export type LiveChannel = {
   group?: string;
   logoUrl?: string;
   streamUrl?: string;
+  sources?: LiveStreamSource[];
   now?: string;
   next?: string;
   sourceCount: number;
