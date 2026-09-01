@@ -1,0 +1,6 @@
+# Firebase Android App public configuration
+# Copy these into android-app/gradle.properties locally, or set them as CI environment variables.
+ASTRAWAVE_FIREBASE_API_KEY=
+ASTRAWAVE_FIREBASE_APP_ID=
+ASTRAWAVE_FIREBASE_PROJECT_ID=astrawave
+ASTRAWAVE_FIREBASE_SENDER_ID=

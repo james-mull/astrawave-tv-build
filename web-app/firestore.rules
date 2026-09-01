@@ -3,14 +3,97 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function owns(uid) { return signedIn() && request.auth.uid == uid; }
+    function onlyKeys(keys) { return request.resource.data.keys().hasOnly(keys); }
+    function hasUpdatedAt() { return request.resource.data.updatedAt is timestamp; }
+
+    function validProfile() {
+      return onlyKeys(['displayName', 'avatarUrl', 'kidsMode', 'createdAt', 'updatedAt']) &&
+        (!('displayName' in request.resource.data) || request.resource.data.displayName is string) &&
+        (!('avatarUrl' in request.resource.data) || request.resource.data.avatarUrl is string) &&
+        (!('kidsMode' in request.resource.data) || request.resource.data.kidsMode is bool);
+    }
+
+    function validWatchlist(docId) {
+      return onlyKeys(['mediaId', 'kind', 'title', 'posterUrl', 'year', 'updatedAt', 'createdAt']) &&
+        request.resource.data.mediaId == docId &&
+        request.resource.data.kind is string &&
+        request.resource.data.title is string &&
+        hasUpdatedAt();
+    }
+
+    function validProgress(docId) {
+      return onlyKeys(['mediaId', 'kind', 'title', 'positionMs', 'durationMs', 'updatedAt', 'createdAt']) &&
+        request.resource.data.mediaId == docId &&
+        request.resource.data.kind is string &&
+        request.resource.data.title is string &&
+        request.resource.data.positionMs is number &&
+        request.resource.data.durationMs is number &&
+        request.resource.data.positionMs >= 0 &&
+        request.resource.data.durationMs >= 0 &&
+        hasUpdatedAt();
+    }
+
+    function validFavoriteTeam(docId) {
+      return onlyKeys(['teamId', 'name', 'league', 'logoUrl', 'updatedAt', 'createdAt']) &&
+        request.resource.data.teamId == docId &&
+        request.resource.data.name is string &&
+        (!('league' in request.resource.data) || request.resource.data.league is string || request.resource.data.league == null) &&
+        hasUpdatedAt();
+    }
+
+    function validSettings() {
+      return request.resource.data is map && hasUpdatedAt();
+    }
+
+    function validSource() {
+      return onlyKeys(['name', 'type', 'enabled', 'priority', 'config', 'updatedAt', 'createdAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.type is string &&
+        request.resource.data.enabled is bool &&
+        (!('priority' in request.resource.data) || request.resource.data.priority is number) &&
+        (!('config' in request.resource.data) || request.resource.data.config is map) &&
+        hasUpdatedAt();
+    }
 
     match /profiles/{uid} {
-      allow read, create, update: if owns(uid);
+      allow read: if owns(uid);
+      allow create, update: if owns(uid) && validProfile();
       allow delete: if false;
     }
 
-    match /users/{uid}/{subcollection}/{docId} {
-      allow read, write: if owns(uid) && subcollection in ['watchlist', 'progress', 'favoriteTeams', 'settings', 'sources'];
+    match /users/{uid} {
+      allow read, create, update: if owns(uid) && validProfile();
+      allow delete: if false;
+
+      match /watchlist/{docId} {
+        allow read: if owns(uid);
+        allow create, update: if owns(uid) && validWatchlist(docId);
+        allow delete: if owns(uid);
+      }
+
+      match /progress/{docId} {
+        allow read: if owns(uid);
+        allow create, update: if owns(uid) && validProgress(docId);
+        allow delete: if owns(uid);
+      }
+
+      match /favoriteTeams/{docId} {
+        allow read: if owns(uid);
+        allow create, update: if owns(uid) && validFavoriteTeam(docId);
+        allow delete: if owns(uid);
+      }
+
+      match /settings/{docId} {
+        allow read: if owns(uid);
+        allow create, update: if owns(uid) && validSettings();
+        allow delete: if owns(uid);
+      }
+
+      match /sources/{docId} {
+        allow read: if owns(uid);
+        allow create, update: if owns(uid) && validSource();
+        allow delete: if owns(uid);
+      }
     }
 
     match /entitlements/{uid} {

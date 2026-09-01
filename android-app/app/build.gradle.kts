@@ -15,10 +15,18 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        val firebaseApiKey = providers.gradleProperty("ASTRAWAVE_FIREBASE_API_KEY").orNull ?: ""
-        val firebaseAppId = providers.gradleProperty("ASTRAWAVE_FIREBASE_APP_ID").orNull ?: ""
-        val firebaseProjectId = providers.gradleProperty("ASTRAWAVE_FIREBASE_PROJECT_ID").orNull ?: ""
-        val firebaseSenderId = providers.gradleProperty("ASTRAWAVE_FIREBASE_SENDER_ID").orNull ?: ""
+        val firebaseApiKey = providers.gradleProperty("ASTRAWAVE_FIREBASE_API_KEY").orNull
+            ?: providers.environmentVariable("ASTRAWAVE_FIREBASE_API_KEY").orNull
+            ?: ""
+        val firebaseAppId = providers.gradleProperty("ASTRAWAVE_FIREBASE_APP_ID").orNull
+            ?: providers.environmentVariable("ASTRAWAVE_FIREBASE_APP_ID").orNull
+            ?: ""
+        val firebaseProjectId = providers.gradleProperty("ASTRAWAVE_FIREBASE_PROJECT_ID").orNull
+            ?: providers.environmentVariable("ASTRAWAVE_FIREBASE_PROJECT_ID").orNull
+            ?: ""
+        val firebaseSenderId = providers.gradleProperty("ASTRAWAVE_FIREBASE_SENDER_ID").orNull
+            ?: providers.environmentVariable("ASTRAWAVE_FIREBASE_SENDER_ID").orNull
+            ?: ""
         buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
