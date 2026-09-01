@@ -49,9 +49,10 @@ function parseM3u(text: string) {
   return channels;
 }
 
+const freeLiveM3uUrl = 'https://iptv-org.github.io/iptv/index.m3u';
+
 async function liveChannels() {
-  const url = process.env.ASTRAWAVE_LIVE_M3U_URL;
-  if (!url) return [];
+  const url = process.env.ASTRAWAVE_LIVE_M3U_URL || freeLiveM3uUrl;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Live feed ${res.status}`);
   return parseM3u(await res.text());

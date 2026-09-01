@@ -46,6 +46,10 @@ Deploy Firestore rules from `web-app`:
 firebase deploy --only firestore:rules,firestore:indexes --project astrawave
 ```
 
+## Free live TV data
+
+The web app uses `https://iptv-org.github.io/iptv/index.m3u` as its free default live TV playlist when `ASTRAWAVE_LIVE_M3U_URL` is empty. Set `ASTRAWAVE_LIVE_M3U_URL` only when you want to replace it with your own authorized M3U feed.
+
 ## Builds
 
 Web:
