@@ -1,0 +1,27 @@
+name: Check AstraWave Free TV
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 9 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check rights-gated streams and build playlist
+        run: python astrwaave-free-tv/check_free_tv.py
+      - name: Commit refreshed status and playlist
+        run: |
+          git config user.name "astrawave-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add astrwaave-free-tv/status.json astrwaave-free-tv/astrawave-free-tv.m3u
+          git diff --cached --quiet || git commit -m "Refresh AstraWave Free TV health"
+          git push
