@@ -8,6 +8,8 @@ Rebuild the current AstraWave client around the Nuvio media core while preservin
 - Tuvora-style onboarding and simplicity
 - TiviMate-quality Live TV and EPG
 - AstraWave sports, Free TV, cloud sync, music/podcasts, profiles, and source aggregation
+- a premium, modern, visually consistent UI across phone, tablet, TV, Fire TV, and web
+- a best-in-class intelligence layer that unifies discovery, playback, sports, audio, IPTV, addons, personal media, and household features
 
 The current working Firebase-ready AstraWave beta remains intact on the existing branch while this rebuild is developed on `feature/nuvio-core-rebuild`.
 
@@ -48,8 +50,381 @@ The rebuild must retain or improve all of these AstraWave capabilities:
 - video podcasts
 - background audio / mini-player
 - AstraWave+ entitlements
-- QR TV setup/login roadmap
-- future multiview, DVR for authorized sources, alerts, AI assistant
+- QR TV setup/login
+- multiview
+- authorized DVR/catch-up roadmap
+- alerts
+- AI assistant
+- backup/restore
+- device handoff
+- phone-as-remote
+- diagnostics dashboard
+- automatic playlist cleanup
+- parental controls
+- privacy/local-only mode
+
+## Best-in-class differentiators
+
+### Universal Watch
+Every playable item gets one consistent primary action. AstraWave checks all eligible configured sources, pre-validates them, ranks candidates, and opens the best healthy option when Auto Best is enabled. Ask Every Time remains available.
+
+Candidate sources can include:
+- My IPTV
+- AstraWave Free TV
+- compatible addons
+- personal media
+- authorized cloud/debrid
+- other supported eligible providers
+
+Ranking factors:
+1. authorization/eligibility
+2. user preference
+3. health
+4. latency
+5. quality
+6. codec/device compatibility
+7. bitrate/data preference
+8. direct-play support
+9. backup availability
+
+### Universal Search
+One search surface across Movies, Shows, Episodes, People, Collections, Live Channels, EPG, Sports, Teams, Music, Podcasts, Video Podcasts, Radio, personal media, addon catalogs, and My Stuff.
+
+### Adaptive Smart Home
+Home changes intelligently using time of day, day of week, profile, recent activity, unfinished media, upcoming sports, favorite teams, live programming, and household context.
+
+Examples:
+- Morning: news, weather, podcasts, radio
+- Afternoon: Live TV, sports starting soon, Continue Listening
+- Evening: Watch Tonight, new episodes, movies, live sports
+- Weekend: Family Night, sports, binge suggestions, longer movies
+
+### AI Entertainment Assistant
+Natural-language assistant grounded in content the user can actually access.
+
+Examples:
+- “Find me a funny movie under two hours.”
+- “What NBA games can I watch tonight?”
+- “Show me something the whole family will like.”
+- “Find a 90s thriller I haven’t watched.”
+- “What live news is available right now?”
+
+### Household Recommendation Engine
+Profiles remain separate while shared modes such as Family Night combine selected profiles, respect age restrictions, avoid recently watched titles, and rank content by likely group satisfaction.
+
+### Automatic Stream Failover
+For eligible live streams, detect failures and automatically switch to a healthy backup where possible while preserving playback context.
+
+### Pre-play Source Validation
+Before presenting a source as playable, verify reachability, protocol compatibility, short-lived health state, and latency where practical.
+
+### Playback Intelligence
+Auto-select resolution, HDR/SDR, codec, bitrate, audio format, audio language, subtitles, and data usage based on device capabilities, network quality, and profile preferences.
+
+### Universal Continue Watching / Listening
+Unified progress system for movies, episodes, eligible personal media, podcasts, video podcasts, and long-form audio.
+
+### Catalog Builder
+Users can build manual or smart catalogs such as 90s Thrillers, Oscar Winners, Mind-Bending Movies, Kids Saturday, Family Night, My Team Games, 90-Minute Movies, Hidden Gems, and Unwatched Favorites.
+
+### Advanced Stremio Catalog Control
+Addon catalogs can be hidden, reordered, pinned to Home, grouped, locally renamed, searched, and restricted by profile.
+
+### Optional Trakt-style History / Scrobbling
+Support external watch history, lists, ratings, watched state, and progress without replacing AstraWave’s native Firebase/local history.
+
+### Advanced Subtitles
+Preferred languages, automatic selection, delay, size, position, style, background opacity, and remembered settings per profile.
+
+### Picture-in-Picture and Background Playback
+Picture-in-Picture for eligible video/live content and persistent background audio/mini-player for music, radio, and podcasts where the platform permits.
+
+### Device Handoff
+Continue on TV, Continue on Phone, and Continue on Web with title and playback position transfer.
+
+### Phone as Remote
+Phone can act as TV keyboard, search interface, channel browser, queue controller, source manager, and remote.
+
+### Backup / Restore
+Back up profiles, playlists, addon setup, channel mappings, favorites, settings, and layouts, then restore to another supported device.
+
+### Diagnostics Dashboard
+Power-user dashboard for playlist health, failing channels, EPG coverage, addon health, source latency, API status, Firebase sync, Free TV last check, and last successful refresh.
+
+### Parental Controls
+Kids profiles, PIN protection, age restrictions, Live TV group restrictions, settings lock, and optional quiet/bedtime restrictions.
+
+### Privacy Mode
+Optional local-only profiles with no cloud history or cloud progress sync.
+
+## Premium UI / UX Design System
+
+Beautiful, clean UI is a release requirement. Functionality is not considered complete if it works but looks unfinished, cluttered, inconsistent, or confusing.
+
+### Visual identity
+- Premium dark-first design
+- AstraWave-owned visual identity rather than stock Nuvio styling
+- cinematic artwork with controlled gradients and overlays
+- restrained accent usage
+- high contrast without harsh visual noise
+- modern typography with clear hierarchy
+- rounded, consistent component geometry
+- intentional whitespace
+- minimal borders
+- subtle depth/elevation where useful
+- polished icons with one coherent icon family
+- no developer-looking raw URLs, IDs, debug labels, or technical jargon in normal user flows
+
+### Design tokens
+Create shared tokens for:
+- spacing
+- corner radius
+- typography sizes/weights
+- elevation
+- focus scale
+- opacity
+- animation duration/easing
+- card aspect ratios
+- artwork sizes
+- grid gaps
+- safe areas
+- content widths
+
+No screen should invent its own unrelated spacing or card system.
+
+### Typography
+Use a small, consistent type scale:
+- Display / hero
+- Page title
+- Section title
+- Card title
+- Body
+- Metadata
+- Caption
+
+Priorities:
+- readable from TV distance
+- clean on mobile
+- no oversized blocks of text
+- metadata visually subordinate to titles/actions
+
+### Artwork treatment
+- high-quality poster/backdrop/logo hierarchy
+- consistent fallback artwork
+- skeleton placeholders during load
+- smart cropping
+- gradient scrims to preserve readability
+- avoid stretched or low-resolution art
+- cache frequently used artwork
+- logos where they improve scanning, especially channels and sports teams
+
+### Home UI
+Home should feel cinematic but not crowded.
+
+Requirements:
+- one strong hero region
+- concise hero metadata
+- obvious primary Watch action
+- horizontal content rows with consistent spacing
+- row titles aligned consistently
+- dynamic rows hidden when empty
+- Continue Watching includes visible progress
+- live cards identify Live state and current program
+- sports cards clearly show teams, time/status, broadcaster availability, and Watch state
+- avoid overwhelming users with too many rows before personalization
+
+### Card system
+Standardized card families:
+- movie poster
+- TV poster
+- landscape feature
+- live channel
+- EPG program
+- sports event
+- team
+- podcast
+- podcast episode
+- radio station
+- music/album/playlist
+- source/provider
+
+Cards should share consistent focus, press, loading, unavailable, and selected states.
+
+### Motion and interaction
+Motion should make the app feel premium without slowing it down.
+
+Use:
+- subtle focus scaling on TV
+- smooth row scrolling
+- short crossfades
+- hero transitions
+- mini-player expansion
+- source-switch transitions
+- loading skeletons instead of blank screens
+
+Avoid:
+- excessive bouncing
+- long transitions
+- distracting autoplay motion
+- animations that delay navigation
+
+### TV / Fire TV UX
+TV must be designed separately rather than merely stretching the phone UI.
+
+Requirements:
+- D-pad-first navigation
+- highly visible focus state
+- predictable focus movement
+- focus never disappears
+- no unreachable controls
+- large readable text
+- generous TV-safe spacing
+- collapsed navigation rail that expands on focus
+- fast Back behavior
+- minimal dialogs requiring typing
+- QR setup for credentials when possible
+- mini-guide while watching
+- channel surfing optimized for remote use
+- focus restoration after returning from player/details
+
+### Phone UI
+- bottom navigation for primary destinations where appropriate
+- thumb-friendly controls
+- compact metadata
+- swipe/scroll behavior that feels native
+- Picture-in-Picture support where eligible
+- mini-player that does not obstruct navigation
+- one-handed source/settings flows where practical
+
+### Tablet UI
+- adaptive navigation rail
+- larger grids
+- master/detail layouts where valuable
+- no phone-width content floating awkwardly in a large screen
+
+### Web UI
+- responsive desktop/tablet/mobile breakpoints
+- keyboard navigation
+- hover and focus states
+- media rows that take advantage of wider screens
+- consistent visual design with Android rather than a separate-looking product
+
+### Live TV / Guide UI
+Target TiviMate/Xfinity-level usability.
+
+Requirements:
+- clean channel column
+- clear current-time indicator
+- strong current-program state
+- readable program blocks
+- Now/Next information
+- favorite/category filters
+- channel logos without clutter
+- fast vertical/horizontal navigation
+- mini-guide overlay
+- full-screen player with unobtrusive controls
+- quick return to previous channel
+- source/failover state accessible but not constantly visible
+
+### Sports UI
+Sports should have its own visual language while staying within AstraWave’s design system.
+
+Event cards should show:
+- league
+- team logos/names
+- time or live status
+- score when available
+- broadcaster/source availability
+- Watch button when resolvable
+
+Game Day pages should provide a polished command-center layout rather than a generic metadata page.
+
+### Music & Podcasts UI
+- large cover art where appropriate
+- persistent mini-player
+- queue access
+- simple Listen/Watch toggle for video podcasts
+- waveform/progress only where useful
+- clean episode lists
+- easy subscription/favorite controls
+- background playback state visible throughout app
+
+### Source setup UI
+Hide complexity behind simple choices.
+
+Top-level source setup:
+- AstraWave Free TV — already available
+- Add My IPTV
+- Add Addon
+- Connect Personal Media
+- Connect Cloud/Authorized Service
+
+Advanced settings remain available but should not dominate onboarding.
+
+### Loading / Empty / Error states
+Every major screen must have intentional:
+- loading skeleton
+- empty state
+- offline state
+- provider unavailable state
+- no playable source state
+- retry action
+- configuration-required state
+
+Never show a blank page because an API returned nothing.
+
+### Accessibility
+- high-contrast focus states
+- scalable text where practical
+- screen-reader labels
+- meaningful content descriptions
+- minimum touch targets
+- do not rely on color alone for state
+- subtitle accessibility options
+
+### Performance perception
+UI must feel immediate even when data is still loading.
+
+Targets:
+- show cached Home data instantly when available
+- progressive image loading
+- skeletons instead of spinners for content grids
+- prefetch likely details/screens
+- lazy-load long rows
+- cache EPG and metadata appropriately
+- avoid blocking navigation on source health checks
+
+### Customization
+Optional user customization without compromising design consistency:
+- row ordering
+- hidden Home rows
+- compact/comfortable content density
+- preferred start page
+- favorite channel groups
+- theme accent options later
+- TV grid density
+
+### Visual QA gate
+Before release, every top-level page must be visually reviewed on:
+- phone portrait
+- phone landscape
+- tablet
+- 1080p TV
+- 4K TV
+- Fire TV remote navigation
+- desktop web
+
+No page passes QA with:
+- clipped text
+- overlapping controls
+- inconsistent margins
+- weak focus indicators
+- raw debug data
+- stretched artwork
+- blank sections
+- unreadable metadata
+- inconsistent card sizing
+- broken responsive layouts
 
 ## Target navigation
 
@@ -64,7 +439,6 @@ Home | Movies | TV | Live TV | Guide | Sports | Music & Podcasts | Search | My A
 
 ### 1. Nuvio core
 Use the pinned Nuvio upstream baseline for:
-
 - Compose Multiplatform UI foundation
 - movie/TV discovery flows
 - title details
@@ -89,20 +463,15 @@ Built-in catalog rows:
 - Genres
 - Collections/franchises
 - Cast/crew-driven discovery
-- Personalized recommendations later
+- Personalized recommendations
+- Watch Tonight
+- Family Night
+- Hidden Gems
 
-TMDB is metadata/catalog only; playback comes from authorized configured sources.
+TMDB is metadata/catalog only; playback comes from eligible configured sources.
 
 ### 3. Stremio-compatible addon layer
-Users can install compatible addons that may contribute:
-
-- catalogs
-- metadata
-- search results
-- subtitles
-- authorized playback sources
-
-Addon results are merged into AstraWave discovery while retaining provider attribution and source ranking.
+Users can install compatible addons that may contribute catalogs, metadata, search results, subtitles, and eligible playback sources. Results retain provider attribution and pass through central source ranking.
 
 ### 4. Live TV source model
 Three modes:
@@ -110,23 +479,7 @@ Three modes:
 #### AstraWave Free TV
 AstraWave-supplied curated channels from authorized/public feeds only.
 
-Each channel record should include:
-- channel id
-- name
-- stream URL
-- backup URLs
-- logo
-- category
-- country/region
-- language
-- EPG id
-- rights status
-- rights evidence URL / source
-- last rights review
-- last health check
-- latency
-- quality
-- active/inactive state
+Each channel record includes channel ID, name, stream/backup URLs, logo, category, country/region, language, EPG ID, rights status/evidence, rights review date, health date, latency, quality, and active state.
 
 Daily automation:
 - test reachability
@@ -141,88 +494,34 @@ Daily automation:
 - regenerate published Free TV playlist
 
 #### My IPTV
-User-managed sources:
-- M3U URL
-- Xtream server + username + password
-- multiple playlists/accounts
-- per-source refresh
-- favorites
-- channel grouping
-- user XMLTV support
+User-managed M3U/Xtream sources, multiple accounts/playlists, refresh controls, favorites, grouping, and XMLTV.
 
 #### Combined
-Optional merged channel/guide experience combining:
-- AstraWave Free TV
-- My IPTV
-
-Duplicate channels should normalize by tvg-id, channel name, region, and broadcaster identity.
+Merged optional experience combining AstraWave Free TV and My IPTV with deduplication by tvg-id, name, region, and broadcaster identity.
 
 ## Guide / EPG
 
-Build a TiviMate/Xfinity-style guide with:
-
-- Now
-- Tonight
-- Tomorrow
-- date picker
-- favorites filter
-- sports filter
-- movies filter
-- kids filter
-- search
-- recently watched
-- mini-guide while playing
-- channel groups
-- fast D-pad navigation
-- XMLTV merge across user and AstraWave sources
+Build a TiviMate/Xfinity-style guide with Now, Tonight, Tomorrow, date picker, favorites, sports, movies, kids, search, recent channels, mini-guide, groups, fast D-pad navigation, and merged XMLTV.
 
 ## Sports Guide
 
-### Coverage roadmap
-- NFL
-- NBA
-- MLB
-- NHL
-- NCAA football/basketball
-- MLS
-- Premier League
-- Champions League
-- major soccer leagues
-- UFC
-- boxing
-- golf
-- tennis
-- F1
-- NASCAR
-- IndyCar
-- WWE / sports-entertainment events where appropriate
+Coverage roadmap includes NFL, NBA, MLB, NHL, NCAA, MLS, Premier League, Champions League, major soccer, UFC, boxing, golf, tennis, F1, NASCAR, IndyCar, and appropriate sports-entertainment events.
 
-### Event resolution flow
-1. Fetch schedule/event metadata.
-2. Identify expected broadcaster/network.
-3. Search My IPTV for matching channels.
-4. Search AstraWave Free TV for an authorized matching channel.
-5. Health-check candidate streams.
-6. Rank candidates by authorization, quality, latency, and source preference.
-7. If playable, show Watch.
-8. If not playable, still show schedule, teams, time, venue, broadcaster, and event info.
+Event resolution flow:
+1. Fetch schedule metadata.
+2. Identify broadcaster/network.
+3. Search My IPTV.
+4. Search AstraWave Free TV.
+5. Health-check candidates.
+6. Rank eligible candidates.
+7. Show Watch when playable.
+8. Otherwise show accurate event/broadcaster information without pretending playback exists.
 
-Users can follow:
-- teams
-- leagues
-- players/competitors later
-- individual events
-
-Home rows should include:
-- Sports Starting Soon
-- Today’s Biggest Games
-- Favorite Teams
-- Live Sports Now
+Add Game Day mode, favorite-team pages, alerts, and multiview roadmap.
 
 ## Music & Podcasts
 
-First-class section with tabs:
-
+Tabs:
 - For You
 - Music
 - Podcasts
@@ -231,24 +530,11 @@ First-class section with tabs:
 - Library
 - Search
 
-Capabilities:
-- RSS podcast subscriptions
-- podcast episode playback
-- video podcast listen/watch toggle
-- internet radio URLs
-- background audio
-- queue
-- mini-player
-- favorites
-- recently played
-- Continue Listening
-- Firebase sync for playback/progress/subscriptions
-- personal music library connectors later
+Capabilities include RSS, video podcast Listen/Watch, radio, background playback, queue, mini-player, favorites, recently played, Continue Listening, Firebase sync, and personal music connectors later.
 
 ## Home experience
 
-Premium streaming-style home, more polished than stock Nuvio:
-
+Premium streaming-style Home:
 1. Hero
 2. Continue Watching
 3. Continue Listening
@@ -270,134 +556,48 @@ Premium streaming-style home, more polished than stock Nuvio:
 19. Hidden Gems
 20. Movies on Live TV Tonight
 
-Rows should be dynamic and hidden when empty.
+Rows are dynamic and hidden when empty.
 
 ## Profiles and household
 
-Profile types:
-- Adult
-- Kids
-- Guest
+Adult, Kids, and Guest profiles with separate history, watchlist, progress, favorites, teams, subscriptions, audio favorites, and recommendations.
 
-Per-profile separation:
-- history
-- watchlist
-- Continue Watching
-- favorites
-- sports teams
-- podcast subscriptions
-- music/radio favorites
-- recommendations
-
-Kids roadmap:
-- PIN
-- age/content restrictions
-- restricted live groups
+Kids controls include PIN, age/content restrictions, restricted Live TV groups, and protected settings.
 
 ## Firebase cloud layer
 
-Keep Firebase as AstraWave cloud backend.
-
-Sync:
-- account/auth
-- profiles
-- watchlists
-- playback progress
-- favorite teams
-- settings
-- source configuration metadata
-- podcast subscriptions
-- music/radio favorites
-- AstraWave+ entitlements
-
-Do not put media streams through Firebase.
+Sync account/auth, profiles, watchlists, playback progress, favorite teams, settings, source metadata, subscriptions, music/radio favorites, backup metadata, and AstraWave+ entitlements. Do not route media streams through Firebase.
 
 ## Player
 
-Nuvio/Media3 player remains the base.
-
-Add AstraWave options:
-- Auto Best
-- Ask Every Time
-- prefer resolution
-- prefer HDR
-- codec preference
-- bitrate/data saver
-- audio track
-- subtitles
-- source switcher
-- Live TV previous/next channel
-- mini-guide
-- failover on dead live source
-- continue playback progress
+Nuvio/Media3 player remains the base with Auto Best, Ask Every Time, resolution/HDR/codec/bitrate preferences, audio/subtitles, source switcher, previous/next Live TV channel, mini-guide, failover, PiP, progress, and device handoff.
 
 ## Search
 
-Unified search across:
-- movies
-- shows
-- episodes
-- people
-- collections
-- channels
-- EPG programs
-- sports events
-- teams
-- music
-- podcasts
-- radio
-- My Stuff
-
-Results should identify source/category clearly.
+Unified search across all media, live, sports, audio, people, collections, sources, EPG, and My Stuff.
 
 ## Source ranking
 
-Central resolver ranks candidates using:
+Central resolver ranks by authorization/eligibility, user preference, health, latency, quality, direct-play compatibility, bitrate/codec preference, and backup availability.
 
-1. authorization/rights eligibility
-2. user preference
-3. source health
-4. latency
-5. quality/resolution
-6. direct-play compatibility
-7. bitrate/codec preference
-8. backup/failover availability
+Never publish or auto-select an ineligible source.
 
-Never publish or auto-select a source that is not eligible for playback.
+## Onboarding
 
-## UI direction
-
-### Visual target
-- Tuvora simplicity
-- Nuvio content density where useful
-- TiviMate-quality Live TV interaction
-- AstraWave branding
-- premium dark design
-- large artwork
-- clean typography
-- obvious focus states
-- minimal setup friction
-
-### Onboarding
 First launch:
 1. Sign In
 2. Create Account
 3. Continue Without Account
 4. Select/Create Profile
 5. Optional Add IPTV
-6. Enter Home
+6. Optional Add Addons/Personal Media
+7. Enter Home
 
-Free TV and TMDB catalogs should make the app useful even if the user skips source setup.
+Free TV and TMDB catalogs make the app useful immediately.
 
 ## TV setup
 
-Roadmap:
-- QR sign-in
-- QR source setup
-- configure IPTV from phone/web
-- D-pad-first UI
-- large focus targets
-- avoid typing long Xtream credentials with remote
+QR sign-in, QR source setup, phone/web configuration, D-pad-first UI, large focus targets, and minimal remote typing.
 
 ## AstraWave+ product layer
 
@@ -413,223 +613,127 @@ Free:
 - basic watchlist/progress
 - basic addons
 
-AstraWave+ candidate features:
+AstraWave+ candidates:
 - unlimited playlists
 - merged guide
 - advanced channel cleanup
 - advanced failover
 - cloud sync across devices
 - multiple profiles
-- advanced household recommendations
+- household recommendations
 - sports alerts
 - multiview
-- authorized DVR roadmap
-- web remote
+- authorized DVR/catch-up features
+- web/phone remote
 - advanced addons/extensions
 - backups
 - AI assistant
-- themes/layout customization
+- advanced customization
 
 ## Build phases
 
 ### Phase 0 — Protect current beta
-- Keep existing Firebase-ready beta branch unchanged.
-- Build new work only on `feature/nuvio-core-rebuild`.
-- Maintain downloadable fallback APK until new branch reaches feature parity.
-
-Exit gate: old beta remains installable and green.
+Keep existing Firebase-ready beta branch unchanged and maintain fallback APK.
 
 ### Phase 1 — Establish Nuvio baseline
-- Pin upstream Nuvio commit.
-- Confirm GPL notices/attribution.
-- Build upstream Android APK in CI.
-- Document upstream structure.
-- Identify extension points for Home, source resolver, player, navigation, and data stores.
+Pin upstream Nuvio, preserve GPL notices, build reproducibly, document extension points.
 
-Exit gate: clean Nuvio baseline APK builds reproducibly.
+### Phase 2 — AstraWave design system + branding + navigation
+- establish visual tokens and component library
+- rebrand shell/assets where license-compliant
+- build premium Home/card/hero/nav system
+- implement phone/tablet/TV/web adaptive layouts
+- implement TV focus system
+- add loading/empty/error states
 
-### Phase 2 — AstraWave branding + navigation shell
-- Rebrand package/app names/assets where license-compliant.
-- Implement AstraWave navigation.
-- Add responsive phone/tablet/TV layouts.
-- Replace stock home shell with AstraWave row system.
-
-Exit gate: branded app launches and all top-level destinations navigate correctly.
+Exit gate: branded app launches, all destinations work, and UI passes first visual QA on phone and TV.
 
 ### Phase 3 — TMDB + native catalogs
-- Wire AstraWave TMDB configuration.
-- Build default movie/TV catalogs.
-- Title pages use enriched metadata.
-- Search uses TMDB + local/addon catalogs.
-
-Exit gate: useful Movies/TV experience with no user source configured.
+Wire default catalogs, enriched detail screens, search, recommendations, and visually polished metadata pages.
 
 ### Phase 4 — Stremio addon integration
-- Preserve Nuvio addon concepts.
-- Add addon management UI.
-- Merge addon catalogs/search/subtitles/source candidates.
-- Add provider attribution and source ranking.
-
-Exit gate: installed compatible addons can extend catalogs without breaking native catalogs.
+Preserve/expand addon management, catalog controls, subtitles, attribution, and resolver integration.
 
 ### Phase 5 — My IPTV
-- M3U ingestion
-- Xtream APIs
-- multiple sources
-- channel normalization
-- favorites/recent
-- XMLTV
-- source refresh
-
-Exit gate: user IPTV plays reliably and survives app restart.
+M3U, Xtream, multiple sources, cleanup, favorites, recent channels, XMLTV, refresh, diagnostics.
 
 ### Phase 6 — AstraWave Free TV
-- Build rights registry.
-- Add authorized/public channel seeds.
-- Daily health workflow.
-- rights + health gating.
-- backup selection.
-- Free TV category UI.
-
-Exit gate: only healthy rights-approved channels appear.
+Rights registry, authorized seeds, daily health checking, backup selection, EPG mapping, polished Free TV browsing.
 
 ### Phase 7 — Combined Live TV + Guide
-- Merge user + Free TV sources.
-- deduplicate channels.
-- merge EPG.
-- build grid guide.
-- mini-guide.
-- now/next.
-- filters.
+Merge/dedupe sources, merged EPG, full grid guide, mini-guide, Now/Next, filters, automatic failover, instant-ish switching optimization.
 
-Exit gate: smooth TV/phone guide with working playback and failover.
-
-### Phase 8 — Sports Guide
-- schedule ingestion
-- broadcaster normalization
-- channel matching
-- My IPTV + Free TV resolver
-- favorite teams
-- home sports rows
-- event detail screens
-
-Exit gate: sports event can resolve to a healthy matching authorized/user channel where available.
+### Phase 8 — Sports Guide + Game Day
+Schedules, broadcaster normalization, channel matching, favorites, alerts, Game Day UI, multiview foundation.
 
 ### Phase 9 — Music & Podcasts
-- RSS
-- video podcasts
-- radio
-- background playback
-- queue
-- mini-player
-- Continue Listening
-- Firebase sync
-
-Exit gate: audio experience works independently of movie/TV playback.
+RSS, video podcasts, radio, background playback, queue, mini-player, Continue Listening, polished audio UI.
 
 ### Phase 10 — Firebase profiles/cloud sync
-- move profile/watchlist/progress/favorites/settings bindings into Nuvio-derived client
-- account persistence
-- profile picker
-- entitlement loading
-
-Exit gate: same user sees synchronized state across compatible AstraWave clients.
+Profile picker, persistence, watchlists/progress/favorites/settings, privacy/local-only mode, entitlement loading, device handoff state.
 
 ### Phase 11 — Personal media + authorized cloud/debrid
-- Plex
-- Jellyfin
-- Emby
-- NAS/WebDAV roadmap
-- authorized cloud/debrid connectors
-- central resolver integration
+Plex, Jellyfin, Emby, NAS/WebDAV roadmap, authorized cloud/debrid connectors, resolver integration.
 
-Exit gate: personal/authorized sources appear as normal AstraWave candidates.
+### Phase 12 — Intelligence layer
+Universal Watch, Universal Search, Smart Home, AI assistant, household recommendations, Catalog Builder, pre-play validation, playback intelligence.
 
-### Phase 12 — Premium UX / Tuvora-style setup
-- streamlined first-run experience
-- QR TV setup
-- source management hub
-- richer Home personalization
-- cleaner settings
-- error/empty/loading states
+### Phase 13 — Connected-device experience
+QR setup, phone remote, backup/restore, handoff, TV credential management, optional web remote.
 
-Exit gate: nontechnical user can install, reach content, and add IPTV without documentation.
+### Phase 14 — AstraWave+ entitlements
+Free/premium gates for software features only; never sell unauthorized media access.
 
-### Phase 13 — AstraWave+ entitlements
-- free vs premium feature gates
-- entitlement sync
-- upgrade surfaces
-- no playback source is sold as copyrighted content
+### Phase 15 — Full functional + visual QA
+Test phone, tablet, Android TV, Fire TV, web, fresh/upgrade install, auth, navigation, Live TV, guide, sports, failover, TMDB, addons, Firebase, audio, profiles, Universal Watch/Search, AI surfaces, PiP, handoff, remote, accessibility, and responsive design.
 
-Exit gate: subscription logic gates software features, not unauthorized media.
+Exit gate: no critical crashes, dead navigation, fake operational claims, blank screens, broken focus, inconsistent layouts, or untested core flows.
 
-### Phase 14 — Full QA
-Test:
-- Android phone
-- Android tablet
-- Android TV
-- Fire TV
-- web where applicable
-- fresh install
-- upgrade install
-- login persistence
-- navigation stability
-- Live TV playback
-- guide performance
-- sports matching
-- source failover
-- TMDB
-- addon catalogs
-- Firebase sync
-- podcasts/radio
-- profile separation
-
-Exit gate: no known critical crashes, dead navigation, fake operational claims, or untested core flows.
-
-### Phase 15 — Release
-- production signing
-- release notes
-- source-code/GPL compliance package
-- production APK/AAB
-- public download page
-- privacy/terms
-- monitoring
+### Phase 16 — Release
+Production signing, release notes, GPL source/compliance package, APK/AAB, download page, privacy/terms, monitoring, and release visual review.
 
 ## Current implementation priorities
 
-Order of work from the current branch:
-
-1. Finish green pinned Nuvio baseline build.
-2. Import/adapt Nuvio source into AstraWave-controlled branch/repo structure.
-3. Rebrand shell and navigation.
+1. Finish green pinned Nuvio baseline.
+2. Import/adapt Nuvio into AstraWave-controlled structure.
+3. Build AstraWave design system and premium shell.
 4. Wire TMDB default catalogs.
-5. Preserve/expand Stremio catalog/addon support.
-6. Port existing AstraWave M3U/Xtream/XMLTV/source-ranking logic.
-7. Connect AstraWave Free TV registry + daily checker.
-8. Build combined guide.
-9. Port sports resolver.
+5. Preserve/expand Stremio catalogs/addons.
+6. Port M3U/Xtream/XMLTV/source ranking.
+7. Connect Free TV registry/daily checker.
+8. Build combined guide/failover.
+9. Port sports resolver and Game Day.
 10. Add Music & Podcasts.
-11. Port Firebase cloud state.
+11. Port Firebase state/profiles.
 12. Add personal/cloud/debrid connectors.
-13. Finish TV UX/QR onboarding.
-14. Add entitlements.
-15. Full device QA and production release.
+13. Add Universal Watch/Search and intelligence layer.
+14. Add TV QR, phone remote, backup/restore, handoff.
+15. Add entitlements.
+16. Full functional and visual QA.
+17. Production release.
 
 ## Definition of done
 
 AstraWave is not complete until:
-
 - every listed top-level module exists
 - current AstraWave feature set is preserved
-- Nuvio-derived flows are fully rebranded/integrated
+- Nuvio-derived flows are rebranded/integrated
+- UI is beautiful, clean, consistent, responsive, and visually QA’d on every target form factor
 - user M3U/Xtream works
 - AstraWave Free TV is rights-gated and health-checked daily
 - TMDB catalogs work by default
-- compatible Stremio addons can add catalogs
-- sports guide resolves against both user IPTV and Free TV
+- compatible Stremio addons can add/manage catalogs
+- sports guide resolves against both My IPTV and Free TV
 - Music & Podcasts works with background playback
+- Universal Watch and Universal Search work across eligible source types
+- automatic failover and pre-play health checks work
 - Firebase sync works
-- TV navigation is D-pad friendly
+- profiles/parental/privacy controls work
+- TV navigation is D-pad friendly with reliable focus
+- phone remote/QR/handoff core flows work where enabled
+- loading, empty, offline, and error states are intentional
+- no blank pages, debug-looking UI, stretched art, or fake operational claims remain
+- accessibility baseline is met
 - Android build is green
 - real-device QA is complete
 - GPL obligations are satisfied
