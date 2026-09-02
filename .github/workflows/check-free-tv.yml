@@ -17,11 +17,11 @@ jobs:
         with:
           python-version: '3.12'
       - name: Check rights-gated streams and build playlist
-        run: python astrwaave-free-tv/check_free_tv.py
+        run: python astrawave-free-tv/check_free_tv.py
       - name: Commit refreshed status and playlist
         run: |
           git config user.name "astrawave-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add astrwaave-free-tv/status.json astrwaave-free-tv/astrawave-free-tv.m3u
+          git add astrawave-free-tv/status.json astrawave-free-tv/astrawave-free-tv.m3u
           git diff --cached --quiet || git commit -m "Refresh AstraWave Free TV health"
           git push
