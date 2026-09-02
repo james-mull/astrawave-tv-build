@@ -1,0 +1,46 @@
+name: Build Nuvio Baseline
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AstraWave
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android components
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Clone pinned Nuvio baseline
+        run: |
+          git clone https://github.com/NuvioMedia/NuvioMobile.git nuvio-client
+          cd nuvio-client
+          git checkout 9b09045f7af32073c8073893f7e324f135c8060a
+
+      - name: Build Nuvio Android full debug
+        working-directory: nuvio-client
+        run: ./gradlew --no-daemon :androidApp:assembleFullDebug
+
+      - name: Upload baseline APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstraWave-Nuvio-Baseline
+          path: nuvio-client/androidApp/build/outputs/apk/full/debug/*.apk
+          if-no-files-found: error
