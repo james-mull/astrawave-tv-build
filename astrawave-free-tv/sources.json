@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "policy": {
+    "description": "AstraWave Free TV registry. Only streams with documented authorization/public distribution status belong here. Discovery sources are never auto-approved.",
+    "requiredRightsStatuses": ["official", "public-domain", "creative-commons", "authorized-redistribution"]
+  },
+  "channels": []
+}
