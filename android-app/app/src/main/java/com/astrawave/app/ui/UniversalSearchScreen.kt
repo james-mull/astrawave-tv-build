@@ -41,7 +41,7 @@ private sealed interface SearchState {
 @Composable
 fun UniversalSearchScreen() {
     val context = LocalContext.current
-    val token = remember { AppSettingsStore(context).tmdbBearerToken.orEmpty() }
+    val token = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val repository = remember(token) { TmdbCatalogRepository(token) }
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
@@ -115,21 +115,21 @@ fun UniversalSearchScreen() {
                     SearchMessage("No matches", "No movie or TV results matched this search.")
                 } else {
                     current.items.take(50).forEach { item ->
-                        Column(
+                        AstraWaveFocusableCard(
                             Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 5.dp)
-                                .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
-                                .padding(16.dp),
+                                .padding(vertical = 5.dp),
                         ) {
-                            Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                item.overview.ifBlank { "Open for details and Watch options." },
-                                color = AstraWaveColors.SecondaryText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 3,
-                            )
+                            Column {
+                                Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    item.overview.ifBlank { "Open for details and Watch options." },
+                                    color = AstraWaveColors.SecondaryText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 3,
+                                )
+                            }
                         }
                     }
                 }
