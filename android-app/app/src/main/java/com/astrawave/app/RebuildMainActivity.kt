@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SportsFootball
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,21 +39,28 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.AccountOverview
 import com.astrawave.app.core.AstraWaveList
+import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
+import com.astrawave.app.data.TmdbCatalogPage
+import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.MyAstraWaveHub
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class RebuildMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +84,12 @@ private enum class RebuildDestination(val label: String, val icon: ImageVector) 
     Discover("Discover", Icons.Default.Explore),
     Search("Search", Icons.Default.Search),
     My("My AstraWave", Icons.Default.AccountCircle),
+}
+
+private sealed interface CatalogLoadState {
+    data object Loading : CatalogLoadState
+    data class Ready(val page: TmdbCatalogPage) : CatalogLoadState
+    data class Error(val message: String) : CatalogLoadState
 }
 
 @Composable
@@ -103,7 +117,7 @@ private fun RebuildRoot() {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             if (!wide) SectionStrip(current) { current = it }
             when (current) {
-                RebuildDestination.Home -> LandingScreen()
+                RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
                 RebuildDestination.Live -> PlaceholderScreen("Live TV", "AstraWave Free TV, My IPTV and Combined mode")
@@ -177,42 +191,128 @@ private fun SectionStrip(current: RebuildDestination, onSelect: (RebuildDestinat
 }
 
 @Composable
-private fun LandingScreen() {
+private fun CatalogLanding(title: String, catalogs: List<AstraWaveCatalog>, showIntro: Boolean = false) {
+    val context = LocalContext.current
+    val token = remember { AppSettingsStore(context).tmdbBearerToken.orEmpty() }
+    val repository = remember(token) { TmdbCatalogRepository(token) }
+    val states = remember(catalogs, token) {
+        mutableStateMapOf<AstraWaveCatalog, CatalogLoadState>().apply {
+            catalogs.forEach { put(it, CatalogLoadState.Loading) }
+        }
+    }
+
+    LaunchedEffect(catalogs, token) {
+        if (!repository.isConfigured()) return@LaunchedEffect
+        catalogs.forEach { catalog ->
+            states[catalog] = CatalogLoadState.Loading
+            states[catalog] = try {
+                val page = withContext(Dispatchers.IO) { repository.load(catalog) }
+                CatalogLoadState.Ready(page)
+            } catch (error: Exception) {
+                CatalogLoadState.Error(error.message ?: "Unable to load catalog")
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
-        Text("ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
-        Spacer(Modifier.height(10.dp))
-        Text("Everything you watch and listen to.", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge)
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "Movies, TV, live channels, sports, music and podcasts in one clean, personalized home.",
-            color = AstraWaveColors.SecondaryText,
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Spacer(Modifier.height(34.dp))
-        Text("Built-in discovery", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(12.dp))
-        (movieCatalogs.take(3) + tvCatalogs.take(3)).forEach { catalog -> CatalogRow(catalog) }
+        if (showIntro) {
+            Text("ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(10.dp))
+            Text("Everything you watch and listen to.", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Movies, TV, live channels, sports, music and podcasts in one clean, personalized home.",
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Spacer(Modifier.height(34.dp))
+        } else {
+            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+            Spacer(Modifier.height(6.dp))
+            Text("Built-in AstraWave discovery powered by TMDB metadata", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(22.dp))
+        }
+
+        if (!repository.isConfigured()) {
+            ConfigurationCard(
+                title = "TMDB setup needed",
+                message = "Connect a TMDB bearer token in My AstraWave → Account → Integrations to populate built-in movie and TV discovery. The app stays usable instead of showing a blank page.",
+            )
+            return@Column
+        }
+
+        catalogs.forEach { catalog ->
+            when (val state = states[catalog] ?: CatalogLoadState.Loading) {
+                CatalogLoadState.Loading -> LoadingCatalogRow(catalog)
+                is CatalogLoadState.Ready -> RealCatalogRow(state.page)
+                is CatalogLoadState.Error -> ErrorCatalogRow(catalog, state.message)
+            }
+        }
     }
 }
 
 @Composable
-private fun CatalogLanding(title: String, catalogs: List<AstraWaveCatalog>) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(6.dp))
-        Text("AstraWave built-in TMDB catalog structure", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(22.dp))
-        catalogs.forEach { CatalogRow(it) }
+private fun RealCatalogRow(page: TmdbCatalogPage) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+        Text(page.catalog.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(9.dp))
+        if (page.items.isEmpty()) {
+            ConfigurationCard("Nothing to show yet", "TMDB returned no items for this catalog.")
+        } else {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                page.items.take(12).forEach { item ->
+                    Column(
+                        Modifier
+                            .width(168.dp)
+                            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
+                            .padding(14.dp),
+                    ) {
+                        Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            item.overview.ifBlank { "Open for details and Watch options." },
+                            color = AstraWaveColors.SecondaryText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 4,
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
     }
 }
 
 @Composable
-private fun CatalogRow(catalog: AstraWaveCatalog) {
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp).background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp),
+private fun LoadingCatalogRow(catalog: AstraWaveCatalog) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 7.dp).background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(catalog.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-        Text("${catalog.mediaType.uppercase()} • ${catalog.endpoint}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+        CircularProgressIndicator(modifier = Modifier.width(22.dp), color = AstraWaveColors.Accent, strokeWidth = 2.dp)
+        Column {
+            Text(catalog.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+            Text("Loading real catalog data…", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun ErrorCatalogRow(catalog: AstraWaveCatalog, message: String) {
+    ConfigurationCard(catalog.title, "Could not refresh this row: $message")
+}
+
+@Composable
+private fun ConfigurationCard(title: String, message: String) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 7.dp).background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp),
+    ) {
+        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(5.dp))
+        Text(message, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
