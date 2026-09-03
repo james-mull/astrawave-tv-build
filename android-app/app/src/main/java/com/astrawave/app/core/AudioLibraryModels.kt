@@ -50,4 +50,6 @@ data class AudioLibrarySnapshot(
     val radioStations: List<RadioStation> = emptyList(),
     val favorites: List<AudioItem> = emptyList(),
     val queue: AudioQueue = AudioQueue(),
+    /** Subscription id -> last load error. Empty means every requested feed loaded successfully. */
+    val feedErrors: Map<String, String> = emptyMap(),
 )
