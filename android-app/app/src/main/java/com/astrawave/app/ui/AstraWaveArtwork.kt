@@ -11,8 +11,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import com.astrawave.app.data.ArtworkRegistry
 
-/** Shared artwork geometry and branded fallbacks used before/while remote artwork is unavailable. */
+/** Shared artwork geometry, remote artwork rendering, and branded fallbacks. */
 enum class AstraWaveArtworkKind(val aspectRatio: Float) {
     Poster(2f / 3f),
     Backdrop(16f / 9f),
@@ -27,10 +30,11 @@ fun AstraWaveArtwork(
     artworkAvailable: Boolean = false,
     content: (@Composable () -> Unit)? = null,
 ) {
+    val remoteArtwork = ArtworkRegistry.resolve(title)
     Box(
         modifier = modifier
             .aspectRatio(kind.aspectRatio)
-            .clip(MaterialTheme.shapes.medium)
+            .clip(MaterialTheme.shapes.large)
             .background(
                 Brush.verticalGradient(
                     listOf(AstraWaveColors.SurfaceFocus, AstraWaveColors.BackgroundRaised),
@@ -38,14 +42,25 @@ fun AstraWaveArtwork(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        if (artworkAvailable && content != null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
-        } else {
-            Text(
-                text = title.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "AW",
-                color = AstraWaveColors.SecondaryText,
-                style = MaterialTheme.typography.headlineMedium,
-            )
+        when {
+            artworkAvailable && content != null -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+            }
+            !remoteArtwork.isNullOrBlank() -> {
+                AsyncImage(
+                    model = remoteArtwork,
+                    contentDescription = "$title artwork",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            else -> {
+                Text(
+                    text = title.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "AW",
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+            }
         }
     }
 }
