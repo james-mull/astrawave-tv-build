@@ -43,6 +43,7 @@ class FirebaseCloudRepository(context: Context) {
 
     val currentUserId: String? get() = auth?.currentUser?.uid
     val configured: Boolean get() = ready
+    val signedIn: Boolean get() = currentUserId != null
 
     fun signUpWithEmail(email: String, password: String): Task<AuthResult>? =
         auth?.createUserWithEmailAndPassword(email.trim(), password)
@@ -91,6 +92,12 @@ class FirebaseCloudRepository(context: Context) {
             ))
     }
 
+    fun removeWatchlist(profileId: String, mediaId: String) {
+        val uid = currentUserId ?: return
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.collection("watchlist")?.document(mediaId)?.delete()
+    }
+
     fun addWatchlist(mediaId: String, kind: String, title: String) {
         val uid = currentUserId ?: return
         db?.collection("users")?.document(uid)?.collection("profiles")?.document("default")
@@ -118,6 +125,12 @@ class FirebaseCloudRepository(context: Context) {
             ))
     }
 
+    fun removeFavorite(profileId: String, mediaId: String) {
+        val uid = currentUserId ?: return
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.collection("favorites")?.document(mediaId)?.delete()
+    }
+
     fun saveList(list: AstraWaveList) {
         val uid = currentUserId ?: return
         val payload = mapOf(
@@ -139,6 +152,12 @@ class FirebaseCloudRepository(context: Context) {
         )
         db?.collection("users")?.document(uid)?.collection("profiles")?.document(list.profileId)
             ?.collection("lists")?.document(list.id)?.set(payload)
+    }
+
+    fun removeList(profileId: String, listId: String) {
+        val uid = currentUserId ?: return
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.collection("lists")?.document(listId)?.delete()
     }
 
     fun saveProfile(profileId: String, name: String, kidsMode: Boolean = false) {
