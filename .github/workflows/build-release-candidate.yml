@@ -47,9 +47,11 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
 
       - name: Run release core invariant tests
-        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
 
       - name: Prepare optional release signing
         shell: bash
@@ -67,7 +69,7 @@ jobs:
           fi
 
       - name: Build release APK and AAB
-        run: ./gradlew --no-daemon --stacktrace :app:assembleRelease :app:bundleRelease
+        run: gradle --no-daemon --stacktrace :app:assembleRelease :app:bundleRelease
 
       - name: Generate release provenance and SHA-256 checksums
         shell: bash
