@@ -57,7 +57,8 @@ class TmdbCatalogRepository(
             "$baseUrl/search/multi?query=${encode(query)}&include_adult=false&language=${encode(language)}&page=$page",
             headers(),
         )
-        return parseItems(json)
+        return parseItems(JSONObject(json), fallbackMediaType = null)
+            .filter { it.mediaType == "movie" || it.mediaType == "tv" }
     }
 
     fun builtInMovieCatalogs(): List<AstraWaveCatalog> = listOf(
@@ -90,13 +91,11 @@ class TmdbCatalogRepository(
             catalog = catalog,
             page = root.optInt("page", 1),
             totalPages = root.optInt("total_pages", 1),
-            items = parseItems(root),
+            items = parseItems(root, fallbackMediaType = catalog.mediaType),
         )
     }
 
-    private fun parseItems(json: String): List<TmdbItem> = parseItems(JSONObject(json))
-
-    private fun parseItems(root: JSONObject): List<TmdbItem> {
+    private fun parseItems(root: JSONObject, fallbackMediaType: String?): List<TmdbItem> {
         val array = root.optJSONArray("results") ?: return emptyList()
         return buildList {
             for (i in 0 until array.length()) {
@@ -110,6 +109,7 @@ class TmdbCatalogRepository(
                         overview = obj.optString("overview"),
                         posterPath = obj.optString("poster_path").takeIf { it.isNotBlank() && it != "null" },
                         backdropPath = obj.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" },
+                        mediaType = obj.optString("media_type").takeIf { it.isNotBlank() } ?: fallbackMediaType,
                     )
                 )
             }
