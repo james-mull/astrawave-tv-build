@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.AccountOverview
 import com.astrawave.app.core.AccountSection
 import com.astrawave.app.core.AstraWaveList
+import com.astrawave.app.core.OnboardingStep
 import com.astrawave.app.data.LibraryCloudSync
 import com.astrawave.app.data.LocalLibraryStore
 
@@ -65,6 +66,7 @@ fun MyAstraWaveHub(
     var snapshot by remember(profileId) { mutableStateOf(store.snapshot(profileId)) }
     var activeView by remember { mutableStateOf<PersonalLibraryView?>(null) }
     var createList by remember { mutableStateOf(false) }
+    var showSetup by remember { mutableStateOf(false) }
 
     fun refresh() { snapshot = store.snapshot(profileId) }
 
@@ -72,6 +74,29 @@ fun MyAstraWaveHub(
         cloudSync.restore(profileId) { result ->
             if (result.isSuccess) refresh()
         }
+    }
+
+    if (showSetup) {
+        AstraWaveOnboardingScreen(
+            profileId = profileId,
+            onOpenStep = { step ->
+                when (step) {
+                    OnboardingStep.PROFILE -> onOpenAccountSection(AccountSection.PROFILES)
+                    OnboardingStep.LIVE_TV -> onOpenAccountSection(AccountSection.IPTV)
+                    OnboardingStep.ADDONS -> onOpenAccountSection(AccountSection.ADDONS)
+                    OnboardingStep.PERSONAL_MEDIA -> onOpenAccountSection(AccountSection.PERSONAL_MEDIA)
+                    OnboardingStep.DEVICE_PAIRING -> onOpenAccountSection(AccountSection.DEVICES)
+                    OnboardingStep.PRIVACY -> onOpenAccountSection(AccountSection.PRIVACY)
+                    OnboardingStep.TMDB,
+                    OnboardingStep.AUDIO,
+                    OnboardingStep.WELCOME,
+                    OnboardingStep.COMPLETE,
+                    -> Unit
+                }
+            },
+            onFinished = { showSetup = false },
+        )
+        return
     }
 
     val selected = activeView
@@ -134,6 +159,7 @@ fun MyAstraWaveHub(
         Spacer(Modifier.height(26.dp))
         Text("ACCOUNT & SETTINGS", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+        SetupRow { showSetup = true }
         AccountSection.entries.forEach { section -> AccountRow(section) { onOpenAccountSection(section) } }
     }
 
@@ -209,6 +235,21 @@ private fun EmptyListsCard(onCreate: () -> Unit) {
             Spacer(Modifier.height(4.dp))
             Text("Build any collection you want. Lists are stored locally and remain available offline.",
                 color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun SetupRow(onClick: () -> Unit) {
+    AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 4.dp).clickable(onClick = onClick)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Settings, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Setup & Onboarding", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyLarge)
+                Text("Resume or review AstraWave setup", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = AstraWaveColors.TertiaryText)
         }
     }
 }
