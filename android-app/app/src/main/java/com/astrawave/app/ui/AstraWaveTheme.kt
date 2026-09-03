@@ -6,6 +6,7 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -101,11 +102,20 @@ private val AstraWaveShapes = Shapes(
 )
 
 @Composable
-fun AstraWaveTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = AstraWaveColorScheme,
-        typography = AstraWaveTypography,
-        shapes = AstraWaveShapes,
-        content = content,
-    )
+fun AstraWaveTheme(
+    spacing: AstraWaveSpacing = AstraWaveSpacing(),
+    sizing: AstraWaveSizing = AstraWaveSizing(),
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(
+        LocalAstraWaveSpacing provides spacing,
+        LocalAstraWaveSizing provides sizing,
+    ) {
+        MaterialTheme(
+            colorScheme = AstraWaveColorScheme,
+            typography = AstraWaveTypography,
+            shapes = AstraWaveShapes,
+            content = content,
+        )
+    }
 }
