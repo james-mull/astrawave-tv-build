@@ -22,9 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.core.IptvSource
 import com.astrawave.app.data.GuideRepository
 import com.astrawave.app.data.GuideSnapshot
-import com.astrawave.app.data.IptvSourceConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -36,7 +36,7 @@ private sealed interface GuideLoadState {
 
 @Composable
 fun AstraWaveGuideScreen(
-    sources: List<IptvSourceConfig>,
+    sources: List<IptvSource>,
     repository: GuideRepository = remember { GuideRepository() },
 ) {
     var state by remember(sources) { mutableStateOf<GuideLoadState>(GuideLoadState.Loading) }
