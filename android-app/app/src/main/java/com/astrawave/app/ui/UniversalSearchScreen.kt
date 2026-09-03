@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -62,12 +61,9 @@ fun UniversalSearchScreen(profileId: String = "default") {
             .background(AstraWaveColors.Background)
             .padding(24.dp),
     ) {
-        Text("Search", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Search built-in TMDB discovery and metadata from your enabled addons in one place.",
-            color = AstraWaveColors.SecondaryText,
-            style = MaterialTheme.typography.bodyLarge,
+        AstraWavePageHeader(
+            title = "Search",
+            subtitle = "Search built-in TMDB discovery and metadata from your enabled addons in one place.",
         )
         Spacer(Modifier.height(18.dp))
 
@@ -87,7 +83,8 @@ fun UniversalSearchScreen(profileId: String = "default") {
             label = { Text("Movies, shows and addon catalogs") },
         )
         Spacer(Modifier.height(10.dp))
-        Button(
+        AstraWavePrimaryButton(
+            label = "Search",
             onClick = {
                 val trimmed = query.trim()
                 if (trimmed.isEmpty()) {
@@ -117,9 +114,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
                 }
             },
             enabled = query.isNotBlank(),
-        ) {
-            Text("Search")
-        }
+        )
         Spacer(Modifier.height(20.dp))
 
         when (val current = state) {
@@ -135,7 +130,10 @@ fun UniversalSearchScreen(profileId: String = "default") {
                     SearchMessage("No matches", "No connected movie, TV or addon metadata matched this search.")
                 } else {
                     if (current.tmdbItems.isNotEmpty()) {
-                        Text("AstraWave / TMDB", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                        AstraWaveSectionHeader(
+                            title = "AstraWave / TMDB",
+                            subtitle = "Built-in metadata and catalog results.",
+                        )
                         Spacer(Modifier.height(8.dp))
                         current.tmdbItems.take(40).forEach { item ->
                             AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
@@ -157,7 +155,10 @@ fun UniversalSearchScreen(profileId: String = "default") {
                     }
 
                     if (current.addonItems.isNotEmpty()) {
-                        Text("From Your Addons", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                        AstraWaveSectionHeader(
+                            title = "From Your Addons",
+                            subtitle = "Provider-attributed metadata from enabled compatible addons.",
+                        )
                         Spacer(Modifier.height(8.dp))
                         current.addonItems.take(40).forEach { hit ->
                             AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
@@ -178,6 +179,11 @@ fun UniversalSearchScreen(profileId: String = "default") {
                                         "Metadata result • playback requires an authorized eligible source",
                                         color = AstraWaveColors.TertiaryText,
                                         style = MaterialTheme.typography.labelMedium,
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    LibraryActionRow(
+                                        item = hit.item.toLibraryItemRef(hit.addonId),
+                                        profileId = profileId,
                                     )
                                 }
                             }
@@ -200,14 +206,5 @@ fun UniversalSearchScreen(profileId: String = "default") {
 
 @Composable
 private fun SearchMessage(title: String, message: String) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
-            .padding(18.dp),
-    ) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
-        Text(message, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-    }
+    AstraWaveStatePanel(title = title, message = message)
 }
