@@ -76,6 +76,7 @@ import com.astrawave.app.ui.LibraryActionRow
 import com.astrawave.app.ui.LiveTvHubScreen
 import com.astrawave.app.ui.MultiviewScreen
 import com.astrawave.app.ui.MyAstraWaveHub
+import com.astrawave.app.ui.PersonalMediaScreen
 import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.UniversalSearchScreen
 import com.astrawave.app.ui.toLibraryItemRef
@@ -102,6 +103,7 @@ private enum class RebuildDestination(val label: String, val icon: ImageVector) 
     Sports("Sports", Icons.Default.SportsFootball),
     Multiview("Multiview", Icons.Default.Tv),
     Audio("Music & Podcasts", Icons.Default.MusicNote),
+    PersonalMedia("Personal Media", Icons.Default.Tv),
     Addons("Addons", Icons.Default.Explore),
     Discover("Discover", Icons.Default.Explore),
     Search("Search", Icons.Default.Search),
@@ -156,10 +158,7 @@ private fun RebuildRoot() {
                 isTv -> 72.dp
                 else -> 108.dp
             }
-            NavigationRail(
-                containerColor = AstraWaveColors.BackgroundRaised,
-                modifier = Modifier.width(railWidth),
-            ) {
+            NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(railWidth)) {
                 Spacer(Modifier.height(14.dp))
                 Text(
                     if (isTv && !tvRailExpanded) "AW" else "ASTRAWAVE",
@@ -173,9 +172,7 @@ private fun RebuildRoot() {
                     NavigationRailItem(
                         selected = current == item,
                         onClick = { current = item },
-                        modifier = Modifier.onFocusChanged { state ->
-                            if (isTv) tvRailExpanded = state.hasFocus
-                        },
+                        modifier = Modifier.onFocusChanged { state -> if (isTv) tvRailExpanded = state.hasFocus },
                         icon = { Icon(item.icon, item.label) },
                         label = if (showRailLabel) ({ Text(item.label, maxLines = 1) }) else null,
                         alwaysShowLabel = showRailLabel,
@@ -233,6 +230,7 @@ private fun RebuildRoot() {
                     }
                 }
                 RebuildDestination.Audio -> AudioLibraryScreen(profileId = activeProfileId)
+                RebuildDestination.PersonalMedia -> PersonalMediaScreen(profileId = activeProfileId)
                 RebuildDestination.Addons -> StremioAddonScreen(profileId = activeProfileId)
                 RebuildDestination.Discover -> CombinedDiscoverScreen(profileId = activeProfileId)
                 RebuildDestination.Search -> UniversalSearchScreen(profileId = activeProfileId)
@@ -479,10 +477,7 @@ private fun RealCatalogRow(page: TmdbCatalogPage) {
                 page.items.take(12).forEach { item ->
                     AstraWaveFocusableCard(Modifier.width(184.dp)) {
                         Column {
-                            AstraWaveArtwork(
-                                title = item.title,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            AstraWaveArtwork(title = item.title, modifier = Modifier.fillMaxWidth())
                             Spacer(Modifier.height(10.dp))
                             Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                             Spacer(Modifier.height(6.dp))
