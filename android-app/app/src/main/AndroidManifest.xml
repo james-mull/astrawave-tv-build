@@ -19,10 +19,6 @@
             android:exported="false"
             android:screenOrientation="unspecified" />
         <activity
-            android:name=".MainActivity"
-            android:exported="false"
-            android:screenOrientation="unspecified" />
-        <activity
             android:name=".RebuildMainActivity"
             android:exported="true"
             android:screenOrientation="unspecified">
