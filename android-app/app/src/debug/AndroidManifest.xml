@@ -9,5 +9,9 @@
             android:name=".Phase2ModalQaActivity"
             android:exported="true"
             android:label="AstraWave Phase 2 Modal QA" />
+        <activity
+            android:name=".Phase2SportsQaActivity"
+            android:exported="true"
+            android:label="AstraWave Phase 2 Sports QA" />
     </application>
 </manifest>
