@@ -57,39 +57,43 @@ class LiveTvRepository {
     fun merge(channelLists: List<List<LiveChannel>>, programmes: List<XmlTvProgramme> = emptyList()): List<LiveChannelGroup> {
         val byTvg = programmes.groupBy { it.channelId }
         val nowMs = System.currentTimeMillis()
-        return channelLists.flatten().groupBy { it.normalizedName }.map { (_, candidates) ->
-            val ordered = candidates.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.source })
-            val first = ordered.first()
-            val schedule = ordered.asSequence()
-                .mapNotNull { it.tvgId }
-                .mapNotNull { byTvg[it] }
-                .firstOrNull()
-                .orEmpty()
-                .sortedBy { parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
-            val current = schedule.firstOrNull { programme ->
-                val start = parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
-                val stop = parseXmlTvEpochMs(programme.stop) ?: return@firstOrNull false
-                nowMs in start until stop
+        return channelLists.flatten()
+            .groupBy(::channelIdentityKey)
+            .map { (identityKey, candidates) ->
+                val ordered = candidates.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.source })
+                val first = ordered.first()
+                val schedule = ordered.asSequence()
+                    .mapNotNull { it.tvgId?.takeIf(String::isNotBlank) }
+                    .flatMap { byTvg[it].orEmpty().asSequence() }
+                    .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+                    .sortedBy { parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
+                    .toList()
+                val current = schedule.firstOrNull { programme ->
+                    val start = parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                    val stop = parseXmlTvEpochMs(programme.stop) ?: return@firstOrNull false
+                    nowMs in start until stop
+                }
+                val next = schedule.firstOrNull { programme ->
+                    val start = parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                    start > nowMs && programme != current
+                }
+                LiveChannelGroup(
+                    canonicalName = identityKey,
+                    displayName = ordered.map { it.name }.maxByOrNull { it.length } ?: first.name,
+                    candidates = ordered,
+                    currentProgram = current,
+                    nextProgram = next,
+                )
             }
-            val next = schedule.firstOrNull { programme ->
-                val start = parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
-                start > nowMs && programme != current
-            }
-            LiveChannelGroup(
-                canonicalName = first.normalizedName,
-                displayName = ordered.map { it.name }.maxByOrNull { it.length } ?: first.name,
-                candidates = ordered,
-                currentProgram = current,
-                nextProgram = next,
-            )
-        }.sortedWith(compareBy<LiveChannelGroup> { it.candidates.firstOrNull()?.group ?: "ZZZ" }.thenBy { it.displayName })
+            .sortedWith(compareBy<LiveChannelGroup> { it.candidates.firstOrNull()?.group ?: "ZZZ" }.thenBy { it.displayName })
     }
 
     fun healthyCandidates(group: LiveChannelGroup): List<LiveChannel> = group.candidates.filter { candidate ->
         runCatching { StreamHealthChecker.check(candidate.url).reachable }.getOrDefault(false)
     }
 
-    fun choosePlayable(group: LiveChannelGroup): LiveChannel? = healthyCandidates(group).firstOrNull() ?: group.bestCandidate
+    /** Returns only a health-verified candidate. A dead/unverified fallback is never called playable. */
+    fun choosePlayable(group: LiveChannelGroup): LiveChannel? = healthyCandidates(group).firstOrNull()
 
     companion object {
         private val xmlTvFormats = listOf(
@@ -111,6 +115,14 @@ class LiveTvRepository {
             }
             return null
         }
+
+        fun channelIdentityKey(channel: LiveChannel): String =
+            channel.tvgId
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.lowercase(Locale.US)
+                ?.let { "tvg:$it" }
+                ?: "name:${channel.normalizedName}"
 
         fun normalizeChannelName(raw: String): String = raw.lowercase(Locale.US)
             .replace(Regex("\\b(uhd|4k|fhd|hd|sd|hevc|h265|h264|60fps|50fps)\\b"), " ")
