@@ -69,4 +69,23 @@ object DvrEligibility {
     fun canSchedule(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsDvr
     fun canCatchUp(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsCatchUp
     fun canTimeshift(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsTimeshift
+
+    fun validateRequest(
+        request: RecordingRequest,
+        capabilities: LiveSourceCapabilities,
+        nowEpochMs: Long = System.currentTimeMillis(),
+    ): List<String> = buildList {
+        if (request.id.isBlank()) add("Recording id is required")
+        if (request.profileId.isBlank()) add("Profile id is required")
+        if (request.sourceId.isBlank()) add("Source id is required")
+        if (request.channelId.isBlank()) add("Channel id is required")
+        if (request.title.isBlank()) add("Recording title is required")
+        if (request.endEpochMs <= request.startEpochMs) add("Recording end time must be after start time")
+        if (request.endEpochMs <= nowEpochMs) add("Recording has already ended")
+        if (!canSchedule(capabilities)) add("This source does not advertise authorized DVR support")
+        capabilities.maxRecordingHours?.let { maxHours ->
+            val durationMs = request.endEpochMs - request.startEpochMs
+            if (durationMs > maxHours * 3_600_000L) add("Recording exceeds this source's maximum duration")
+        }
+    }
 }
