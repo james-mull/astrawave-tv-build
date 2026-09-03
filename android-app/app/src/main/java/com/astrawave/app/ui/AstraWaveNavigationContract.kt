@@ -3,10 +3,9 @@ package com.astrawave.app.ui
 /**
  * Canonical Phase 2 primary-navigation contract.
  *
- * Primary navigation stays intentionally small so AstraWave feels like a consumer streaming
- * product instead of an admin menu. Lower-frequency destinations remain reachable from the
- * owning hubs: Guide from Live TV, Multiview from Live TV/Sports, addon and personal-media
- * management from My AstraWave, and broader catalog exploration from Home/Search.
+ * Primary navigation stays focused on destinations users need frequently. Discover is omitted
+ * because Home and Search already cover broad exploration. Guide and Music remain first-class
+ * until their owning hubs expose equally direct shortcuts on every supported device class.
  */
 data class AstraWaveNavItem(
     val route: String,
@@ -19,7 +18,9 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("movies", "Movies"),
         AstraWaveNavItem("tv", "TV"),
         AstraWaveNavItem("live", "Live"),
+        AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Sports"),
+        AstraWaveNavItem("audio", "Music"),
         AstraWaveNavItem("search", "Search"),
         AstraWaveNavItem("my", "My"),
     )
@@ -29,7 +30,9 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("movies", "Movies"),
         AstraWaveNavItem("tv", "TV"),
         AstraWaveNavItem("live", "Live"),
+        AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Sports"),
+        AstraWaveNavItem("audio", "Music"),
         AstraWaveNavItem("search", "Search"),
         AstraWaveNavItem("my", "My"),
     )
