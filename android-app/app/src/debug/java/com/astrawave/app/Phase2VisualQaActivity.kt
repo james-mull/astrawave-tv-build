@@ -121,6 +121,9 @@ private fun Phase2VisualQaScreen() {
     var modalVerifiedCommit by remember(deviceClass) {
         mutableStateOf(verificationStore.modalVerifiedCommit(deviceClass))
     }
+    var sportsVerifiedCommit by remember(deviceClass) {
+        mutableStateOf(verificationStore.sportsVerifiedCommit(deviceClass))
+    }
 
     val visitedExpected = visitedControls.intersect(expectedFocusControls)
     val traversalComplete = visitedExpected.size == expectedFocusControls.size
@@ -129,6 +132,7 @@ private fun Phase2VisualQaScreen() {
     val missingControls = expectedFocusControls - visitedExpected
     val missingRemoteKeys = requiredRemoteKeys - remoteKeysSeen
     val modalExactBuildVerified = verificationStore.isModalVerified(deviceClass) && modalVerifiedCommit == commitSha
+    val sportsExactBuildVerified = verificationStore.isSportsVerified(deviceClass) && sportsVerifiedCommit == commitSha
     val exactBuildVerified = verificationStore.isVerified(deviceClass) && recordedVerifiedCommit == commitSha
 
     fun recordFocus(label: String) {
@@ -154,14 +158,16 @@ private fun Phase2VisualQaScreen() {
         runCatching { firstFocus.requestFocus() }
     }
 
-    fun refreshModalEvidence() {
+    fun refreshPrerequisiteEvidence() {
         modalVerifiedCommit = verificationStore.modalVerifiedCommit(deviceClass)
-        activationMessage = if (
-            verificationStore.isModalVerified(deviceClass) && modalVerifiedCommit == commitSha
-        ) {
-            "Modal QA evidence refreshed: same-build prerequisite is satisfied."
-        } else {
-            "Modal QA evidence refreshed: same-build prerequisite is still incomplete."
+        sportsVerifiedCommit = verificationStore.sportsVerifiedCommit(deviceClass)
+        val modalReady = verificationStore.isModalVerified(deviceClass) && modalVerifiedCommit == commitSha
+        val sportsReady = verificationStore.isSportsVerified(deviceClass) && sportsVerifiedCommit == commitSha
+        activationMessage = when {
+            modalReady && sportsReady -> "QA prerequisites refreshed: Modal Focus and Sports Visual QA both pass for this exact build."
+            !modalReady && !sportsReady -> "QA prerequisites refreshed: Modal Focus and Sports Visual QA are both still incomplete for this exact build."
+            !modalReady -> "QA prerequisites refreshed: Modal Focus QA is still incomplete for this exact build."
+            else -> "QA prerequisites refreshed: Sports Visual QA is still incomplete for this exact build."
         }
     }
 
@@ -214,6 +220,15 @@ private fun Phase2VisualQaScreen() {
                 else -> "$deviceClass modal focus QA is required for build ${commitSha.take(12)} before final device verification can be recorded."
             },
         )
+        AstraWaveStatePanel(
+            title = "Sports visual prerequisite",
+            message = when {
+                sportsExactBuildVerified -> "$deviceClass sports visual QA is recorded for this exact build (${commitSha.take(12)})."
+                sportsVerifiedCommit != null -> "$deviceClass sports visual QA was recorded on ${sportsVerifiedCommit!!.take(12)}, not this build (${commitSha.take(12)}). Open Sports QA and re-run it."
+                !commitKnown -> "This local build has no trackable commit SHA, so sports QA cannot satisfy Phase 2 verification."
+                else -> "$deviceClass sports visual QA is required for build ${commitSha.take(12)} before final device verification can be recorded."
+            },
+        )
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -223,17 +238,21 @@ private fun Phase2VisualQaScreen() {
                 onClick = { context.startActivity(Intent(context, Phase2ModalQaActivity::class.java)) },
             )
             AstraWaveSecondaryButton(
-                label = "Refresh modal QA status",
-                onClick = ::refreshModalEvidence,
+                label = "Open Sports QA",
+                onClick = { context.startActivity(Intent(context, Phase2SportsQaActivity::class.java)) },
+            )
+            AstraWaveSecondaryButton(
+                label = "Refresh QA prerequisites",
+                onClick = ::refreshPrerequisiteEvidence,
             )
         }
         AstraWaveStatePanel(
             title = "Verification evidence",
             message = when {
                 exactBuildVerified -> "$deviceClass is recorded as verified for this exact build (${commitSha.take(12)}). A newer build must be verified again."
-                recordedVerifiedCommit != null -> "$deviceClass was verified on ${recordedVerifiedCommit!!.take(12)}, not this build (${commitSha.take(12)}). Re-run traversal and visual benchmark checks."
+                recordedVerifiedCommit != null -> "$deviceClass was verified on ${recordedVerifiedCommit!!.take(12)}, not this build (${commitSha.take(12)}). Re-run all prerequisites, traversal, and visual benchmark checks."
                 !commitKnown -> "This local build has no trackable commit SHA, so it cannot be recorded as Phase 2 verification evidence."
-                else -> "$deviceClass has not been verified for build ${commitSha.take(12)}. Complete modal QA, traversal, and the visual benchmark before recording evidence."
+                else -> "$deviceClass has not been verified for build ${commitSha.take(12)}. Complete Modal Focus QA, Sports Visual QA, traversal, and the visual benchmark before recording evidence."
             },
         )
         AstraWaveStatePanel(
@@ -275,7 +294,7 @@ private fun Phase2VisualQaScreen() {
             )
             AstraWavePrimaryButton(
                 label = if (exactBuildVerified) "Build verified" else "Record device verification",
-                enabled = traversalPassed && visualBenchmarkConfirmed && modalExactBuildVerified && commitKnown && !exactBuildVerified,
+                enabled = traversalPassed && visualBenchmarkConfirmed && modalExactBuildVerified && sportsExactBuildVerified && commitKnown && !exactBuildVerified,
                 onClick = {
                     verificationStore.markVerified(deviceClass, commitSha)
                     recordedVerifiedCommit = verificationStore.verifiedCommit(deviceClass)
@@ -288,11 +307,12 @@ private fun Phase2VisualQaScreen() {
             )
             AstraWaveSecondaryButton(
                 label = "Clear device verification",
-                enabled = recordedVerifiedCommit != null || modalVerifiedCommit != null,
+                enabled = recordedVerifiedCommit != null || modalVerifiedCommit != null || sportsVerifiedCommit != null,
                 onClick = {
                     verificationStore.clear(deviceClass)
                     recordedVerifiedCommit = null
                     modalVerifiedCommit = null
+                    sportsVerifiedCommit = null
                     visualBenchmarkConfirmed = false
                     activationMessage = "$deviceClass verification evidence cleared."
                 },
