@@ -83,17 +83,23 @@ private fun Phase2VisualQaScreen() {
             "Cards → Sports Starting Soon",
         )
     }
+    val requiredRemoteKeys = remember(isTv) {
+        if (isTv) setOf("Up", "Down", "Left", "Right", "Select") else emptySet()
+    }
     var activationMessage by remember { mutableStateOf("Use touch or D-pad to exercise every control below.") }
     var focusedControl by remember { mutableStateOf("Waiting for focus") }
     var visitedControls by remember { mutableStateOf(emptySet<String>()) }
     var focusTrail by remember { mutableStateOf(emptyList<String>()) }
     var lastRemoteKey by remember { mutableStateOf("None yet") }
+    var remoteKeysSeen by remember { mutableStateOf(emptySet<String>()) }
     var disabledFocusViolation by remember { mutableStateOf(false) }
 
     val visitedExpected = visitedControls.intersect(expectedFocusControls)
     val traversalComplete = visitedExpected.size == expectedFocusControls.size
-    val traversalPassed = traversalComplete && !disabledFocusViolation
+    val remoteCoverageComplete = requiredRemoteKeys.all { it in remoteKeysSeen }
+    val traversalPassed = traversalComplete && remoteCoverageComplete && !disabledFocusViolation
     val missingControls = expectedFocusControls - visitedExpected
+    val missingRemoteKeys = requiredRemoteKeys - remoteKeysSeen
 
     fun recordFocus(label: String) {
         focusedControl = label
@@ -111,6 +117,7 @@ private fun Phase2VisualQaScreen() {
         visitedControls = emptySet()
         focusTrail = emptyList()
         lastRemoteKey = "None yet"
+        remoteKeysSeen = emptySet()
         disabledFocusViolation = false
         runCatching { firstFocus.requestFocus() }
     }
@@ -135,7 +142,10 @@ private fun Phase2VisualQaScreen() {
             .background(AstraWaveColors.Background)
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
-                    remoteKeyLabel(event.key)?.let { lastRemoteKey = it }
+                    remoteKeyLabel(event.key)?.let { label ->
+                        lastRemoteKey = label
+                        remoteKeysSeen = remoteKeysSeen + label
+                    }
                 }
                 false
             }
@@ -158,7 +168,7 @@ private fun Phase2VisualQaScreen() {
         )
         AstraWaveStatePanel(
             title = "D-pad traversal coverage",
-            message = "${visitedExpected.size}/${expectedFocusControls.size} expected controls visited • last remote key: $lastRemoteKey • disabled-focus violation: ${if (disabledFocusViolation) "YES" else "no"}. Trail: ${focusTrail.joinToString(" → ").ifBlank { "none yet" }}",
+            message = "${visitedExpected.size}/${expectedFocusControls.size} expected controls visited • last remote key: $lastRemoteKey • remote keys seen: ${remoteKeysSeen.sorted().joinToString().ifBlank { "none yet" }} • disabled-focus violation: ${if (disabledFocusViolation) "YES" else "no"}. Trail: ${focusTrail.joinToString(" → ").ifBlank { "none yet" }}",
         )
         AstraWaveStatePanel(
             title = when {
@@ -168,7 +178,8 @@ private fun Phase2VisualQaScreen() {
             },
             message = when {
                 disabledFocusViolation -> "A disabled control received focus. Phase 2 D-pad verification must not pass on this device until that focus-path defect is fixed."
-                traversalPassed -> "All expected controls were visited with no disabled-control focus violation. Record the device result and still complete the visual readability/polish check before closing Phase 2."
+                traversalPassed -> "All expected controls were visited, required remote keys were observed, and no disabled-control focus violation occurred. Record the device result and still complete the visual readability/polish check before closing Phase 2."
+                isTv && missingRemoteKeys.isNotEmpty() -> "Missing controls: ${missingControls.joinToString().ifBlank { "none" }}. Missing remote input: ${missingRemoteKeys.joinToString()}. TV/Fire TV cannot pass from touch or focus traversal alone; exercise Up, Down, Left, Right, and Select on the real remote."
                 else -> "Missing: ${missingControls.joinToString()}. Visit every expected control and confirm the visible focus ring matches the telemetry."
             },
         )
