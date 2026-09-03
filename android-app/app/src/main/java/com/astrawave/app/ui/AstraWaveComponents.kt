@@ -44,10 +44,18 @@ fun AstraWavePageHeader(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth()) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+        Text(
+            title,
+            color = AstraWaveColors.PrimaryText,
+            style = MaterialTheme.typography.headlineLarge,
+        )
         if (!subtitle.isNullOrBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(7.dp))
+            Text(
+                subtitle,
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
     }
 }
@@ -88,8 +96,9 @@ fun AstraWaveStatePanel(
     Row(
         modifier
             .fillMaxWidth()
-            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
-            .padding(18.dp),
+            .border(1.dp, AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large)
+            .background(AstraWaveColors.Surface, MaterialTheme.shapes.large)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (loading) {
@@ -98,11 +107,11 @@ fun AstraWaveStatePanel(
                 color = AstraWaveColors.Accent,
                 strokeWidth = 2.dp,
             )
-            Spacer(Modifier.size(12.dp))
+            Spacer(Modifier.size(14.dp))
         }
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(5.dp))
             Text(message, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -138,17 +147,17 @@ fun AstraWaveFocusableCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(elevation = elevation, shape = MaterialTheme.shapes.medium, clip = false)
+            .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
             .border(
-                width = if (focused) 2.dp else 0.dp,
-                color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Surface,
-                shape = MaterialTheme.shapes.medium,
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.SurfaceRaised,
+                shape = MaterialTheme.shapes.large,
             )
-            .clip(MaterialTheme.shapes.medium)
+            .clip(MaterialTheme.shapes.large)
             .background(if (focused) AstraWaveColors.SurfaceFocus else AstraWaveColors.Surface)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .padding(14.dp),
+            .padding(16.dp),
     ) {
         content()
     }
@@ -164,8 +173,9 @@ fun AstraWaveActionRow(
     Row(
         modifier
             .fillMaxWidth()
-            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
-            .padding(16.dp),
+            .border(1.dp, AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large)
+            .background(AstraWaveColors.Surface, MaterialTheme.shapes.large)
+            .padding(horizontal = 18.dp, vertical = 17.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -211,11 +221,11 @@ fun AstraWavePrimaryButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(elevation = elevation, shape = MaterialTheme.shapes.medium, clip = false)
+            .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
             .border(
                 width = if (focused && enabled) 2.dp else 0.dp,
                 color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.Accent,
-                shape = MaterialTheme.shapes.medium,
+                shape = MaterialTheme.shapes.large,
             )
             .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.buttonColors(
@@ -224,6 +234,7 @@ fun AstraWavePrimaryButton(
             disabledContainerColor = AstraWaveColors.SurfaceRaised,
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
+        shape = MaterialTheme.shapes.large,
     ) {
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
@@ -259,17 +270,18 @@ fun AstraWaveSecondaryButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(elevation = elevation, shape = MaterialTheme.shapes.medium, clip = false)
+            .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
             .border(
-                width = if (focused && enabled) 2.dp else 0.dp,
-                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.SecondaryText,
-                shape = MaterialTheme.shapes.medium,
+                width = if (focused && enabled) 2.dp else 1.dp,
+                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.SurfaceRaised,
+                shape = MaterialTheme.shapes.large,
             )
             .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = AstraWaveColors.PrimaryText,
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
+        shape = MaterialTheme.shapes.large,
     ) {
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
@@ -295,5 +307,6 @@ fun AstraWaveDialog(
             TextButton(onClick = onDismiss) { Text(dismissLabel) }
         },
         containerColor = AstraWaveColors.SurfaceRaised,
+        shape = MaterialTheme.shapes.large,
     )
 }
