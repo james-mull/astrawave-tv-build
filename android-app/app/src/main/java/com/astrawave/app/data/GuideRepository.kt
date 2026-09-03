@@ -11,6 +11,7 @@ data class GuideChannelRow(
     val next: XmlTvProgramme?,
     val playableCandidateCount: Int,
     val preferredSource: String?,
+    val playableUrl: String?,
 )
 
 data class GuideSnapshot(
@@ -20,10 +21,7 @@ data class GuideSnapshot(
     val userChannelCount: Int,
 )
 
-/**
- * Guide-facing projection over the combined Live TV source model. The TV grid,
- * mini-guide and search can share this one normalized projection.
- */
+/** Guide-facing projection over the combined Live TV source model. */
 class GuideRepository(
     private val combined: CombinedLiveTvRepository = CombinedLiveTvRepository(),
 ) {
@@ -40,6 +38,7 @@ class GuideRepository(
                 next = null,
                 playableCandidateCount = group.candidates.size,
                 preferredSource = preferred?.source,
+                playableUrl = preferred?.url,
             )
         }
         return GuideSnapshot(
