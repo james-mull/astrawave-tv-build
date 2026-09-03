@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.InstalledAddon
 import com.astrawave.app.data.StremioAddonStore
+import com.astrawave.app.data.StremioCatalogAggregator
+import com.astrawave.app.data.StremioCatalogRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,12 +42,23 @@ fun StremioAddonScreen(profileId: String = "default") {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val store = remember { StremioAddonStore(context) }
+    val aggregator = remember { StremioCatalogAggregator(context) }
     var addons by remember(profileId) { mutableStateOf(store.loadAll()) }
+    var catalogRows by remember(profileId) { mutableStateOf<List<StremioCatalogRow>>(emptyList()) }
     var installDialog by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
+    var loadingCatalogs by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun refresh() { addons = store.loadAll() }
+
+    suspend fun refreshCatalogs() {
+        loadingCatalogs = true
+        catalogRows = withContext(Dispatchers.IO) { aggregator.load(profileId, maxItemsPerCatalog = 12) }
+        loadingCatalogs = false
+    }
+
+    LaunchedEffect(addons, profileId) { refreshCatalogs() }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -83,6 +97,17 @@ fun StremioAddonScreen(profileId: String = "default") {
                 )
             }
         }
+
+        Spacer(Modifier.height(24.dp))
+        Text("Enabled Addon Catalogs", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(8.dp))
+        if (loadingCatalogs) {
+            AstraWaveStatePanel("Loading addon catalogs…", "Refreshing metadata from enabled addons.", loading = true)
+        } else if (catalogRows.isEmpty()) {
+            AstraWaveStatePanel("No addon catalogs", "Enabled addons with catalog resources will appear here.")
+        } else {
+            catalogRows.forEach { row -> AddonCatalogPreview(row) }
+        }
     }
 
     if (installDialog) {
@@ -104,6 +129,28 @@ fun StremioAddonScreen(profileId: String = "default") {
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun AddonCatalogPreview(row: StremioCatalogRow) {
+    AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Column {
+            Text("${row.catalog.name} • ${row.addonName}", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+            Text(row.catalog.type, color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
+            row.error?.let {
+                Spacer(Modifier.height(5.dp))
+                Text("Catalog unavailable: $it", color = AstraWaveColors.Warning, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (row.items.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                row.items.take(8).forEach { item ->
+                    Text("• ${item.name}${item.releaseInfo?.let { release -> " • $release" }.orEmpty()}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("Metadata only • playback remains authorization-gated", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
 
