@@ -9,6 +9,7 @@ on:
     paths:
       - "android-app/**"
       - ".github/workflows/build-apk.yml"
+      - ".github/workflows/build-release-candidate.yml"
 
 concurrency:
   group: astrwave-android-${{ github.ref }}
