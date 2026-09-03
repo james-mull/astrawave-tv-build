@@ -63,6 +63,7 @@ import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.MyIptvScreen
+import com.astrawave.app.ui.UniversalSearchScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -129,7 +130,7 @@ private fun RebuildRoot() {
                 RebuildDestination.Sports -> AstraWaveSportsScreen(sources = emptyList())
                 RebuildDestination.Audio -> AudioLibraryScreen(subscriptions = emptyList(), stations = emptyList())
                 RebuildDestination.Discover -> CatalogLanding("Discover", movieCatalogs + tvCatalogs)
-                RebuildDestination.Search -> PlaceholderScreen("Search", "Universal search across every AstraWave source")
+                RebuildDestination.Search -> UniversalSearchScreen()
                 RebuildDestination.My -> MyAstraWaveHub(
                     account = AccountOverview(
                         userId = "local",
@@ -317,14 +318,5 @@ private fun ConfigurationCard(title: String, message: String) {
         Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(5.dp))
         Text(message, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@Composable
-private fun PlaceholderScreen(title: String, subtitle: String) {
-    Column(Modifier.fillMaxSize().padding(24.dp)) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(6.dp))
-        Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge)
     }
 }
