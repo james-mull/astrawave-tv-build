@@ -1,5 +1,6 @@
 package com.astrawave.app
 
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -117,6 +118,9 @@ private fun Phase2VisualQaScreen() {
     var recordedVerifiedCommit by remember(deviceClass) {
         mutableStateOf(verificationStore.verifiedCommit(deviceClass))
     }
+    var modalVerifiedCommit by remember(deviceClass) {
+        mutableStateOf(verificationStore.modalVerifiedCommit(deviceClass))
+    }
 
     val visitedExpected = visitedControls.intersect(expectedFocusControls)
     val traversalComplete = visitedExpected.size == expectedFocusControls.size
@@ -124,6 +128,7 @@ private fun Phase2VisualQaScreen() {
     val traversalPassed = traversalComplete && remoteCoverageComplete && !disabledFocusViolation
     val missingControls = expectedFocusControls - visitedExpected
     val missingRemoteKeys = requiredRemoteKeys - remoteKeysSeen
+    val modalExactBuildVerified = verificationStore.isModalVerified(deviceClass) && modalVerifiedCommit == commitSha
     val exactBuildVerified = verificationStore.isVerified(deviceClass) && recordedVerifiedCommit == commitSha
 
     fun recordFocus(label: String) {
@@ -147,6 +152,17 @@ private fun Phase2VisualQaScreen() {
         disabledFocusViolation = false
         visualBenchmarkConfirmed = false
         runCatching { firstFocus.requestFocus() }
+    }
+
+    fun refreshModalEvidence() {
+        modalVerifiedCommit = verificationStore.modalVerifiedCommit(deviceClass)
+        activationMessage = if (
+            verificationStore.isModalVerified(deviceClass) && modalVerifiedCommit == commitSha
+        ) {
+            "Modal QA evidence refreshed: same-build prerequisite is satisfied."
+        } else {
+            "Modal QA evidence refreshed: same-build prerequisite is still incomplete."
+        }
     }
 
     fun remoteKeyLabel(key: Key): String? = when (key) {
@@ -190,12 +206,34 @@ private fun Phase2VisualQaScreen() {
             message = "Run this debug screen separately on Android phone, tablet, Android TV, and Fire TV. On TV, verify focus is obvious, directional movement is predictable, labels remain readable, and no control is clipped.",
         )
         AstraWaveStatePanel(
+            title = "Modal focus prerequisite",
+            message = when {
+                modalExactBuildVerified -> "$deviceClass modal focus QA is recorded for this exact build (${commitSha.take(12)})."
+                modalVerifiedCommit != null -> "$deviceClass modal focus QA was recorded on ${modalVerifiedCommit!!.take(12)}, not this build (${commitSha.take(12)}). Open Modal QA and re-run it."
+                !commitKnown -> "This local build has no trackable commit SHA, so modal QA cannot satisfy Phase 2 verification."
+                else -> "$deviceClass modal focus QA is required for build ${commitSha.take(12)} before final device verification can be recorded."
+            },
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AstraWaveSecondaryButton(
+                label = "Open Modal QA",
+                onClick = { context.startActivity(Intent(context, Phase2ModalQaActivity::class.java)) },
+            )
+            AstraWaveSecondaryButton(
+                label = "Refresh modal QA status",
+                onClick = ::refreshModalEvidence,
+            )
+        }
+        AstraWaveStatePanel(
             title = "Verification evidence",
             message = when {
                 exactBuildVerified -> "$deviceClass is recorded as verified for this exact build (${commitSha.take(12)}). A newer build must be verified again."
                 recordedVerifiedCommit != null -> "$deviceClass was verified on ${recordedVerifiedCommit!!.take(12)}, not this build (${commitSha.take(12)}). Re-run traversal and visual benchmark checks."
                 !commitKnown -> "This local build has no trackable commit SHA, so it cannot be recorded as Phase 2 verification evidence."
-                else -> "$deviceClass has not been verified for build ${commitSha.take(12)}. Complete traversal and the visual benchmark before recording evidence."
+                else -> "$deviceClass has not been verified for build ${commitSha.take(12)}. Complete modal QA, traversal, and the visual benchmark before recording evidence."
             },
         )
         AstraWaveStatePanel(
@@ -237,19 +275,24 @@ private fun Phase2VisualQaScreen() {
             )
             AstraWavePrimaryButton(
                 label = if (exactBuildVerified) "Build verified" else "Record device verification",
-                enabled = traversalPassed && visualBenchmarkConfirmed && commitKnown && !exactBuildVerified,
+                enabled = traversalPassed && visualBenchmarkConfirmed && modalExactBuildVerified && commitKnown && !exactBuildVerified,
                 onClick = {
                     verificationStore.markVerified(deviceClass, commitSha)
-                    recordedVerifiedCommit = commitSha
-                    activationMessage = "$deviceClass recorded for build ${commitSha.take(12)}."
+                    recordedVerifiedCommit = verificationStore.verifiedCommit(deviceClass)
+                    activationMessage = if (verificationStore.isVerified(deviceClass)) {
+                        "$deviceClass recorded for build ${commitSha.take(12)}."
+                    } else {
+                        "$deviceClass was not recorded because a required same-build QA prerequisite is missing."
+                    }
                 },
             )
             AstraWaveSecondaryButton(
                 label = "Clear device verification",
-                enabled = recordedVerifiedCommit != null,
+                enabled = recordedVerifiedCommit != null || modalVerifiedCommit != null,
                 onClick = {
                     verificationStore.clear(deviceClass)
                     recordedVerifiedCommit = null
+                    modalVerifiedCommit = null
                     visualBenchmarkConfirmed = false
                     activationMessage = "$deviceClass verification evidence cleared."
                 },
