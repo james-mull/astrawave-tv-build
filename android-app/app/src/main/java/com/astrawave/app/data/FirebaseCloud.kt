@@ -2,6 +2,9 @@ package com.astrawave.app.data
 
 import android.content.Context
 import com.astrawave.app.BuildConfig
+import com.astrawave.app.core.AstraWaveList
+import com.astrawave.app.core.FavoriteEntry
+import com.astrawave.app.core.WatchlistEntry
 import com.google.android.gms.tasks.Task
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -39,6 +42,7 @@ class FirebaseCloudRepository(context: Context) {
     private val db: FirebaseFirestore? get() = if (ready) FirebaseFirestore.getInstance() else null
 
     val currentUserId: String? get() = auth?.currentUser?.uid
+    val configured: Boolean get() = ready
 
     fun signUpWithEmail(email: String, password: String): Task<AuthResult>? =
         auth?.createUserWithEmailAndPassword(email.trim(), password)
@@ -50,9 +54,17 @@ class FirebaseCloudRepository(context: Context) {
         auth?.signOut()
     }
 
-    fun saveProgress(mediaId: String, kind: String, title: String, positionMs: Long, durationMs: Long) {
+    fun saveProgress(
+        mediaId: String,
+        kind: String,
+        title: String,
+        positionMs: Long,
+        durationMs: Long,
+        profileId: String = "default",
+    ) {
         val uid = currentUserId ?: return
-        db?.collection("users")?.document(uid)?.collection("progress")?.document(mediaId)
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.collection("progress")?.document(mediaId)
             ?.set(mapOf(
                 "mediaId" to mediaId,
                 "kind" to kind,
@@ -63,9 +75,26 @@ class FirebaseCloudRepository(context: Context) {
             ))
     }
 
+    fun saveWatchlist(entry: WatchlistEntry) {
+        val uid = currentUserId ?: return
+        val item = entry.item
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(entry.profileId)
+            ?.collection("watchlist")?.document(item.id)
+            ?.set(mapOf(
+                "mediaId" to item.id,
+                "kind" to item.type.name,
+                "title" to item.title,
+                "posterUrl" to item.posterUrl,
+                "sourceId" to item.sourceId,
+                "notifyWhenAvailable" to entry.notifyWhenAvailable,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+    }
+
     fun addWatchlist(mediaId: String, kind: String, title: String) {
         val uid = currentUserId ?: return
-        db?.collection("users")?.document(uid)?.collection("watchlist")?.document(mediaId)
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document("default")
+            ?.collection("watchlist")?.document(mediaId)
             ?.set(mapOf(
                 "mediaId" to mediaId,
                 "kind" to kind,
@@ -74,9 +103,70 @@ class FirebaseCloudRepository(context: Context) {
             ))
     }
 
-    fun saveFavoriteTeam(teamId: String, name: String, league: String?) {
+    fun saveFavorite(entry: FavoriteEntry) {
         val uid = currentUserId ?: return
-        db?.collection("users")?.document(uid)?.collection("favoriteTeams")?.document(teamId)
+        val item = entry.item
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(entry.profileId)
+            ?.collection("favorites")?.document(item.id)
+            ?.set(mapOf(
+                "mediaId" to item.id,
+                "kind" to item.type.name,
+                "title" to item.title,
+                "posterUrl" to item.posterUrl,
+                "sourceId" to item.sourceId,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+    }
+
+    fun saveList(list: AstraWaveList) {
+        val uid = currentUserId ?: return
+        val payload = mapOf(
+            "id" to list.id,
+            "name" to list.name,
+            "description" to list.description,
+            "sortOrder" to list.sortOrder,
+            "isPinned" to list.isPinned,
+            "items" to list.items.map { item ->
+                mapOf(
+                    "id" to item.id,
+                    "type" to item.type.name,
+                    "title" to item.title,
+                    "posterUrl" to item.posterUrl,
+                    "sourceId" to item.sourceId,
+                )
+            },
+            "updatedAt" to FieldValue.serverTimestamp(),
+        )
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(list.profileId)
+            ?.collection("lists")?.document(list.id)?.set(payload)
+    }
+
+    fun saveProfile(profileId: String, name: String, kidsMode: Boolean = false) {
+        val uid = currentUserId ?: return
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.set(mapOf(
+                "profileId" to profileId,
+                "name" to name,
+                "kidsMode" to kidsMode,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+    }
+
+    fun savePreference(profileId: String, key: String, value: Any) {
+        val uid = currentUserId ?: return
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.collection("preferences")?.document(key)
+            ?.set(mapOf(
+                "key" to key,
+                "value" to value,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+    }
+
+    fun addFavoriteTeam(teamId: String, name: String, league: String?, profileId: String = "default") {
+        val uid = currentUserId ?: return
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.collection("favoriteTeams")?.document(teamId)
             ?.set(mapOf(
                 "teamId" to teamId,
                 "name" to name,
@@ -84,4 +174,7 @@ class FirebaseCloudRepository(context: Context) {
                 "updatedAt" to FieldValue.serverTimestamp(),
             ))
     }
+
+    fun saveFavoriteTeam(teamId: String, name: String, league: String?) =
+        addFavoriteTeam(teamId, name, league)
 }
