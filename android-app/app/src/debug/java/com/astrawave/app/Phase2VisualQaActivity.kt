@@ -28,6 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.ui.AstraWaveArtwork
@@ -69,8 +74,41 @@ private fun Phase2VisualQaScreen() {
         configuration.screenWidthDp >= 840 -> "Tablet"
         else -> "Phone"
     }
+    val expectedFocusControls = remember {
+        setOf(
+            "Actions → Watch now",
+            "Actions → Add to list",
+            "Cards → Continue Watching",
+            "Cards → Live Now",
+            "Cards → Sports Starting Soon",
+        )
+    }
     var activationMessage by remember { mutableStateOf("Use touch or D-pad to exercise every control below.") }
     var focusedControl by remember { mutableStateOf("Waiting for focus") }
+    var visitedControls by remember { mutableStateOf(emptySet<String>()) }
+    var focusTrail by remember { mutableStateOf(emptyList<String>()) }
+    var lastRemoteKey by remember { mutableStateOf("None yet") }
+    var disabledFocusViolation by remember { mutableStateOf(false) }
+
+    fun recordFocus(label: String) {
+        focusedControl = label
+        if (label.startsWith("ERROR:")) {
+            disabledFocusViolation = true
+            return
+        }
+        visitedControls = visitedControls + label
+        focusTrail = (focusTrail + label).takeLast(8)
+    }
+
+    fun remoteKeyLabel(key: Key): String? = when (key) {
+        Key.DirectionUp -> "Up"
+        Key.DirectionDown -> "Down"
+        Key.DirectionLeft -> "Left"
+        Key.DirectionRight -> "Right"
+        Key.DirectionCenter, Key.Enter -> "Select"
+        Key.Back -> "Back"
+        else -> null
+    }
 
     LaunchedEffect(Unit) {
         runCatching { firstFocus.requestFocus() }
@@ -80,6 +118,12 @@ private fun Phase2VisualQaScreen() {
         modifier = Modifier
             .fillMaxSize()
             .background(AstraWaveColors.Background)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    remoteKeyLabel(event.key)?.let { lastRemoteKey = it }
+                }
+                false
+            }
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -97,6 +141,10 @@ private fun Phase2VisualQaScreen() {
             title = "Current D-pad focus",
             message = focusedControl,
         )
+        AstraWaveStatePanel(
+            title = "D-pad traversal coverage",
+            message = "${visitedControls.intersect(expectedFocusControls).size}/${expectedFocusControls.size} expected controls visited • last remote key: $lastRemoteKey • disabled-focus violation: ${if (disabledFocusViolation) "YES" else "no"}. Trail: ${focusTrail.joinToString(" → ").ifBlank { "none yet" }}",
+        )
 
         AstraWaveSectionHeader(
             title = "Actions",
@@ -111,18 +159,18 @@ private fun Phase2VisualQaScreen() {
                 onClick = { activationMessage = "Primary action activated." },
                 modifier = Modifier
                     .focusRequester(firstFocus)
-                    .onFocusChanged { if (it.isFocused) focusedControl = "Actions → Watch now" },
+                    .onFocusChanged { if (it.isFocused) recordFocus("Actions → Watch now") },
             )
             AstraWaveSecondaryButton(
                 label = "Add to list",
                 onClick = { activationMessage = "Secondary action activated." },
-                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedControl = "Actions → Add to list" },
+                modifier = Modifier.onFocusChanged { if (it.isFocused) recordFocus("Actions → Add to list") },
             )
             AstraWaveSecondaryButton(
                 label = "Disabled",
                 onClick = {},
                 enabled = false,
-                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedControl = "ERROR: disabled action received focus" },
+                modifier = Modifier.onFocusChanged { if (it.isFocused) recordFocus("ERROR: disabled action received focus") },
             )
         }
         Text(activationMessage, color = AstraWaveColors.SecondaryText)
@@ -139,7 +187,7 @@ private fun Phase2VisualQaScreen() {
                 AstraWaveFocusableCard(
                     Modifier
                         .width(240.dp)
-                        .onFocusChanged { if (it.isFocused) focusedControl = "Cards → $title" },
+                        .onFocusChanged { if (it.isFocused) recordFocus("Cards → $title") },
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         AstraWaveArtwork(title = title, modifier = Modifier.fillMaxWidth())
