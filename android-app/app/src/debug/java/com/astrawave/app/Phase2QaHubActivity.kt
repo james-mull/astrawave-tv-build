@@ -1,5 +1,8 @@
 package com.astrawave.app
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
@@ -11,6 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,33 +61,55 @@ private fun Phase2QaHubScreen() {
         configuration.screenWidthDp >= 600 -> "Tablet"
         else -> "Phone"
     }
+    val deviceModel = listOf(Build.MANUFACTURER, Build.MODEL)
+        .filter { it.isNotBlank() }
+        .joinToString(" ")
+    val osLabel = if (isFireTv) "Fire OS / Android ${Build.VERSION.RELEASE}" else "Android ${Build.VERSION.RELEASE}"
     val commitSha = BuildConfig.GIT_SHA.ifBlank { "local-untracked" }
     val commitKnown = commitSha != "local-untracked" && commitSha.length >= 7
 
     var modalCommit by remember(deviceClass) { mutableStateOf(verificationStore.modalVerifiedCommit(deviceClass)) }
     var sportsCommit by remember(deviceClass) { mutableStateOf(verificationStore.sportsVerifiedCommit(deviceClass)) }
     var verifiedCommit by remember(deviceClass) { mutableStateOf(verificationStore.verifiedCommit(deviceClass)) }
+    var copyMessage by remember { mutableStateOf<String?>(null) }
 
     fun refreshEvidence() {
         modalCommit = verificationStore.modalVerifiedCommit(deviceClass)
         sportsCommit = verificationStore.sportsVerifiedCommit(deviceClass)
         verifiedCommit = verificationStore.verifiedCommit(deviceClass)
+        copyMessage = null
     }
 
     val modalReady = verificationStore.isModalVerified(deviceClass) && modalCommit == commitSha
     val sportsReady = verificationStore.isSportsVerified(deviceClass) && sportsCommit == commitSha
     val deviceReady = verificationStore.isVerified(deviceClass) && verifiedCommit == commitSha
+    val evidenceSummary = buildString {
+        appendLine("AstraWave Phase 2 device evidence")
+        appendLine("Commit: $commitSha")
+        appendLine("Device class: $deviceClass")
+        appendLine("Device: $deviceModel")
+        appendLine("OS: $osLabel (API ${Build.VERSION.SDK_INT})")
+        appendLine("Display: ${configuration.screenWidthDp}×${configuration.screenHeightDp} dp")
+        appendLine("Modal Focus QA: ${if (modalReady) "PASS" else "REQUIRED"}")
+        appendLine("Sports Visual QA: ${if (sportsReady) "PASS" else "REQUIRED"}")
+        append("Final device verification: ${if (deviceReady) "PASS" else "INCOMPLETE"}")
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(AstraWaveColors.Background)
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         AstraWavePageHeader(
             title = "Phase 2 QA Hub",
             subtitle = "$deviceClass • ${configuration.screenWidthDp}×${configuration.screenHeightDp} dp • build ${commitSha.take(12)}",
+        )
+        AstraWaveStatePanel(
+            title = "Evidence identity",
+            message = "$deviceModel • $osLabel • API ${Build.VERSION.SDK_INT}. This identity is included in the copyable evidence summary below.",
         )
         AstraWaveStatePanel(
             title = if (commitKnown) "Exact-build QA ready" else "Untracked build",
@@ -136,8 +163,20 @@ private fun Phase2QaHubScreen() {
             label = "Refresh QA status",
             onClick = ::refreshEvidence,
         )
+        AstraWaveSecondaryButton(
+            label = "Copy evidence summary",
+            enabled = commitKnown,
+            onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("AstraWave Phase 2 QA evidence", evidenceSummary))
+                copyMessage = "Evidence summary copied for $deviceClass build ${commitSha.take(12)}."
+            },
+        )
+        copyMessage?.let { message ->
+            Text(message, color = AstraWaveColors.SecondaryText)
+        }
         Text(
-            text = "Use docs/PHASE2_DEVICE_VISUAL_QA_CHECKLIST.md to record the exact-build benchmark. Do not use this hub as evidence by itself.",
+            text = "Use docs/PHASE2_DEVICE_VISUAL_QA_CHECKLIST.md to record the exact-build benchmark. The copied summary captures identity and current prerequisite status, but the visual checks themselves still require real device review.",
             color = AstraWaveColors.SecondaryText,
         )
     }
