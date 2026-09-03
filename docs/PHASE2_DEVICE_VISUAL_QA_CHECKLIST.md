@@ -8,6 +8,8 @@ Record the exact `BuildConfig.GIT_SHA` shown by the debug QA activities. Evidenc
 
 Commit under review: `<sha>`
 
+Use `.Phase2QaHubActivity` as the entry point. The hub must identify the same device class and exact commit being reviewed and show the same-build prerequisite status before final device verification is recorded.
+
 ## Required device classes
 
 Complete every section independently on:
@@ -46,6 +48,7 @@ Run `.Phase2ModalQaActivity` on the same device and exact commit before final de
 - [ ] Focus returns to the launcher control after dismissal/confirmation.
 - [ ] Focus ring remains visible and unclipped.
 - [ ] Modal QA is recorded for the same device class and exact commit.
+- [ ] QA Hub reports Modal Focus QA as PASS for the exact build.
 
 ## Artwork
 
@@ -82,13 +85,17 @@ Compare the AstraWave shell and current Guide/Live TV presentation against the P
 
 ## Sports benchmark
 
-Compare the current sports presentation against the master plan's premium sports requirement.
+Run `.Phase2SportsQaActivity` on the same device and exact commit. Compare the real shared featured-game and schedule-card components against the master plan's premium sports requirement. The synthetic QA matchups have no playback candidate and must never be treated as real events or streams.
 
 - [ ] Featured game hierarchy is obvious.
+- [ ] Long matchup titles wrap without clipping or breaking hierarchy.
 - [ ] Live/upcoming/unavailable states are visually distinct.
 - [ ] Broadcaster/source status is clear.
 - [ ] Watch/Multiview actions are only exposed when eligible.
 - [ ] Schedule presentation does not look like a generic IPTV/data table.
+- [ ] Focus treatment remains obvious and unclipped at TV viewing distance.
+- [ ] Sports QA is recorded for the same device class and exact commit.
+- [ ] QA Hub reports Sports Visual QA as PASS for the exact build.
 
 ## Nuvio discovery/home benchmark
 
@@ -98,6 +105,8 @@ Compare the current sports presentation against the master plan's premium sports
 
 ## Final per-device evidence
 
+Before recording final device verification, the QA Hub must show same-build PASS for Modal Focus QA and Sports Visual QA. Then run/complete the Core Visual / D-pad QA and record final device verification on the same exact build.
+
 For each device class record:
 
 - exact commit SHA
@@ -106,7 +115,9 @@ For each device class record:
 - display resolution / TV mode where relevant
 - main traversal result
 - modal traversal result
-- visual benchmark result
+- sports visual QA result
+- overall visual benchmark result
+- QA Hub prerequisite status
 - any defects found and commit that fixed them
 
 Only after all four device classes pass on the same exact commit may Phase 2 be checked complete in Issue #1.
