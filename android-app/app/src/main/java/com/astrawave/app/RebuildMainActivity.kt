@@ -57,6 +57,7 @@ import com.astrawave.app.data.AstraWaveCatalog
 import com.astrawave.app.data.TmdbCatalogPage
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.ui.AstraWaveColors
+import com.astrawave.app.ui.AstraWaveFocusableCard
 import com.astrawave.app.ui.AstraWaveGuideScreen
 import com.astrawave.app.ui.AstraWaveSportsScreen
 import com.astrawave.app.ui.AstraWaveTheme
@@ -269,20 +270,17 @@ private fun RealCatalogRow(page: TmdbCatalogPage) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 page.items.take(12).forEach { item ->
-                    Column(
-                        Modifier
-                            .width(168.dp)
-                            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
-                            .padding(14.dp),
-                    ) {
-                        Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            item.overview.ifBlank { "Open for details and Watch options." },
-                            color = AstraWaveColors.SecondaryText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 4,
-                        )
+                    AstraWaveFocusableCard(Modifier.width(168.dp)) {
+                        Column {
+                            Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                item.overview.ifBlank { "Open for details and Watch options." },
+                                color = AstraWaveColors.SecondaryText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 4,
+                            )
+                        }
                     }
                 }
             }
