@@ -54,6 +54,7 @@ import com.astrawave.app.core.AccountOverview
 import com.astrawave.app.core.AstraWaveList
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
+import com.astrawave.app.data.IptvSourceStore
 import com.astrawave.app.data.TmdbCatalogPage
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.ui.AstraWaveColors
@@ -101,6 +102,9 @@ private sealed interface CatalogLoadState {
 @Composable
 private fun RebuildRoot() {
     val wide = LocalConfiguration.current.screenWidthDp >= 840
+    val context = LocalContext.current
+    val activeProfileId = "default"
+    val iptvSources = remember(activeProfileId) { IptvSourceStore(context).load(activeProfileId) }
     var current by remember { mutableStateOf(RebuildDestination.Home) }
 
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
@@ -126,9 +130,9 @@ private fun RebuildRoot() {
                 RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
-                RebuildDestination.Live -> MyIptvScreen(sources = emptyList())
-                RebuildDestination.Guide -> AstraWaveGuideScreen(sources = emptyList())
-                RebuildDestination.Sports -> AstraWaveSportsScreen(sources = emptyList())
+                RebuildDestination.Live -> MyIptvScreen(sources = iptvSources)
+                RebuildDestination.Guide -> AstraWaveGuideScreen(sources = iptvSources)
+                RebuildDestination.Sports -> AstraWaveSportsScreen(sources = iptvSources)
                 RebuildDestination.Audio -> AudioLibraryScreen(subscriptions = emptyList(), stations = emptyList())
                 RebuildDestination.Discover -> CatalogLanding("Discover", movieCatalogs + tvCatalogs)
                 RebuildDestination.Search -> UniversalSearchScreen()
@@ -136,13 +140,13 @@ private fun RebuildRoot() {
                     account = AccountOverview(
                         userId = "local",
                         displayName = "AstraWave User",
-                        activeProfileId = "default",
+                        activeProfileId = activeProfileId,
                         planName = "AstraWave Free",
                         cloudSyncEnabled = false,
                     ),
                     lists = listOf(
-                        AstraWaveList("family-night", "default", "Family Night", "Movies everyone can agree on", isPinned = true),
-                        AstraWaveList("mind-benders", "default", "Mind-Benders", "Thrillers, sci-fi and mysteries"),
+                        AstraWaveList("family-night", activeProfileId, "Family Night", "Movies everyone can agree on", isPinned = true),
+                        AstraWaveList("mind-benders", activeProfileId, "Mind-Benders", "Thrillers, sci-fi and mysteries"),
                     ),
                 )
             }
