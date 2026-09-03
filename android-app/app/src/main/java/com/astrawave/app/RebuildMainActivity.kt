@@ -1,6 +1,8 @@
 package com.astrawave.app
 
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -51,6 +53,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.AccountOverview
+import com.astrawave.app.core.MultiviewLayout
+import com.astrawave.app.core.MultiviewPane
+import com.astrawave.app.core.MultiviewSession
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
 import com.astrawave.app.data.IptvSourceStore
@@ -65,6 +70,7 @@ import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
 import com.astrawave.app.ui.LibraryActionRow
 import com.astrawave.app.ui.LiveTvHubScreen
+import com.astrawave.app.ui.MultiviewScreen
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.UniversalSearchScreen
 import com.astrawave.app.ui.toLibraryItemRef
@@ -89,6 +95,7 @@ private enum class RebuildDestination(val label: String, val icon: ImageVector) 
     Live("Live TV", Icons.Default.LiveTv),
     Guide("Guide", Icons.Default.CalendarMonth),
     Sports("Sports", Icons.Default.SportsFootball),
+    Multiview("Multiview", Icons.Default.Tv),
     Audio("Music & Podcasts", Icons.Default.MusicNote),
     Discover("Discover", Icons.Default.Explore),
     Search("Search", Icons.Default.Search),
@@ -108,6 +115,25 @@ private fun RebuildRoot() {
     val activeProfileId = "default"
     var iptvSources by remember(activeProfileId) { mutableStateOf(IptvSourceStore(context).load(activeProfileId)) }
     var current by remember { mutableStateOf(RebuildDestination.Home) }
+    var multiviewPanes by remember { mutableStateOf<List<MultiviewPane>>(emptyList()) }
+    var multiviewAudioPaneId by remember { mutableStateOf<String?>(null) }
+
+    fun addToMultiview(pane: MultiviewPane) {
+        if (multiviewPanes.any { it.streamUrl == pane.streamUrl }) {
+            Toast.makeText(context, "Already in Multiview.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (multiviewPanes.size >= 4) {
+            Toast.makeText(context, "Multiview supports up to four streams.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        multiviewPanes = multiviewPanes + pane.copy(muted = multiviewPanes.isNotEmpty())
+        if (multiviewAudioPaneId == null) multiviewAudioPaneId = pane.id
+    }
+
+    fun openMultiview() {
+        if (multiviewPanes.isNotEmpty()) current = RebuildDestination.Multiview
+    }
 
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         if (wide) {
@@ -135,9 +161,45 @@ private fun RebuildRoot() {
                 RebuildDestination.Live -> LiveTvHubScreen(
                     sources = iptvSources,
                     onSourcesChanged = { iptvSources = it },
+                    multiviewCount = multiviewPanes.size,
+                    onAddToMultiview = ::addToMultiview,
+                    onOpenMultiview = ::openMultiview,
                 )
                 RebuildDestination.Guide -> AstraWaveGuideScreen(sources = iptvSources)
-                RebuildDestination.Sports -> AstraWaveSportsScreen(sources = iptvSources)
+                RebuildDestination.Sports -> AstraWaveSportsScreen(
+                    sources = iptvSources,
+                    multiviewCount = multiviewPanes.size,
+                    onAddToMultiview = ::addToMultiview,
+                    onOpenMultiview = ::openMultiview,
+                )
+                RebuildDestination.Multiview -> {
+                    if (multiviewPanes.isEmpty()) {
+                        ConfigurationCard("Multiview is empty", "Add live channels or matched sports streams from Live TV or Sports.")
+                    } else {
+                        val layout = when (multiviewPanes.size) {
+                            1, 2 -> MultiviewLayout.TWO_UP
+                            3 -> MultiviewLayout.THREE_UP
+                            else -> MultiviewLayout.FOUR_UP
+                        }
+                        MultiviewScreen(
+                            session = MultiviewSession(
+                                id = "active",
+                                layout = layout,
+                                panes = multiviewPanes,
+                                activeAudioPaneId = multiviewAudioPaneId ?: multiviewPanes.first().id,
+                            ),
+                            onActivateAudio = { multiviewAudioPaneId = it },
+                            onOpenPane = { pane ->
+                                context.startActivity(Intent(context, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, pane.streamUrl))
+                            },
+                            onReplacePane = { pane ->
+                                multiviewPanes = multiviewPanes.filterNot { it.id == pane.id }
+                                if (multiviewAudioPaneId == pane.id) multiviewAudioPaneId = multiviewPanes.firstOrNull()?.id
+                                current = RebuildDestination.Live
+                            },
+                        )
+                    }
+                }
                 RebuildDestination.Audio -> AudioLibraryScreen(profileId = activeProfileId)
                 RebuildDestination.Discover -> CatalogLanding("Discover", movieCatalogs + tvCatalogs)
                 RebuildDestination.Search -> UniversalSearchScreen()
