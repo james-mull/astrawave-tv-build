@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -98,84 +97,118 @@ fun LiveTvHubScreen(
     }
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            LiveModeButton("Channels", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
-            LiveModeButton("Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
-            if (multiviewCount > 0) {
-                LiveModeButton("Multiview ($multiviewCount)", false, onOpenMultiview)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp)) {
+            AstraWavePageHeader(
+                title = "Live TV",
+                subtitle = "Free official channels are ready automatically. Add your own IPTV only if you want more.",
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                LiveModeButton("Watch", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
+                LiveModeButton("My Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+                if (multiviewCount > 0) {
+                    LiveModeButton("Multiview ($multiviewCount)", false, onOpenMultiview)
+                }
             }
         }
 
         when (mode) {
             LiveTvMode.SOURCES -> MyIptvScreen(sources = sources, onSourcesChanged = onSourcesChanged)
             LiveTvMode.CHANNELS -> Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 4.dp),
             ) {
-                AstraWavePageHeader(
-                    title = "Live TV",
-                    subtitle = "Combined AstraWave Free TV and your enabled IPTV sources.",
-                )
-                Spacer(Modifier.height(18.dp))
                 when (val current = state) {
-                    LiveTvLoadState.Loading -> AstraWaveStatePanel("Loading channels…", "Refreshing combined channel inventory and guide data.", loading = true)
+                    LiveTvLoadState.Loading -> AstraWaveStatePanel(
+                        "Getting Live TV ready…",
+                        "Checking AstraWave Free TV and your enabled sources.",
+                        loading = true,
+                    )
                     is LiveTvLoadState.Error -> AstraWaveStatePanel("Live TV unavailable", current.message)
                     is LiveTvLoadState.Ready -> {
                         val snapshot = current.snapshot
+                        val totalChannels = snapshot.freeChannelCount + snapshot.userChannelCount
                         AstraWaveStatePanel(
-                            "${snapshot.totalChannelGroups} channel groups",
-                            "${snapshot.freeChannelCount} AstraWave Free TV • ${snapshot.userChannelCount} from My IPTV",
+                            "$totalChannels channels ready",
+                            when {
+                                snapshot.userChannelCount > 0 -> "${snapshot.freeChannelCount} included free • ${snapshot.userChannelCount} from your sources"
+                                snapshot.freeChannelCount > 0 -> "${snapshot.freeChannelCount} included free channels • Add your own IPTV anytime from My Sources"
+                                else -> "No healthy free channels are available right now. You can still add your own IPTV source."
+                            },
                         )
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(18.dp))
+
                         if (snapshot.groups.isEmpty()) {
-                            AstraWaveStatePanel("No channels yet", "Open Sources to add an M3U or Xtream service. Authorized AstraWave Free TV channels appear here automatically when published.")
+                            AstraWaveStatePanel(
+                                "No channels available",
+                                "Try again later, or open My Sources to add an M3U or Xtream service.",
+                            )
                         } else {
                             snapshot.groups.take(300).forEach { group ->
                                 val candidate = group.bestCandidate
-                                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                                     Column {
-                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                        ) {
                                             Column(Modifier.weight(1f)) {
-                                                Text(group.displayName, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                                                Text(candidate?.source ?: "Source pending", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
+                                                Text(
+                                                    group.displayName,
+                                                    color = AstraWaveColors.PrimaryText,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    maxLines = 2,
+                                                )
+                                                Spacer(Modifier.height(3.dp))
+                                                Text(
+                                                    if (candidate?.source == "AstraWave Free TV") "Included with AstraWave" else candidate?.source ?: "Source unavailable",
+                                                    color = AstraWaveColors.Accent,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                )
                                             }
                                             if (candidate != null) {
                                                 val multiviewEligible = PlayerActivity.isDirectMediaUrl(candidate.url)
-                                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                                    Text("Play", color = AstraWaveColors.Success, modifier = Modifier.clickable { play(candidate.url) }, style = MaterialTheme.typography.labelLarge)
+                                                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                                     Text(
-                                                        when {
-                                                            !multiviewEligible -> "Web live"
-                                                            multiviewCount >= 4 -> "Multiview full"
-                                                            else -> "+ Multiview"
-                                                        },
-                                                        color = if (!multiviewEligible || multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
-                                                        modifier = Modifier.clickable(enabled = multiviewEligible && multiviewCount < 4) {
-                                                            onAddToMultiview(
-                                                                MultiviewPane(
-                                                                    id = "live:${group.canonicalName}",
-                                                                    title = group.displayName,
-                                                                    streamUrl = candidate.url,
-                                                                    sourceName = candidate.source,
-                                                                    channelId = candidate.id,
-                                                                ),
-                                                            )
-                                                        },
+                                                        if (multiviewEligible) "Watch" else "Open Live",
+                                                        color = AstraWaveColors.Success,
+                                                        modifier = Modifier.clickable { play(candidate.url) },
                                                         style = MaterialTheme.typography.labelLarge,
                                                     )
+                                                    if (multiviewEligible) {
+                                                        Text(
+                                                            if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
+                                                            color = if (multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
+                                                            modifier = Modifier.clickable(enabled = multiviewCount < 4) {
+                                                                onAddToMultiview(
+                                                                    MultiviewPane(
+                                                                        id = "live:${group.canonicalName}",
+                                                                        title = group.displayName,
+                                                                        streamUrl = candidate.url,
+                                                                        sourceName = candidate.source,
+                                                                        channelId = candidate.id,
+                                                                    ),
+                                                                )
+                                                            },
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                        )
+                                                    }
                                                 }
                                             } else {
                                                 Text("Unavailable", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
                                             }
                                         }
                                         group.currentProgram?.title?.let { now ->
-                                            Spacer(Modifier.height(5.dp))
-                                            Text("Now: $now", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                                            Spacer(Modifier.height(8.dp))
+                                            Text("Now • $now", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                                         }
                                         group.nextProgram?.title?.let { next ->
-                                            Text("Next: $next", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                            Text("Next • $next", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                                         }
                                     }
                                 }
@@ -183,7 +216,7 @@ fun LiveTvHubScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(28.dp))
             }
         }
     }
@@ -197,6 +230,7 @@ private fun LiveModeButton(label: String, selected: Boolean, onClick: () -> Unit
             containerColor = if (selected) AstraWaveColors.Accent else AstraWaveColors.SurfaceRaised,
             contentColor = AstraWaveColors.PrimaryText,
         ),
+        shape = MaterialTheme.shapes.large,
     ) {
         Text(label)
     }
