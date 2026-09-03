@@ -1,0 +1,82 @@
+name: Build AstraWave Release Candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astrwave-release-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-candidate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    env:
+      ASTRWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRWAVE_FIREBASE_API_KEY }}
+      ASTRWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRWAVE_FIREBASE_APP_ID }}
+      ASTRWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRWAVE_FIREBASE_PROJECT_ID }}
+      ASTRWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRWAVE_FIREBASE_SENDER_ID }}
+      ASTRWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRWAVE_TMDB_BEARER_TOKEN }}
+      ASTRWAVE_RELEASE_KEYSTORE_B64: ${{ secrets.ASTRWAVE_RELEASE_KEYSTORE_B64 }}
+      ASTRWAVE_RELEASE_STORE_PASSWORD: ${{ secrets.ASTRWAVE_RELEASE_STORE_PASSWORD }}
+      ASTRWAVE_RELEASE_KEY_ALIAS: ${{ secrets.ASTRWAVE_RELEASE_KEY_ALIAS }}
+      ASTRWAVE_RELEASE_KEY_PASSWORD: ${{ secrets.ASTRWAVE_RELEASE_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android components
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare optional release signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${ASTRWAVE_RELEASE_KEYSTORE_B64:-}" && -n "${ASTRWAVE_RELEASE_STORE_PASSWORD:-}" && -n "${ASTRWAVE_RELEASE_KEY_ALIAS:-}" && -n "${ASTRWAVE_RELEASE_KEY_PASSWORD:-}" ]]; then
+            KEYSTORE_PATH="$RUNNER_TEMP/astrawave-release.jks"
+            printf '%s' "$ASTRWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
+            echo "ASTRAWAVE_RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+            echo "Release signing credentials detected; signed release artifacts will be produced."
+          else
+            echo "Release signing secrets are incomplete; producing unsigned release-candidate artifacts only."
+          fi
+
+      - name: Build release APK and AAB
+        run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app/build/outputs
+          find . -type f \( -name '*.apk' -o -name '*.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstraWave-release-candidate-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            android-app/app/build/outputs/**/*.apk
+            android-app/app/build/outputs/**/*.aab
+            android-app/app/build/outputs/SHA256SUMS.txt
