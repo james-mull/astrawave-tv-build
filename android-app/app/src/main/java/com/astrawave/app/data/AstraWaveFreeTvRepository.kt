@@ -1,5 +1,7 @@
 package com.astrawave.app.data
 
+import com.astrawave.app.core.IptvSource
+
 /**
  * AstraWave Free TV client. The published playlist is produced by the daily
  * rights/health workflow in astrwave-free-tv and then consumed like any other
@@ -30,14 +32,18 @@ data class CombinedLiveTvSnapshot(
 
 class CombinedLiveTvRepository(
     private val freeTv: AstraWaveFreeTvRepository = AstraWaveFreeTvRepository(),
-    private val userSources: MyIptvRepository = MyIptvRepository(),
+    private val userSources: IptvSourceRepository = IptvSourceRepository(),
     private val liveTv: LiveTvRepository = LiveTvRepository(),
 ) {
-    fun load(userConfigs: List<IptvSourceConfig>): CombinedLiveTvSnapshot {
+    fun load(userSourcesConfig: List<IptvSource>): CombinedLiveTvSnapshot {
         val free = runCatching { freeTv.loadChannels() }.getOrDefault(emptyList())
-        val loadedUser = userSources.loadEnabled(userConfigs)
-        val userChannels = loadedUser.flatMap { it.channels }
-        val programmes = loadedUser.flatMap { it.programmes }
+        val enabled = userSourcesConfig.filter { it.enabled }
+        val userChannels = enabled.flatMap { source ->
+            runCatching { userSources.loadChannels(source) }.getOrDefault(emptyList())
+        }
+        val programmes = enabled.flatMap { source ->
+            runCatching { userSources.loadGuide(source) }.getOrDefault(emptyList())
+        }
         val groups = liveTv.merge(
             channelLists = listOf(free, userChannels),
             programmes = programmes,
