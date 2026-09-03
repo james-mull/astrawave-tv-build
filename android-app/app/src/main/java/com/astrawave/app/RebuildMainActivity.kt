@@ -72,6 +72,7 @@ import com.astrawave.app.ui.LibraryActionRow
 import com.astrawave.app.ui.LiveTvHubScreen
 import com.astrawave.app.ui.MultiviewScreen
 import com.astrawave.app.ui.MyAstraWaveHub
+import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.UniversalSearchScreen
 import com.astrawave.app.ui.toLibraryItemRef
 import kotlinx.coroutines.Dispatchers
@@ -97,6 +98,7 @@ private enum class RebuildDestination(val label: String, val icon: ImageVector) 
     Sports("Sports", Icons.Default.SportsFootball),
     Multiview("Multiview", Icons.Default.Tv),
     Audio("Music & Podcasts", Icons.Default.MusicNote),
+    Addons("Addons", Icons.Default.Explore),
     Discover("Discover", Icons.Default.Explore),
     Search("Search", Icons.Default.Search),
     My("My AstraWave", Icons.Default.AccountCircle),
@@ -201,6 +203,7 @@ private fun RebuildRoot() {
                     }
                 }
                 RebuildDestination.Audio -> AudioLibraryScreen(profileId = activeProfileId)
+                RebuildDestination.Addons -> StremioAddonScreen(profileId = activeProfileId)
                 RebuildDestination.Discover -> CatalogLanding("Discover", movieCatalogs + tvCatalogs)
                 RebuildDestination.Search -> UniversalSearchScreen()
                 RebuildDestination.My -> MyAstraWaveHub(
