@@ -1,10 +1,11 @@
 package com.astrawave.app.data
 
 import android.content.Context
+import com.astrawave.app.BuildConfig
 
 /**
- * Local configuration for the prototype. Production secrets should move to Android Keystore-backed
- * storage and OAuth/device authorization where the upstream provider supports it.
+ * Local configuration for AstraWave. Local values override build-time defaults so
+ * developer/test devices can change providers without rebuilding the app.
  */
 class AppSettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("astrawave_settings", Context.MODE_PRIVATE)
@@ -12,6 +13,11 @@ class AppSettingsStore(context: Context) {
     var tmdbBearerToken: String?
         get() = prefs.getString("tmdb_bearer", null)
         set(value) = prefs.edit().putString("tmdb_bearer", value?.trim()).apply()
+
+    fun effectiveTmdbBearerToken(): String =
+        tmdbBearerToken?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.TMDB_BEARER_TOKEN.takeIf { it.isNotBlank() }
+            ?: ""
 
     var m3uUrl: String?
         get() = prefs.getString("m3u_url", null)
