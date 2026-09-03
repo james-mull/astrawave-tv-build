@@ -138,7 +138,7 @@ private fun RebuildRoot() {
                 )
                 RebuildDestination.Guide -> AstraWaveGuideScreen(sources = iptvSources)
                 RebuildDestination.Sports -> AstraWaveSportsScreen(sources = iptvSources)
-                RebuildDestination.Audio -> AudioLibraryScreen(subscriptions = emptyList(), stations = emptyList())
+                RebuildDestination.Audio -> AudioLibraryScreen(profileId = activeProfileId)
                 RebuildDestination.Discover -> CatalogLanding("Discover", movieCatalogs + tvCatalogs)
                 RebuildDestination.Search -> UniversalSearchScreen()
                 RebuildDestination.My -> MyAstraWaveHub(
