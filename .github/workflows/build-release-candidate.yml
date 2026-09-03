@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: astrwave-release-candidate-${{ github.ref }}
+  group: astrawave-release-candidate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -17,15 +17,15 @@ jobs:
       run:
         working-directory: android-app
     env:
-      ASTRWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRWAVE_FIREBASE_API_KEY }}
-      ASTRWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRWAVE_FIREBASE_APP_ID }}
-      ASTRWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRWAVE_FIREBASE_PROJECT_ID }}
-      ASTRWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRWAVE_FIREBASE_SENDER_ID }}
-      ASTRWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRWAVE_TMDB_BEARER_TOKEN }}
-      ASTRWAVE_RELEASE_KEYSTORE_B64: ${{ secrets.ASTRWAVE_RELEASE_KEYSTORE_B64 }}
-      ASTRWAVE_RELEASE_STORE_PASSWORD: ${{ secrets.ASTRWAVE_RELEASE_STORE_PASSWORD }}
-      ASTRWAVE_RELEASE_KEY_ALIAS: ${{ secrets.ASTRWAVE_RELEASE_KEY_ALIAS }}
-      ASTRWAVE_RELEASE_KEY_PASSWORD: ${{ secrets.ASTRWAVE_RELEASE_KEY_PASSWORD }}
+      ASTRAWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRAWAVE_FIREBASE_API_KEY }}
+      ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
+      ASTRAWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRAWAVE_FIREBASE_PROJECT_ID }}
+      ASTRAWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRAWAVE_FIREBASE_SENDER_ID }}
+      ASTRAWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRAWAVE_TMDB_BEARER_TOKEN }}
+      ASTRAWAVE_RELEASE_KEYSTORE_B64: ${{ secrets.ASTRAWAVE_RELEASE_KEYSTORE_B64 }}
+      ASTRAWAVE_RELEASE_STORE_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_STORE_PASSWORD }}
+      ASTRAWAVE_RELEASE_KEY_ALIAS: ${{ secrets.ASTRAWAVE_RELEASE_KEY_ALIAS }}
+      ASTRAWAVE_RELEASE_KEY_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -50,9 +50,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -n "${ASTRWAVE_RELEASE_KEYSTORE_B64:-}" && -n "${ASTRWAVE_RELEASE_STORE_PASSWORD:-}" && -n "${ASTRWAVE_RELEASE_KEY_ALIAS:-}" && -n "${ASTRWAVE_RELEASE_KEY_PASSWORD:-}" ]]; then
+          if [[ -n "${ASTRAWAVE_RELEASE_KEYSTORE_B64:-}" && -n "${ASTRAWAVE_RELEASE_STORE_PASSWORD:-}" && -n "${ASTRAWAVE_RELEASE_KEY_ALIAS:-}" && -n "${ASTRAWAVE_RELEASE_KEY_PASSWORD:-}" ]]; then
             KEYSTORE_PATH="$RUNNER_TEMP/astrawave-release.jks"
-            printf '%s' "$ASTRWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
+            printf '%s' "$ASTRAWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
             echo "ASTRAWAVE_RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
             echo "Release signing credentials detected; signed release artifacts will be produced."
           else
