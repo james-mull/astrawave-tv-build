@@ -17,6 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +41,10 @@ jobs:
 
       - name: Build debug APK
         working-directory: android-app
-        run: gradle --no-daemon assembleDebug
+        timeout-minutes: 15
+        env:
+          ASTRAWAVE_GIT_SHA: ${{ github.sha }}
+        run: gradle --no-daemon --stacktrace assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
