@@ -1,5 +1,39 @@
 {
-  "checkedAt": 1788398535,
-  "results": [],
-  "healthyChannelCount": 0
+  "checkedAt": 1788441925,
+  "results": [
+    {
+      "id": "one-albuquerque-media",
+      "name": "One Albuquerque Media",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 206,
+      "latencyMs": 378,
+      "error": null,
+      "checkedAt": 1788441925
+    },
+    {
+      "id": "scottsdale-video-network",
+      "name": "Scottsdale Video Network",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 308,
+      "error": null,
+      "checkedAt": 1788441925
+    },
+    {
+      "id": "nasa-live",
+      "name": "NASA Live / NASA+",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 143,
+      "error": null,
+      "checkedAt": 1788441925
+    }
+  ],
+  "healthyChannelCount": 3
 }

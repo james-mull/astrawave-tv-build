@@ -1,1 +1,7 @@
 #EXTM3U
+#EXTINF:-1 tvg-id="OneAlbuquerqueMedia.us" tvg-logo="" group-title="Local Government",One Albuquerque Media
+https://www.cabq.gov/artsculture/govtv
+#EXTINF:-1 tvg-id="ScottsdaleVideoNetwork.us" tvg-logo="" group-title="Local Government",Scottsdale Video Network
+https://www.scottsdaleaz.gov/scottsdale-video-network/live-stream
+#EXTINF:-1 tvg-id="NASALive.us" tvg-logo="" group-title="Science & Public",NASA Live / NASA+
+https://www.nasa.gov/live/
