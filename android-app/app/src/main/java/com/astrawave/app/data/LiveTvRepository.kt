@@ -1,6 +1,8 @@
 package com.astrawave.app.data
 
 import java.io.ByteArrayInputStream
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 /** Unified live-TV pipeline for AstraWave-authorized feeds and user-provided M3U/Xtream sources. */
@@ -21,6 +23,7 @@ data class LiveChannelGroup(
     val displayName: String,
     val candidates: List<LiveChannel>,
     val currentProgram: XmlTvProgramme? = null,
+    val nextProgram: XmlTvProgramme? = null,
 ) {
     val bestCandidate: LiveChannel? get() = candidates.minByOrNull { it.priority }
 }
@@ -53,15 +56,31 @@ class LiveTvRepository {
 
     fun merge(channelLists: List<List<LiveChannel>>, programmes: List<XmlTvProgramme> = emptyList()): List<LiveChannelGroup> {
         val byTvg = programmes.groupBy { it.channelId }
+        val nowMs = System.currentTimeMillis()
         return channelLists.flatten().groupBy { it.normalizedName }.map { (_, candidates) ->
             val ordered = candidates.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.source })
             val first = ordered.first()
-            val guide = ordered.asSequence().mapNotNull { it.tvgId }.mapNotNull { byTvg[it]?.firstOrNull() }.firstOrNull()
+            val schedule = ordered.asSequence()
+                .mapNotNull { it.tvgId }
+                .mapNotNull { byTvg[it] }
+                .firstOrNull()
+                .orEmpty()
+                .sortedBy { parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
+            val current = schedule.firstOrNull { programme ->
+                val start = parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                val stop = parseXmlTvEpochMs(programme.stop) ?: return@firstOrNull false
+                nowMs in start until stop
+            }
+            val next = schedule.firstOrNull { programme ->
+                val start = parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                start > nowMs && programme != current
+            }
             LiveChannelGroup(
                 canonicalName = first.normalizedName,
                 displayName = ordered.map { it.name }.maxByOrNull { it.length } ?: first.name,
                 candidates = ordered,
-                currentProgram = guide,
+                currentProgram = current,
+                nextProgram = next,
             )
         }.sortedWith(compareBy<LiveChannelGroup> { it.candidates.firstOrNull()?.group ?: "ZZZ" }.thenBy { it.displayName })
     }
@@ -73,6 +92,26 @@ class LiveTvRepository {
     fun choosePlayable(group: LiveChannelGroup): LiveChannel? = healthyCandidates(group).firstOrNull() ?: group.bestCandidate
 
     companion object {
+        private val xmlTvFormats = listOf(
+            "yyyyMMddHHmmss Z",
+            "yyyyMMddHHmm Z",
+            "yyyyMMddHHmmss",
+            "yyyyMMddHHmm",
+        )
+
+        fun parseXmlTvEpochMs(raw: String): Long? {
+            val value = raw.trim()
+            if (value.isBlank()) return null
+            xmlTvFormats.forEach { pattern ->
+                runCatching {
+                    val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
+                    val date: Date = parser.parse(value) ?: return@runCatching null
+                    return date.time
+                }
+            }
+            return null
+        }
+
         fun normalizeChannelName(raw: String): String = raw.lowercase(Locale.US)
             .replace(Regex("\\b(uhd|4k|fhd|hd|sd|hevc|h265|h264|60fps|50fps)\\b"), " ")
             .replace(Regex("\\b(us|usa|east|west|central|backup|alt|alternative)\\b"), " ")
