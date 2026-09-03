@@ -54,7 +54,7 @@ private fun AstraWaveDesignSystemShowcase() {
             }
             AstraWaveSectionHeader(
                 title = "Operational states",
-                subtitle = "No feature destination should fall back to a blank or dead screen.",
+                subtitle = "Every degraded state stays explicit, recoverable, and free of fake playback promises.",
             )
             AstraWaveLoadingState(
                 title = "Refreshing catalogs",
@@ -71,6 +71,18 @@ private fun AstraWaveDesignSystemShowcase() {
                 message = "Errors explain the failure without implying that unavailable content is playable.",
                 retryLabel = "Try again",
                 onRetry = {},
+            )
+            AstraWaveOfflineState(onRetry = {})
+            AstraWavePartialDataState(
+                message = "Schedule data loaded, but some broadcaster metadata is temporarily unavailable.",
+                onAction = {},
+            )
+            AstraWaveNoSourceState(
+                message = "No authorized/public Free TV feed or user-configured IPTV source can play this item.",
+            )
+            AstraWaveStaleSourceState(
+                message = "This user-configured playlist has not refreshed successfully and may be out of date.",
+                onRefresh = {},
             )
         }
     }
