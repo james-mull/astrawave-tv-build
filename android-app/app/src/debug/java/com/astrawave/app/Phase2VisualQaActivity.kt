@@ -1,5 +1,6 @@
 package com.astrawave.app
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.ui.AstraWaveArtwork
@@ -61,7 +63,14 @@ class Phase2VisualQaActivity : ComponentActivity() {
 private fun Phase2VisualQaScreen() {
     val configuration = LocalConfiguration.current
     val firstFocus = remember { FocusRequester() }
+    val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    val deviceClass = when {
+        isTv -> "TV / Fire TV"
+        configuration.screenWidthDp >= 840 -> "Tablet"
+        else -> "Phone"
+    }
     var activationMessage by remember { mutableStateOf("Use touch or D-pad to exercise every control below.") }
+    var focusedControl by remember { mutableStateOf("Waiting for focus") }
 
     LaunchedEffect(Unit) {
         runCatching { firstFocus.requestFocus() }
@@ -77,12 +86,16 @@ private fun Phase2VisualQaScreen() {
     ) {
         AstraWavePageHeader(
             title = "Phase 2 Visual QA",
-            subtitle = "${configuration.screenWidthDp}×${configuration.screenHeightDp} dp • verify spacing, contrast, focus visibility, clipping, and 10-foot readability.",
+            subtitle = "$deviceClass • ${configuration.screenWidthDp}×${configuration.screenHeightDp} dp • verify spacing, contrast, focus visibility, clipping, and 10-foot readability.",
         )
 
         AstraWaveStatePanel(
             title = "Device checklist",
             message = "Run this debug screen on Android phone, tablet, Android TV, and Fire TV. On TV, verify focus is obvious, directional movement is predictable, labels remain readable, and no control is clipped.",
+        )
+        AstraWaveStatePanel(
+            title = "Current D-pad focus",
+            message = focusedControl,
         )
 
         AstraWaveSectionHeader(
@@ -96,30 +109,38 @@ private fun Phase2VisualQaScreen() {
             AstraWavePrimaryButton(
                 label = "Watch now",
                 onClick = { activationMessage = "Primary action activated." },
-                modifier = Modifier.focusRequester(firstFocus),
+                modifier = Modifier
+                    .focusRequester(firstFocus)
+                    .onFocusChanged { if (it.isFocused) focusedControl = "Actions → Watch now" },
             )
             AstraWaveSecondaryButton(
                 label = "Add to list",
                 onClick = { activationMessage = "Secondary action activated." },
+                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedControl = "Actions → Add to list" },
             )
             AstraWaveSecondaryButton(
                 label = "Disabled",
                 onClick = {},
                 enabled = false,
+                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedControl = "ERROR: disabled action received focus" },
             )
         }
         Text(activationMessage, color = AstraWaveColors.SecondaryText)
 
         AstraWaveSectionHeader(
             title = "D-pad card row",
-            subtitle = "Move left/right through all three cards and confirm focus never disappears or jumps unexpectedly.",
+            subtitle = "Move left/right through all three cards and confirm the focus telemetry follows the visible ring without disappearing or jumping.",
         )
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             listOf("Continue Watching", "Live Now", "Sports Starting Soon").forEach { title ->
-                AstraWaveFocusableCard(Modifier.width(240.dp)) {
+                AstraWaveFocusableCard(
+                    Modifier
+                        .width(240.dp)
+                        .onFocusChanged { if (it.isFocused) focusedControl = "Cards → $title" },
+                ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         AstraWaveArtwork(title = title, modifier = Modifier.fillMaxWidth())
                         Text(title, color = AstraWaveColors.PrimaryText)
