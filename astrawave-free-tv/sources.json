@@ -1,8 +1,42 @@
 {
-  "version": 1,
+  "version": 2,
   "policy": {
     "description": "AstraWave Free TV registry. Only streams with documented authorization/public distribution status belong here. Discovery sources are never auto-approved.",
     "requiredRightsStatuses": ["official", "public-domain", "creative-commons", "authorized-redistribution"]
   },
-  "channels": []
+  "channels": [
+    {
+      "id": "one-albuquerque-media",
+      "name": "One Albuquerque Media",
+      "group": "Local Government",
+      "tvgId": "OneAlbuquerqueMedia.us",
+      "streamUrl": "https://www.cabq.gov/artsculture/govtv",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsEvidenceUrl": "https://www.cabq.gov/artsculture/govtv",
+      "notes": "Official City of Albuquerque government-access television live stream."
+    },
+    {
+      "id": "scottsdale-video-network",
+      "name": "Scottsdale Video Network",
+      "group": "Local Government",
+      "tvgId": "ScottsdaleVideoNetwork.us",
+      "streamUrl": "https://www.scottsdaleaz.gov/scottsdale-video-network/live-stream",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsEvidenceUrl": "https://www.scottsdaleaz.gov/scottsdale-video-network",
+      "notes": "Official City of Scottsdale government-access television live stream."
+    },
+    {
+      "id": "nasa-live",
+      "name": "NASA Live / NASA+",
+      "group": "Science & Public",
+      "tvgId": "NASALive.us",
+      "streamUrl": "https://www.nasa.gov/live/",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsEvidenceUrl": "https://www.nasa.gov/ways-to-watch/",
+      "notes": "Official NASA live programming and NASA+ access."
+    }
+  ]
 }
