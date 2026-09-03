@@ -30,12 +30,16 @@ android {
         val tmdbBearerToken = providers.gradleProperty("ASTRAWAVE_TMDB_BEARER_TOKEN").orNull
             ?: providers.environmentVariable("ASTRAWAVE_TMDB_BEARER_TOKEN").orNull
             ?: ""
+        val gitSha = providers.gradleProperty("ASTRAWAVE_GIT_SHA").orNull
+            ?: providers.environmentVariable("GITHUB_SHA").orNull
+            ?: "local-untracked"
 
         buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"$firebaseSenderId\"")
         buildConfigField("String", "TMDB_BEARER_TOKEN", "\"$tmdbBearerToken\"")
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
     val releaseStoreFile = providers.environmentVariable("ASTRAWAVE_RELEASE_STORE_FILE").orNull
