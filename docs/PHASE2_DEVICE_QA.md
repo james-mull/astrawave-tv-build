@@ -9,17 +9,20 @@ Phase 2 and Phase 22 must not be marked complete in GitHub Issue #1 until every 
 Use this exact build for the current device qualification pass unless the branch changes afterward.
 
 - Branch: `feature/nuvio-core-rebuild`
-- Commit SHA: `28eddecd396c3f533b2ad4177a23055a97a42e70`
-- CI run: `33757549876`
+- Commit SHA: `0073ece256765d0056c18ce1714c7bef8f768131`
+- CI run: `33759301025`
 - CI result: `SUCCESS`
 - Core invariant tests: `PASS`
 - Debug APK build: `PASS`
 - Artifact: `AstraWave-Android-debug`
-- Artifact ID: `9894254349`
-- Artifact digest: `sha256:d3d4ad6560c5db0a9d9ce69fe4910efb99bfddd3d413524d11cfbc09478ba61a`
+- Artifact ID: `9894947774`
+- Artifact digest: `sha256:90fe1ea3f73c8f462e7afa5734c58b4dd87eda8a930b8a48cf4cda65485fc003`
+- Extracted APK SHA-256: `b31b42ac948350d30401884fb87990dee8c2278d94db2c0f93b5d030cfd4c96b`
 - Debug QA activity: `com.astrawave.app/.Phase2VisualQaActivity`
 - Modal QA activity: `com.astrawave.app/.Phase2ModalQaActivity`
 - Launch command: `adb shell am start -n com.astrawave.app/.Phase2VisualQaActivity`
+
+This canonical build includes stricter TV/Fire TV traversal gating: `Traversal PASS candidate` requires every expected focus target plus observed Up, Down, Left, Right, and Select remote input, with no disabled-control focus violation.
 
 If the branch head changes after this commit, do not reuse a result for an affected surface. Rebuild, record the new SHA, and rerun the affected checks.
 
@@ -89,6 +92,7 @@ Evidence / notes: `________________`
 - [ ] Collapsed rail expands predictably on focus
 - [ ] Rail does not flicker or collapse while moving between rail items
 - [ ] All expected QA controls are visited in `Phase2VisualQaActivity`
+- [ ] Up, Down, Left, Right, and Select are all observed by QA telemetry
 - [ ] QA screen reports `Traversal PASS candidate`
 - [ ] No disabled-control focus violation is reported
 - [ ] Visible focus ring matches focus telemetry
@@ -115,6 +119,7 @@ Evidence / notes: `________________`
 - [ ] Collapsed rail expands predictably on focus
 - [ ] Rail does not flicker or collapse during rapid remote navigation
 - [ ] All expected QA controls are visited in `Phase2VisualQaActivity`
+- [ ] Up, Down, Left, Right, and Select are all observed by QA telemetry
 - [ ] QA screen reports `Traversal PASS candidate`
 - [ ] No disabled-control focus violation is reported
 - [ ] Visible focus ring matches focus telemetry
@@ -249,7 +254,7 @@ Only check this after all four device sections and the visual benchmark are comp
 - [ ] Android TV passed
 - [ ] Fire TV passed
 - [ ] Visual benchmark passed
-- [x] Exact canonical head commit has green Android CI (`28eddecd396c3f533b2ad4177a23055a97a42e70`, run `33757549876`)
+- [x] Exact canonical head commit has green Android CI (`0073ece256765d0056c18ce1714c7bef8f768131`, run `33759301025`)
 
 **Phase 2 exit gate:** [ ] PASS
 
