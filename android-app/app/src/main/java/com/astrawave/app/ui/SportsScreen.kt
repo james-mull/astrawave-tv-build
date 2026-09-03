@@ -3,7 +3,6 @@ package com.astrawave.app.ui
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -132,7 +131,7 @@ fun AstraWaveSportsScreen(
 
                 val featured = visibleEvents.firstOrNull { it.watchCandidate != null } ?: visibleEvents.firstOrNull()
                 if (featured != null) {
-                    FeaturedGameCard(
+                    AstraWaveFeaturedSportsCard(
                         item = featured,
                         multiviewCount = multiviewCount,
                         onPlay = ::play,
@@ -154,7 +153,7 @@ fun AstraWaveSportsScreen(
                     SportsInfoCard("No events", "No events match the selected league for this date.")
                 } else {
                     visibleEvents.take(100).forEach { item ->
-                        SportsScheduleCard(
+                        AstraWaveSportsScheduleCard(
                             item = item,
                             multiviewCount = multiviewCount,
                             onPlay = ::play,
@@ -183,11 +182,9 @@ private fun SportsHeader(multiviewCount: Int, onOpenMultiview: () -> Unit) {
             )
         }
         if (multiviewCount > 0) {
-            Text(
-                "Multiview  $multiviewCount/4",
-                color = AstraWaveColors.Accent,
-                modifier = Modifier.clickable(onClick = onOpenMultiview).padding(10.dp),
-                style = MaterialTheme.typography.labelLarge,
+            AstraWaveSecondaryButton(
+                label = "Multiview  $multiviewCount/4",
+                onClick = onOpenMultiview,
             )
         }
     }
@@ -238,22 +235,16 @@ private fun LeagueFilterRail(
 
 @Composable
 private fun LeagueChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        color = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
-        modifier = Modifier
-            .background(
-                if (selected) AstraWaveColors.Accent else AstraWaveColors.Surface,
-                MaterialTheme.shapes.large,
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        style = MaterialTheme.typography.labelLarge,
-    )
+    if (selected) {
+        AstraWavePrimaryButton(label = label, onClick = onClick)
+    } else {
+        AstraWaveSecondaryButton(label = label, onClick = onClick)
+    }
 }
 
+/** Shared premium sports hero used by Sports today and reusable by Home/Game Day surfaces. */
 @Composable
-private fun FeaturedGameCard(
+fun AstraWaveFeaturedSportsCard(
     item: SportsGuideItem,
     multiviewCount: Int,
     onPlay: (String) -> Unit,
@@ -288,8 +279,9 @@ private fun FeaturedGameCard(
     }
 }
 
+/** Shared premium sports schedule card reusable by Sports, Home, and Game Day surfaces. */
 @Composable
-private fun SportsScheduleCard(
+fun AstraWaveSportsScheduleCard(
     item: SportsGuideItem,
     multiviewCount: Int,
     onPlay: (String) -> Unit,
@@ -361,33 +353,25 @@ private fun SportsActions(
     onAddToMultiview: (MultiviewPane) -> Unit,
 ) {
     val candidate = item.watchCandidate ?: return
-    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        Text(
-            "▶ Watch",
-            color = AstraWaveColors.PrimaryText,
-            modifier = Modifier
-                .background(AstraWaveColors.Accent, MaterialTheme.shapes.medium)
-                .clickable { onPlay(candidate.streamUrl) }
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.labelLarge,
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        AstraWavePrimaryButton(
+            label = "▶ Watch",
+            onClick = { onPlay(candidate.streamUrl) },
         )
-        Text(
-            if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
-            color = if (multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.Accent,
-            modifier = Modifier
-                .clickable(enabled = multiviewCount < 4) {
-                    onAddToMultiview(
-                        MultiviewPane(
-                            id = "sports:${item.event.id}",
-                            title = item.event.name,
-                            streamUrl = candidate.streamUrl,
-                            sourceName = candidate.source,
-                            eventId = item.event.id,
-                        ),
-                    )
-                }
-                .padding(horizontal = 6.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.labelLarge,
+        AstraWaveSecondaryButton(
+            label = if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
+            enabled = multiviewCount < 4,
+            onClick = {
+                onAddToMultiview(
+                    MultiviewPane(
+                        id = "sports:${item.event.id}",
+                        title = item.event.name,
+                        streamUrl = candidate.streamUrl,
+                        sourceName = candidate.source,
+                        eventId = item.event.id,
+                    ),
+                )
+            },
         )
     }
 }
