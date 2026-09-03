@@ -1,6 +1,7 @@
 package com.astrawave.app
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -48,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -112,9 +114,12 @@ private sealed interface CatalogLoadState {
 
 @Composable
 private fun RebuildRoot() {
-    val wide = LocalConfiguration.current.screenWidthDp >= 840
+    val configuration = LocalConfiguration.current
     val context = LocalContext.current
+    val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    val useRail = isTv || configuration.screenWidthDp >= 840
     val activeProfileId = "default"
+    var tvRailExpanded by remember(isTv) { mutableStateOf(!isTv) }
     var iptvSources by remember(activeProfileId) { mutableStateOf(IptvSourceStore(context).load(activeProfileId)) }
     var current by remember { mutableStateOf(RebuildDestination.Home) }
     var multiviewPanes by remember { mutableStateOf<List<MultiviewPane>>(emptyList()) }
@@ -138,24 +143,42 @@ private fun RebuildRoot() {
     }
 
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
-        if (wide) {
-            NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(108.dp)) {
+        if (useRail) {
+            val railWidth = when {
+                isTv && tvRailExpanded -> 216.dp
+                isTv -> 72.dp
+                else -> 108.dp
+            }
+            NavigationRail(
+                containerColor = AstraWaveColors.BackgroundRaised,
+                modifier = Modifier.width(railWidth),
+            ) {
                 Spacer(Modifier.height(14.dp))
-                Text("AW", color = AstraWaveColors.Accent, style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    if (isTv && !tvRailExpanded) "AW" else "ASTRAWAVE",
+                    color = AstraWaveColors.Accent,
+                    style = MaterialTheme.typography.headlineMedium,
+                    maxLines = 1,
+                )
                 Spacer(Modifier.height(10.dp))
                 RebuildDestination.entries.forEach { item ->
+                    val showRailLabel = !isTv || tvRailExpanded
                     NavigationRailItem(
                         selected = current == item,
                         onClick = { current = item },
+                        modifier = Modifier.onFocusChanged { state ->
+                            if (isTv) tvRailExpanded = state.hasFocus
+                        },
                         icon = { Icon(item.icon, item.label) },
-                        label = { Text(item.label, maxLines = 1) },
+                        label = if (showRailLabel) ({ Text(item.label, maxLines = 1) }) else null,
+                        alwaysShowLabel = showRailLabel,
                     )
                 }
             }
         }
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            if (!wide) SectionStrip(current) { current = it }
+            if (!useRail) SectionStrip(current) { current = it }
             when (current) {
                 RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
@@ -218,7 +241,7 @@ private fun RebuildRoot() {
                 )
             }
 
-            if (!wide) {
+            if (!useRail) {
                 NavigationBar(containerColor = AstraWaveColors.BackgroundRaised) {
                     listOf(RebuildDestination.Home, RebuildDestination.Movies, RebuildDestination.Live, RebuildDestination.Sports, RebuildDestination.My).forEach { item ->
                         NavigationBarItem(
