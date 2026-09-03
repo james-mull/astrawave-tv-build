@@ -77,6 +77,7 @@ private fun AstraWaveDesignSystemShowcase() {
                 message = "Schedule data loaded, but some broadcaster metadata is temporarily unavailable.",
                 onAction = {},
             )
+            AstraWaveUnauthenticatedState(onAction = {})
             AstraWaveNoSourceState(
                 message = "No authorized/public Free TV feed or user-configured IPTV source can play this item.",
             )
@@ -84,6 +85,7 @@ private fun AstraWaveDesignSystemShowcase() {
                 message = "This user-configured playlist has not refreshed successfully and may be out of date.",
                 onRefresh = {},
             )
+            AstraWaveEpgUnavailableState(onRefresh = {})
         }
     }
 }
