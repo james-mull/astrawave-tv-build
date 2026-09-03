@@ -26,12 +26,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
-import com.astrawave.app.core.AudioItem
 import com.astrawave.app.core.AudioLibrarySnapshot
 import com.astrawave.app.core.AudioSubscription
 import com.astrawave.app.core.RadioStation
@@ -40,6 +40,7 @@ import com.astrawave.app.data.AudioSourceStore
 import com.astrawave.app.data.StreamHealthChecker
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private sealed interface AudioLoadState {
@@ -54,6 +55,7 @@ fun AudioLibraryScreen(
     repository: AudioLibraryRepository = remember { AudioLibraryRepository() },
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val store = remember { AudioSourceStore(context) }
     var sources by remember(profileId) { mutableStateOf(store.load(profileId)) }
     var state by remember(sources) { mutableStateOf<AudioLoadState>(AudioLoadState.Loading) }
@@ -71,6 +73,19 @@ fun AudioLibraryScreen(
 
     fun play(url: String) {
         context.startActivity(Intent(context, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, url))
+    }
+
+    fun playChecked(url: String, unavailableMessage: String) {
+        scope.launch {
+            val healthy = withContext(Dispatchers.IO) {
+                runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
+            }
+            if (!healthy) {
+                Toast.makeText(context, unavailableMessage, Toast.LENGTH_LONG).show()
+            } else {
+                play(url)
+            }
+        }
     }
 
     Column(
@@ -134,12 +149,7 @@ fun AudioLibraryScreen(
                     snapshot.radioStations.forEach { station ->
                         AstraWaveFocusableCard(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
-                                val health = runCatching { StreamHealthChecker.check(station.streamUrl) }.getOrNull()
-                                if (health?.reachable == false) {
-                                    Toast.makeText(context, "This radio stream is not reachable right now.", Toast.LENGTH_LONG).show()
-                                } else {
-                                    play(station.streamUrl)
-                                }
+                                playChecked(station.streamUrl, "This radio stream is not reachable right now.")
                             },
                         ) {
                             Column {
@@ -196,9 +206,7 @@ private fun AddPodcastDialog(onDismiss: () -> Unit, onSave: (AudioSubscription) 
         confirmButton = {
             TextButton(
                 enabled = title.isNotBlank() && url.startsWith("http"),
-                onClick = {
-                    onSave(AudioSubscription(UUID.randomUUID().toString(), title.trim(), url.trim()))
-                },
+                onClick = { onSave(AudioSubscription(UUID.randomUUID().toString(), title.trim(), url.trim())) },
             ) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
@@ -223,9 +231,7 @@ private fun AddRadioDialog(onDismiss: () -> Unit, onSave: (RadioStation) -> Unit
         confirmButton = {
             TextButton(
                 enabled = name.isNotBlank() && url.startsWith("http"),
-                onClick = {
-                    onSave(RadioStation(UUID.randomUUID().toString(), name.trim(), url.trim(), genre.trim().ifBlank { null }))
-                },
+                onClick = { onSave(RadioStation(UUID.randomUUID().toString(), name.trim(), url.trim(), genre.trim().ifBlank { null })) },
             ) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
