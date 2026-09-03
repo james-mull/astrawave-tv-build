@@ -52,14 +52,25 @@ private fun AstraWaveDesignSystemShowcase() {
                     Text("D-pad focus should remain obvious from 10 feet.", color = AstraWaveColors.SecondaryText)
                 }
             }
-            AstraWaveStatePanel(
-                title = "Premium empty state",
-                message = "Feature modules use the same loading, empty, and error treatment instead of blank destinations.",
+            AstraWaveSectionHeader(
+                title = "Operational states",
+                subtitle = "No feature destination should fall back to a blank or dead screen.",
             )
-            AstraWaveStatePanel(
+            AstraWaveLoadingState(
                 title = "Refreshing catalogs",
                 message = "Loading treatment remains readable on phone, tablet, and TV.",
-                loading = true,
+            )
+            AstraWaveEmptyState(
+                title = "Nothing here yet",
+                message = "Empty destinations explain what is missing and can offer a focused next action.",
+                actionLabel = "Browse movies",
+                onAction = {},
+            )
+            AstraWaveErrorState(
+                title = "Source unavailable",
+                message = "Errors explain the failure without implying that unavailable content is playable.",
+                retryLabel = "Try again",
+                onRetry = {},
             )
         }
     }
