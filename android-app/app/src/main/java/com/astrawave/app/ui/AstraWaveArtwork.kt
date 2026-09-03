@@ -47,6 +47,10 @@ fun AstraWaveArtwork(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
             }
             !remoteArtwork.isNullOrBlank() -> {
+                // Keep the branded fallback underneath the network image. It remains visible while
+                // artwork is loading and if Coil cannot decode/fetch the remote image, preventing
+                // slow or broken artwork from degrading into an empty card.
+                AstraWaveArtworkFallback(title)
                 AsyncImage(
                     model = remoteArtwork,
                     contentDescription = "$title artwork",
@@ -54,13 +58,16 @@ fun AstraWaveArtwork(
                     contentScale = ContentScale.Crop,
                 )
             }
-            else -> {
-                Text(
-                    text = title.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "AW",
-                    color = AstraWaveColors.SecondaryText,
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-            }
+            else -> AstraWaveArtworkFallback(title)
         }
     }
+}
+
+@Composable
+private fun AstraWaveArtworkFallback(title: String) {
+    Text(
+        text = title.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "AW",
+        color = AstraWaveColors.SecondaryText,
+        style = MaterialTheme.typography.headlineMedium,
+    )
 }
