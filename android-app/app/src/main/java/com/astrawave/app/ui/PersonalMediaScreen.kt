@@ -28,11 +28,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.PersonalMediaConnection
 import com.astrawave.app.core.PersonalMediaConnectionStatus
+import com.astrawave.app.core.PersonalMediaGateway
 import com.astrawave.app.core.PersonalMediaProvider
 import com.astrawave.app.core.PersonalMediaValidation
 import com.astrawave.app.data.EmbyFamilyPersonalMediaGateway
 import com.astrawave.app.data.PersonalMediaCredentialStore
 import com.astrawave.app.data.PersonalMediaStore
+import com.astrawave.app.data.PlexPersonalMediaGateway
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,6 +47,7 @@ fun PersonalMediaScreen(profileId: String = "default") {
     val store = remember { PersonalMediaStore(context) }
     val credentials = remember { PersonalMediaCredentialStore(context) }
     val embyFamilyGateway = remember { EmbyFamilyPersonalMediaGateway(context) }
+    val plexGateway = remember { PlexPersonalMediaGateway(context) }
     var connections by remember(profileId) { mutableStateOf(store.load(profileId)) }
     var showAdd by remember { mutableStateOf(false) }
     var authConnection by remember { mutableStateOf<PersonalMediaConnection?>(null) }
@@ -53,14 +56,21 @@ fun PersonalMediaScreen(profileId: String = "default") {
 
     fun refresh() { connections = store.load(profileId) }
 
+    fun gatewayFor(connection: PersonalMediaConnection): PersonalMediaGateway? = when (connection.provider) {
+        PersonalMediaProvider.PLEX -> plexGateway
+        PersonalMediaProvider.JELLYFIN, PersonalMediaProvider.EMBY -> embyFamilyGateway
+        PersonalMediaProvider.WEBDAV, PersonalMediaProvider.NAS -> null
+    }
+
     fun testConnection(connection: PersonalMediaConnection) {
-        if (connection.provider != PersonalMediaProvider.JELLYFIN && connection.provider != PersonalMediaProvider.EMBY) {
+        val gateway = gatewayFor(connection)
+        if (gateway == null) {
             error = "${connection.provider.name} authenticated adapter is not connected yet."
             return
         }
         testingConnectionId = connection.id
         scope.launch {
-            val tested = withContext(Dispatchers.IO) { embyFamilyGateway.test(connection) }
+            val tested = withContext(Dispatchers.IO) { gateway.test(connection) }
             store.save(tested)
             testingConnectionId = null
             error = tested.lastError
@@ -90,7 +100,9 @@ fun PersonalMediaScreen(profileId: String = "default") {
             )
         } else {
             connections.forEach { connection ->
-                val supportsTokenAuth = connection.provider == PersonalMediaProvider.JELLYFIN || connection.provider == PersonalMediaProvider.EMBY
+                val supportsTokenAuth = connection.provider == PersonalMediaProvider.PLEX ||
+                    connection.provider == PersonalMediaProvider.JELLYFIN ||
+                    connection.provider == PersonalMediaProvider.EMBY
                 val hasCredential = credentials.hasCredential(connection.id)
                 AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column {
@@ -261,7 +273,7 @@ private fun AddPersonalMediaDialog(
                 OutlinedTextField(name, { name = it }, label = { Text("Connection name") }, singleLine = true)
                 OutlinedTextField(serverUrl, { serverUrl = it }, label = { Text("Server URL") }, singleLine = true)
                 Text(
-                    if (provider == PersonalMediaProvider.JELLYFIN || provider == PersonalMediaProvider.EMBY)
+                    if (provider == PersonalMediaProvider.PLEX || provider == PersonalMediaProvider.JELLYFIN || provider == PersonalMediaProvider.EMBY)
                         "After saving, add your server access token and AstraWave will test the connection."
                     else
                         "Server metadata can be saved now; secure authentication for this provider will be enabled by its adapter.",
