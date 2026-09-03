@@ -1,6 +1,7 @@
 package com.astrawave.app
 
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,6 +35,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.ui.AstraWaveArtwork
 import com.astrawave.app.ui.AstraWaveColors
@@ -76,13 +78,22 @@ class Phase2VisualQaActivity : ComponentActivity() {
 @Composable
 private fun Phase2VisualQaScreen() {
     val configuration = LocalConfiguration.current
+    val context = LocalContext.current
     val firstFocus = remember { FocusRequester() }
+    val verificationStore = remember(context) { Phase2QaVerificationStore(context) }
     val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    val isFireTv = isTv && (
+        Build.MANUFACTURER.equals("Amazon", ignoreCase = true) ||
+            Build.BRAND.equals("Amazon", ignoreCase = true)
+        )
     val deviceClass = when {
-        isTv -> "TV / Fire TV"
-        configuration.screenWidthDp >= 840 -> "Tablet"
+        isFireTv -> "Fire TV"
+        isTv -> "Android TV"
+        configuration.screenWidthDp >= 600 -> "Tablet"
         else -> "Phone"
     }
+    val commitSha = BuildConfig.GIT_SHA.ifBlank { "local-untracked" }
+    val commitKnown = commitSha != "local-untracked" && commitSha.length >= 7
     val expectedFocusControls = remember {
         setOf(
             "Actions → Watch now",
@@ -102,6 +113,10 @@ private fun Phase2VisualQaScreen() {
     var lastRemoteKey by remember { mutableStateOf("None yet") }
     var remoteKeysSeen by remember { mutableStateOf(emptySet<String>()) }
     var disabledFocusViolation by remember { mutableStateOf(false) }
+    var visualBenchmarkConfirmed by remember(deviceClass, commitSha) { mutableStateOf(false) }
+    var recordedVerifiedCommit by remember(deviceClass) {
+        mutableStateOf(verificationStore.verifiedCommit(deviceClass))
+    }
 
     val visitedExpected = visitedControls.intersect(expectedFocusControls)
     val traversalComplete = visitedExpected.size == expectedFocusControls.size
@@ -109,11 +124,13 @@ private fun Phase2VisualQaScreen() {
     val traversalPassed = traversalComplete && remoteCoverageComplete && !disabledFocusViolation
     val missingControls = expectedFocusControls - visitedExpected
     val missingRemoteKeys = requiredRemoteKeys - remoteKeysSeen
+    val exactBuildVerified = verificationStore.isVerified(deviceClass) && recordedVerifiedCommit == commitSha
 
     fun recordFocus(label: String) {
         focusedControl = label
         if (label.startsWith("ERROR:")) {
             disabledFocusViolation = true
+            visualBenchmarkConfirmed = false
             return
         }
         visitedControls = visitedControls + label
@@ -128,6 +145,7 @@ private fun Phase2VisualQaScreen() {
         lastRemoteKey = "None yet"
         remoteKeysSeen = emptySet()
         disabledFocusViolation = false
+        visualBenchmarkConfirmed = false
         runCatching { firstFocus.requestFocus() }
     }
 
@@ -164,12 +182,21 @@ private fun Phase2VisualQaScreen() {
     ) {
         AstraWavePageHeader(
             title = "Phase 2 Visual QA",
-            subtitle = "$deviceClass • ${configuration.screenWidthDp}×${configuration.screenHeightDp} dp • verify spacing, contrast, focus visibility, clipping, and 10-foot readability.",
+            subtitle = "$deviceClass • ${configuration.screenWidthDp}×${configuration.screenHeightDp} dp • build ${commitSha.take(12)} • verify spacing, contrast, focus visibility, clipping, and 10-foot readability.",
         )
 
         AstraWaveStatePanel(
             title = "Device checklist",
-            message = "Run this debug screen on Android phone, tablet, Android TV, and Fire TV. On TV, verify focus is obvious, directional movement is predictable, labels remain readable, and no control is clipped.",
+            message = "Run this debug screen separately on Android phone, tablet, Android TV, and Fire TV. On TV, verify focus is obvious, directional movement is predictable, labels remain readable, and no control is clipped.",
+        )
+        AstraWaveStatePanel(
+            title = "Verification evidence",
+            message = when {
+                exactBuildVerified -> "$deviceClass is recorded as verified for this exact build (${commitSha.take(12)}). A newer build must be verified again."
+                recordedVerifiedCommit != null -> "$deviceClass was verified on ${recordedVerifiedCommit!!.take(12)}, not this build (${commitSha.take(12)}). Re-run traversal and visual benchmark checks."
+                !commitKnown -> "This local build has no trackable commit SHA, so it cannot be recorded as Phase 2 verification evidence."
+                else -> "$deviceClass has not been verified for build ${commitSha.take(12)}. Complete traversal and the visual benchmark before recording evidence."
+            },
         )
         AstraWaveStatePanel(
             title = "Current D-pad focus",
@@ -187,15 +214,47 @@ private fun Phase2VisualQaScreen() {
             },
             message = when {
                 disabledFocusViolation -> "A disabled control received focus. Phase 2 D-pad verification must not pass on this device until that focus-path defect is fixed."
-                traversalPassed -> "All expected controls were visited, required remote keys were observed, and no disabled-control focus violation occurred. Record the device result and still complete the visual readability/polish check before closing Phase 2."
-                isTv && missingRemoteKeys.isNotEmpty() -> "Missing controls: ${missingControls.joinToString().ifBlank { "none" }}. Missing remote input: ${missingRemoteKeys.joinToString()}. TV/Fire TV cannot pass from touch or focus traversal alone; exercise Up, Down, Left, Right, and Select on the real remote."
+                traversalPassed -> "All expected controls were visited, required remote keys were observed, and no disabled-control focus violation occurred. Now compare hierarchy, readability, focus behavior, artwork, Guide/Live TV presentation, and sports presentation against the Phase 2 Nuvio/TiviMate benchmark before recording this device."
+                isTv && missingRemoteKeys.isNotEmpty() -> "Missing controls: ${missingControls.joinToString().ifBlank { "none" }}. Missing remote input: ${missingRemoteKeys.joinToString()}. Android TV/Fire TV cannot pass from touch or focus traversal alone; exercise Up, Down, Left, Right, and Select on the real remote."
                 else -> "Missing: ${missingControls.joinToString()}. Visit every expected control and confirm the visible focus ring matches the telemetry."
             },
         )
-        AstraWaveSecondaryButton(
-            label = "Reset traversal test",
-            onClick = ::resetTraversal,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AstraWaveSecondaryButton(
+                label = "Reset traversal test",
+                onClick = ::resetTraversal,
+            )
+            AstraWaveSecondaryButton(
+                label = if (visualBenchmarkConfirmed) "Visual benchmark confirmed" else "Confirm visual benchmark",
+                enabled = traversalPassed && !visualBenchmarkConfirmed,
+                onClick = {
+                    visualBenchmarkConfirmed = true
+                    activationMessage = "Visual benchmark confirmed for this device session. Record verification only if the comparison was actually completed."
+                },
+            )
+            AstraWavePrimaryButton(
+                label = if (exactBuildVerified) "Build verified" else "Record device verification",
+                enabled = traversalPassed && visualBenchmarkConfirmed && commitKnown && !exactBuildVerified,
+                onClick = {
+                    verificationStore.markVerified(deviceClass, commitSha)
+                    recordedVerifiedCommit = commitSha
+                    activationMessage = "$deviceClass recorded for build ${commitSha.take(12)}."
+                },
+            )
+            AstraWaveSecondaryButton(
+                label = "Clear device verification",
+                enabled = recordedVerifiedCommit != null,
+                onClick = {
+                    verificationStore.clear(deviceClass)
+                    recordedVerifiedCommit = null
+                    visualBenchmarkConfirmed = false
+                    activationMessage = "$deviceClass verification evidence cleared."
+                },
+            )
+        }
 
         AstraWaveSectionHeader(
             title = "Actions",
@@ -293,7 +352,7 @@ private fun Phase2VisualQaScreen() {
 
         Spacer(Modifier.height(12.dp))
         Text(
-            "Phase 2 may be marked complete only after the app shell and this QA surface are visually checked on the required device classes and benchmarked against the Nuvio/TiviMate reference quality in the master rebuild plan.",
+            "Phase 2 may be marked complete only after the app shell and this QA surface are visually checked on Android phone, tablet, Android TV, and Fire TV for the exact build being closed, and benchmarked against the Nuvio/TiviMate reference quality in the master rebuild plan.",
             color = AstraWaveColors.SecondaryText,
         )
         Spacer(Modifier.height(24.dp))
