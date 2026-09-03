@@ -36,6 +36,14 @@ data class RankedRecommendation(
     val reasons: List<RecommendationReason>,
 )
 
+enum class RecommendationAvailabilityPolicy {
+    /** Discovery rows may include metadata-only items such as Coming Soon. */
+    INCLUDE_METADATA_ONLY,
+
+    /** Watch-now / AI-grounded rows must have at least one eligible connected source. */
+    REQUIRE_PLAYABLE_SOURCE,
+}
+
 /**
  * Deterministic local ranking used before any optional AI explanation/generation layer.
  * This keeps recommendations explainable and avoids fake model-derived confidence values.
@@ -45,9 +53,14 @@ class RecommendationEngine {
         profile: RecommendationProfile,
         candidates: List<RecommendationCandidate>,
         limit: Int = 50,
+        availabilityPolicy: RecommendationAvailabilityPolicy = RecommendationAvailabilityPolicy.INCLUDE_METADATA_ONLY,
     ): List<RankedRecommendation> = candidates
         .asSequence()
         .filterNot { it.id in profile.completedItemIds }
+        .filter { candidate ->
+            availabilityPolicy == RecommendationAvailabilityPolicy.INCLUDE_METADATA_ONLY ||
+                candidate.availableSourceCount > 0
+        }
         .map { candidate -> rankOne(profile, candidate) }
         .sortedWith(compareByDescending<RankedRecommendation> { it.score }.thenBy { it.candidate.title })
         .take(limit)
