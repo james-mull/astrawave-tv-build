@@ -58,6 +58,7 @@ import com.astrawave.app.data.TmdbCatalogPage
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveGuideScreen
+import com.astrawave.app.ui.AstraWaveSportsScreen
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.MyIptvScreen
@@ -124,7 +125,7 @@ private fun RebuildRoot() {
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
                 RebuildDestination.Live -> MyIptvScreen(sources = emptyList())
                 RebuildDestination.Guide -> AstraWaveGuideScreen(sources = emptyList())
-                RebuildDestination.Sports -> PlaceholderScreen("Sports", "Schedules, broadcaster matching and Watch actions")
+                RebuildDestination.Sports -> AstraWaveSportsScreen(sources = emptyList())
                 RebuildDestination.Audio -> PlaceholderScreen("Music & Podcasts", "Music, podcasts, video podcasts and radio")
                 RebuildDestination.Discover -> CatalogLanding("Discover", movieCatalogs + tvCatalogs)
                 RebuildDestination.Search -> PlaceholderScreen("Search", "Universal search across every AstraWave source")
