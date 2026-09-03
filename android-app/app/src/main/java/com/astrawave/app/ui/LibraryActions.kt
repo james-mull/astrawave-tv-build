@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.FavoriteEntry
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
+import com.astrawave.app.core.StremioMetaItem
 import com.astrawave.app.core.WatchlistEntry
 import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LocalLibraryStore
@@ -31,6 +32,18 @@ fun TmdbItem.toLibraryItemRef(): LibraryItemRef = LibraryItemRef(
     title = title,
     posterUrl = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" },
     sourceId = "tmdb:$id",
+)
+
+fun StremioMetaItem.toLibraryItemRef(addonId: String): LibraryItemRef = LibraryItemRef(
+    id = "stremio:$addonId:$type:$id",
+    type = when (type.lowercase()) {
+        "series", "tv", "show" -> LibraryMediaType.SERIES
+        "episode" -> LibraryMediaType.EPISODE
+        else -> LibraryMediaType.MOVIE
+    },
+    title = name,
+    posterUrl = posterUrl,
+    sourceId = "stremio:$addonId:$type:$id",
 )
 
 @Composable
