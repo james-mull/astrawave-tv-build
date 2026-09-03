@@ -35,6 +35,7 @@ import com.astrawave.app.data.EmbyFamilyPersonalMediaGateway
 import com.astrawave.app.data.PersonalMediaCredentialStore
 import com.astrawave.app.data.PersonalMediaStore
 import com.astrawave.app.data.PlexPersonalMediaGateway
+import com.astrawave.app.data.WebDavPersonalMediaGateway
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -48,29 +49,26 @@ fun PersonalMediaScreen(profileId: String = "default") {
     val credentials = remember { PersonalMediaCredentialStore(context) }
     val embyFamilyGateway = remember { EmbyFamilyPersonalMediaGateway(context) }
     val plexGateway = remember { PlexPersonalMediaGateway(context) }
+    val webDavGateway = remember { WebDavPersonalMediaGateway(context) }
     var connections by remember(profileId) { mutableStateOf(store.load(profileId)) }
     var showAdd by remember { mutableStateOf(false) }
-    var authConnection by remember { mutableStateOf<PersonalMediaConnection?>(null) }
+    var tokenAuthConnection by remember { mutableStateOf<PersonalMediaConnection?>(null) }
+    var basicAuthConnection by remember { mutableStateOf<PersonalMediaConnection?>(null) }
     var testingConnectionId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun refresh() { connections = store.load(profileId) }
 
-    fun gatewayFor(connection: PersonalMediaConnection): PersonalMediaGateway? = when (connection.provider) {
+    fun gatewayFor(connection: PersonalMediaConnection): PersonalMediaGateway = when (connection.provider) {
         PersonalMediaProvider.PLEX -> plexGateway
         PersonalMediaProvider.JELLYFIN, PersonalMediaProvider.EMBY -> embyFamilyGateway
-        PersonalMediaProvider.WEBDAV, PersonalMediaProvider.NAS -> null
+        PersonalMediaProvider.WEBDAV, PersonalMediaProvider.NAS -> webDavGateway
     }
 
     fun testConnection(connection: PersonalMediaConnection) {
-        val gateway = gatewayFor(connection)
-        if (gateway == null) {
-            error = "${connection.provider.name} authenticated adapter is not connected yet."
-            return
-        }
         testingConnectionId = connection.id
         scope.launch {
-            val tested = withContext(Dispatchers.IO) { gateway.test(connection) }
+            val tested = withContext(Dispatchers.IO) { gatewayFor(connection).test(connection) }
             store.save(tested)
             testingConnectionId = null
             error = tested.lastError
@@ -83,7 +81,7 @@ fun PersonalMediaScreen(profileId: String = "default") {
     ) {
         AstraWavePageHeader(
             title = "Personal Media",
-            subtitle = "Connect your own Plex, Jellyfin, Emby, WebDAV or NAS libraries. Authentication secrets are encrypted with Android Keystore.",
+            subtitle = "Connect your own Plex, Jellyfin, Emby, WebDAV or WebDAV-compatible NAS libraries. Authentication secrets are encrypted with Android Keystore.",
         )
         Spacer(Modifier.height(14.dp))
         Button(onClick = { showAdd = true }) { Text("Add Server") }
@@ -103,6 +101,8 @@ fun PersonalMediaScreen(profileId: String = "default") {
                 val supportsTokenAuth = connection.provider == PersonalMediaProvider.PLEX ||
                     connection.provider == PersonalMediaProvider.JELLYFIN ||
                     connection.provider == PersonalMediaProvider.EMBY
+                val supportsBasicAuth = connection.provider == PersonalMediaProvider.WEBDAV ||
+                    connection.provider == PersonalMediaProvider.NAS
                 val hasCredential = credentials.hasCredential(connection.id)
                 AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Column {
@@ -116,11 +116,13 @@ fun PersonalMediaScreen(profileId: String = "default") {
                                     testingConnectionId == connection.id -> "Testing…"
                                     connection.status == PersonalMediaConnectionStatus.READY -> "Ready"
                                     hasCredential -> "Credential saved"
+                                    supportsBasicAuth -> "Login optional"
                                     else -> "Setup needed"
                                 },
                                 color = when {
                                     connection.status == PersonalMediaConnectionStatus.READY -> AstraWaveColors.Success
                                     hasCredential -> AstraWaveColors.Accent
+                                    supportsBasicAuth -> AstraWaveColors.SecondaryText
                                     else -> AstraWaveColors.TertiaryText
                                 },
                                 style = MaterialTheme.typography.labelMedium,
@@ -129,11 +131,15 @@ fun PersonalMediaScreen(profileId: String = "default") {
                         Spacer(Modifier.height(8.dp))
                         Text(
                             when (connection.status) {
-                                PersonalMediaConnectionStatus.READY -> "Connected • ${connection.libraryCount} libraries • last checked ${connection.lastSyncEpochMs}"
+                                PersonalMediaConnectionStatus.READY -> "Connected • ${connection.libraryCount} libraries • ${connection.itemCount} items • last checked ${connection.lastSyncEpochMs}"
                                 PersonalMediaConnectionStatus.ERROR -> connection.lastError ?: "Connection error"
                                 PersonalMediaConnectionStatus.DEGRADED -> connection.lastError ?: "Connection degraded"
                                 PersonalMediaConnectionStatus.CONNECTING -> "Connecting…"
-                                PersonalMediaConnectionStatus.NOT_CONNECTED -> if (hasCredential) "Secure credential saved • test the server to finish setup" else "Server saved • secure authentication required"
+                                PersonalMediaConnectionStatus.NOT_CONNECTED -> when {
+                                    hasCredential -> "Secure credential saved • test the server to finish setup"
+                                    supportsBasicAuth -> "Server saved • test anonymously or add a secure username/password"
+                                    else -> "Server saved • secure authentication required"
+                                }
                             },
                             color = AstraWaveColors.SecondaryText,
                             style = MaterialTheme.typography.bodyMedium,
@@ -145,19 +151,25 @@ fun PersonalMediaScreen(profileId: String = "default") {
                                     if (hasCredential) "Update Token" else "Add Token",
                                     color = AstraWaveColors.Accent,
                                     style = MaterialTheme.typography.labelLarge,
-                                    modifier = Modifier.clickable { authConnection = connection },
+                                    modifier = Modifier.clickable { tokenAuthConnection = connection },
                                 )
-                                Text(
-                                    if (testingConnectionId == connection.id) "Testing…" else "Test Connection",
-                                    color = if (testingConnectionId == connection.id) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    modifier = Modifier.clickable(enabled = testingConnectionId != connection.id && hasCredential) {
-                                        testConnection(connection)
-                                    },
-                                )
-                            } else {
-                                Text("Auth adapter pending", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
                             }
+                            if (supportsBasicAuth) {
+                                Text(
+                                    if (hasCredential) "Update Login" else "Add Login",
+                                    color = AstraWaveColors.Accent,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.clickable { basicAuthConnection = connection },
+                                )
+                            }
+                            Text(
+                                if (testingConnectionId == connection.id) "Testing…" else "Test Connection",
+                                color = if (testingConnectionId == connection.id) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.clickable(
+                                    enabled = testingConnectionId != connection.id && (supportsBasicAuth || hasCredential),
+                                ) { testConnection(connection) },
+                            )
                             Text(
                                 if (connection.enabled) "Disable" else "Enable",
                                 color = AstraWaveColors.Accent,
@@ -184,13 +196,28 @@ fun PersonalMediaScreen(profileId: String = "default") {
         }
     }
 
-    authConnection?.let { connection ->
+    tokenAuthConnection?.let { connection ->
         PersonalMediaTokenDialog(
             providerName = connection.provider.name,
-            onDismiss = { authConnection = null },
+            onDismiss = { tokenAuthConnection = null },
             onSave = { token ->
                 credentials.saveToken(connection.id, token)
-                authConnection = null
+                tokenAuthConnection = null
+                error = null
+                testConnection(connection)
+            },
+        )
+    }
+
+    basicAuthConnection?.let { connection ->
+        PersonalMediaBasicAuthDialog(
+            providerName = connection.provider.name,
+            onDismiss = { basicAuthConnection = null },
+            onSave = { username, password ->
+                credentials.clear(connection.id)
+                credentials.saveUsername(connection.id, username)
+                credentials.savePassword(connection.id, password)
+                basicAuthConnection = null
                 error = null
                 testConnection(connection)
             },
@@ -245,6 +272,34 @@ private fun PersonalMediaTokenDialog(
 }
 
 @Composable
+private fun PersonalMediaBasicAuthDialog(
+    providerName: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit,
+) {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Connect $providerName") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Enter credentials for your own WebDAV endpoint. AstraWave encrypts both values locally with Android Keystore.")
+                OutlinedTextField(username, { username = it }, label = { Text("Username") }, singleLine = true)
+                OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = username.isNotBlank() && password.isNotBlank(),
+                onClick = { onSave(username.trim(), password) },
+            ) { Text("Save & Test") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
 private fun AddPersonalMediaDialog(
     profileId: String,
     onDismiss: () -> Unit,
@@ -273,10 +328,14 @@ private fun AddPersonalMediaDialog(
                 OutlinedTextField(name, { name = it }, label = { Text("Connection name") }, singleLine = true)
                 OutlinedTextField(serverUrl, { serverUrl = it }, label = { Text("Server URL") }, singleLine = true)
                 Text(
-                    if (provider == PersonalMediaProvider.PLEX || provider == PersonalMediaProvider.JELLYFIN || provider == PersonalMediaProvider.EMBY)
-                        "After saving, add your server access token and AstraWave will test the connection."
-                    else
-                        "Server metadata can be saved now; secure authentication for this provider will be enabled by its adapter.",
+                    when (provider) {
+                        PersonalMediaProvider.PLEX, PersonalMediaProvider.JELLYFIN, PersonalMediaProvider.EMBY ->
+                            "After saving, add your server access token and AstraWave will test the connection."
+                        PersonalMediaProvider.WEBDAV ->
+                            "After saving, test the WebDAV endpoint anonymously or add an encrypted username/password."
+                        PersonalMediaProvider.NAS ->
+                            "NAS support requires an HTTP(S) WebDAV endpoint. Raw SMB browsing is not enabled in this adapter."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
