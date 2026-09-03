@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,9 +48,10 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.AccountOverview
 import com.astrawave.app.core.AccountSection
 import com.astrawave.app.core.AstraWaveList
+import com.astrawave.app.data.LibraryCloudSync
 import com.astrawave.app.data.LocalLibraryStore
 
-/** Local-first My AstraWave hub. Firebase can mirror the same models when configured. */
+/** Local-first My AstraWave hub. Firebase restores into the same local models when signed in. */
 @Composable
 fun MyAstraWaveHub(
     account: AccountOverview,
@@ -58,12 +60,19 @@ fun MyAstraWaveHub(
 ) {
     val context = LocalContext.current
     val store = remember { LocalLibraryStore(context) }
+    val cloudSync = remember { LibraryCloudSync(context) }
     val profileId = account.activeProfileId
     var snapshot by remember(profileId) { mutableStateOf(store.snapshot(profileId)) }
     var activeView by remember { mutableStateOf<PersonalLibraryView?>(null) }
     var createList by remember { mutableStateOf(false) }
 
     fun refresh() { snapshot = store.snapshot(profileId) }
+
+    LaunchedEffect(profileId) {
+        cloudSync.restore(profileId) { result ->
+            if (result.isSuccess) refresh()
+        }
+    }
 
     val selected = activeView
     if (selected != null) {
