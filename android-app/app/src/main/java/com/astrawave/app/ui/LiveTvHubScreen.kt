@@ -142,12 +142,17 @@ fun LiveTvHubScreen(
                                                 Text(candidate?.source ?: "Source pending", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
                                             }
                                             if (candidate != null) {
+                                                val multiviewEligible = PlayerActivity.isDirectMediaUrl(candidate.url)
                                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                                     Text("Play", color = AstraWaveColors.Success, modifier = Modifier.clickable { play(candidate.url) }, style = MaterialTheme.typography.labelLarge)
                                                     Text(
-                                                        if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
-                                                        color = if (multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
-                                                        modifier = Modifier.clickable(enabled = multiviewCount < 4) {
+                                                        when {
+                                                            !multiviewEligible -> "Web live"
+                                                            multiviewCount >= 4 -> "Multiview full"
+                                                            else -> "+ Multiview"
+                                                        },
+                                                        color = if (!multiviewEligible || multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
+                                                        modifier = Modifier.clickable(enabled = multiviewEligible && multiviewCount < 4) {
                                                             onAddToMultiview(
                                                                 MultiviewPane(
                                                                     id = "live:${group.canonicalName}",
