@@ -86,7 +86,7 @@ object XmlTvParser {
                 val start = parser.getAttributeValue(null, "start") ?: ""
                 val stop = parser.getAttributeValue(null, "stop") ?: ""
                 var title = "Program"
-                var depth = parser.depth
+                val depth = parser.depth
                 while (true) {
                     event = parser.next()
                     if (event == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name == "title") {
@@ -149,20 +149,21 @@ data class TmdbItem(
     val overview: String,
     val posterPath: String?,
     val backdropPath: String?,
+    val mediaType: String? = null,
 )
 
 class TmdbClient(private val bearerToken: String) {
     private val base = "https://api.themoviedb.org/3"
     private val headers get() = mapOf("Authorization" to "Bearer $bearerToken", "accept" to "application/json")
 
-    fun trendingMovies(): List<TmdbItem> = parseResults(SimpleHttp.getText("$base/trending/movie/day", headers))
-    fun trendingShows(): List<TmdbItem> = parseResults(SimpleHttp.getText("$base/trending/tv/day", headers))
+    fun trendingMovies(): List<TmdbItem> = parseResults(SimpleHttp.getText("$base/trending/movie/day", headers), "movie")
+    fun trendingShows(): List<TmdbItem> = parseResults(SimpleHttp.getText("$base/trending/tv/day", headers), "tv")
     fun search(query: String): List<TmdbItem> {
         val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
-        return parseResults(SimpleHttp.getText("$base/search/multi?query=$encoded&include_adult=false", headers))
+        return parseResults(SimpleHttp.getText("$base/search/multi?query=$encoded&include_adult=false", headers), null)
     }
 
-    private fun parseResults(json: String): List<TmdbItem> {
+    private fun parseResults(json: String, fallbackMediaType: String?): List<TmdbItem> {
         val array = JSONObject(json).optJSONArray("results") ?: return emptyList()
         return buildList {
             for (i in 0 until array.length()) {
@@ -176,6 +177,7 @@ class TmdbClient(private val bearerToken: String) {
                         overview = obj.optString("overview"),
                         posterPath = obj.optString("poster_path").takeIf { it.isNotBlank() && it != "null" },
                         backdropPath = obj.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" },
+                        mediaType = obj.optString("media_type").takeIf { it.isNotBlank() } ?: fallbackMediaType,
                     )
                 )
             }
