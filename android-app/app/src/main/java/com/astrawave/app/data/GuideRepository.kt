@@ -1,5 +1,7 @@
 package com.astrawave.app.data
 
+import com.astrawave.app.core.IptvSource
+
 data class GuideChannelRow(
     val id: String,
     val name: String,
@@ -19,15 +21,14 @@ data class GuideSnapshot(
 )
 
 /**
- * Guide-facing projection over the combined Live TV source model. The first
- * implementation uses XMLTV order and is intentionally independent from UI so
- * the TV grid, mini-guide and search can share the same data later.
+ * Guide-facing projection over the combined Live TV source model. The TV grid,
+ * mini-guide and search can share this one normalized projection.
  */
 class GuideRepository(
     private val combined: CombinedLiveTvRepository = CombinedLiveTvRepository(),
 ) {
-    fun load(configs: List<IptvSourceConfig>): GuideSnapshot {
-        val live = combined.load(configs)
+    fun load(sources: List<IptvSource>): GuideSnapshot {
+        val live = combined.load(sources)
         val rows = live.groups.map { group ->
             val preferred = group.bestCandidate
             GuideChannelRow(
