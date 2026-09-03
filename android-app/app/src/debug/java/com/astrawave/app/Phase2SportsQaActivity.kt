@@ -15,15 +15,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.data.SportsEvent
 import com.astrawave.app.data.SportsGuideItem
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveFeaturedSportsCard
 import com.astrawave.app.ui.AstraWavePageHeader
+import com.astrawave.app.ui.AstraWavePrimaryButton
 import com.astrawave.app.ui.AstraWaveSectionHeader
 import com.astrawave.app.ui.AstraWaveSportsScheduleCard
 import com.astrawave.app.ui.AstraWaveStatePanel
@@ -44,6 +49,8 @@ class Phase2SportsQaActivity : ComponentActivity() {
 @Composable
 private fun Phase2SportsQaScreen() {
     val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val verificationStore = remember(context) { Phase2QaVerificationStore(context) }
     val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
     val isFireTv = isTv && (
         Build.MANUFACTURER.equals("Amazon", ignoreCase = true) ||
@@ -57,6 +64,10 @@ private fun Phase2SportsQaScreen() {
     }
     val commitSha = BuildConfig.GIT_SHA.ifBlank { "local-untracked" }
     val commitKnown = commitSha != "local-untracked" && commitSha.length >= 7
+    var recordedCommit by remember(deviceClass) {
+        mutableStateOf(verificationStore.sportsVerifiedCommit(deviceClass))
+    }
+    val exactBuildVerified = verificationStore.isSportsVerified(deviceClass) && recordedCommit == commitSha
 
     val featured = remember {
         SportsGuideItem(
@@ -100,11 +111,12 @@ private fun Phase2SportsQaScreen() {
             subtitle = "$deviceClass • ${configuration.screenWidthDp}×${configuration.screenHeightDp} dp • build ${commitSha.take(12)} • inspect the real shared featured-game and schedule-card components for hierarchy, focus treatment, long-title wrapping, spacing, and 10-foot readability.",
         )
         AstraWaveStatePanel(
-            title = "Exact-build evidence",
-            message = if (commitKnown) {
-                "Record sports visual QA only against this exact build (${commitSha.take(12)}) and this device class ($deviceClass). A newer build must be inspected again."
-            } else {
-                "This local build has no trackable commit SHA and must not be used as Phase 2 sports visual-verification evidence."
+            title = "Sports verification evidence",
+            message = when {
+                exactBuildVerified -> "$deviceClass sports visual QA is recorded for this exact build (${commitSha.take(12)})."
+                recordedCommit != null -> "$deviceClass sports visual QA was recorded on ${recordedCommit!!.take(12)}, not this build (${commitSha.take(12)}). Re-run the benchmark."
+                !commitKnown -> "This local build has no trackable commit SHA and must not be used as Phase 2 sports visual-verification evidence."
+                else -> "Inspect every sports component below on this device, then record the benchmark only if it meets the Phase 2 premium-quality requirements."
             },
         )
         AstraWaveStatePanel(
@@ -138,6 +150,14 @@ private fun Phase2SportsQaScreen() {
         AstraWaveStatePanel(
             title = "Phase 2 benchmark reminder",
             message = "Reject this exact build if the sports components clip, look like generic debug/data cards, lose focus visibility, or fail the premium flagship presentation required by the master rebuild plan.",
+        )
+        AstraWavePrimaryButton(
+            label = if (exactBuildVerified) "Sports QA verified" else "Record sports visual QA",
+            enabled = commitKnown && !exactBuildVerified,
+            onClick = {
+                verificationStore.markSportsVerified(deviceClass, commitSha)
+                recordedCommit = commitSha
+            },
         )
     }
 }
