@@ -56,7 +56,12 @@ class SportsGuideRepository(
                     startTimeEpochMs = 0L,
                     broadcasterNames = broadcasters,
                 )
-                resolver.resolve(guideEvent, live.groups)
+                val matched = resolver.resolve(guideEvent, live.groups)
+                matched.copy(
+                    candidates = matched.candidates.filter { candidate ->
+                        runCatching { StreamHealthChecker.check(candidate.streamUrl).reachable }.getOrDefault(false)
+                    },
+                )
             }
             SportsGuideItem(event, broadcasters, resolution)
         }
