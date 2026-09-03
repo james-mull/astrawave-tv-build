@@ -19,6 +19,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ASTRAWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRAWAVE_TMDB_BEARER_TOKEN }}
+      ASTRAWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRAWAVE_FIREBASE_API_KEY }}
+      ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
+      ASTRAWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRAWAVE_FIREBASE_PROJECT_ID }}
+      ASTRAWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRAWAVE_FIREBASE_SENDER_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
