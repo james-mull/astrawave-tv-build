@@ -3,9 +3,8 @@ package com.astrawave.app.ui
 /**
  * Canonical Phase 2 primary-navigation contract.
  *
- * Primary navigation stays focused on destinations users need frequently. Discover is omitted
- * because Home and Search already cover broad exploration. Guide and Music remain first-class
- * until their owning hubs expose equally direct shortcuts on every supported device class.
+ * Keep this aligned with docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md. Mobile/tablet includes
+ * Discover as a first-class destination; TV keeps the tighter 10-foot rail defined by the plan.
  */
 data class AstraWaveNavItem(
     val route: String,
@@ -21,6 +20,7 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Sports"),
         AstraWaveNavItem("audio", "Music"),
+        AstraWaveNavItem("discover", "Discover"),
         AstraWaveNavItem("search", "Search"),
         AstraWaveNavItem("my", "My"),
     )
@@ -41,5 +41,6 @@ object AstraWaveNavigationContract {
         check(mobileTablet.map { it.route }.distinct().size == mobileTablet.size)
         check(tv.map { it.route }.distinct().size == tv.size)
         check(tv.all { tvItem -> mobileTablet.any { it.route == tvItem.route } })
+        check(mobileTablet.any { it.route == "discover" })
     }
 }
