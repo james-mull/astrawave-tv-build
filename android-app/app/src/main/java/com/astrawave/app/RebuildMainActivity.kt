@@ -47,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -83,6 +84,9 @@ import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.UniversalSearchScreen
 import com.astrawave.app.ui.toLibraryItemRef
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class RebuildMainActivity : ComponentActivity() {
@@ -134,11 +138,27 @@ private fun RebuildRoot() {
         val contract = if (isTv) AstraWaveNavigationContract.tv else AstraWaveNavigationContract.mobileTablet
         contract.mapNotNull { nav -> RebuildDestination.entries.firstOrNull { it.route == nav.route } }
     }
+    val tvRailFocusScope = rememberCoroutineScope()
     var tvRailExpanded by remember(isTv) { mutableStateOf(!isTv) }
+    var tvRailCollapseJob by remember(isTv) { mutableStateOf<Job?>(null) }
     var iptvSources by remember(activeProfileId) { mutableStateOf(IptvSourceStore(context).load(activeProfileId)) }
     var current by remember { mutableStateOf(RebuildDestination.Home) }
     var multiviewPanes by remember { mutableStateOf<List<MultiviewPane>>(emptyList()) }
     var multiviewAudioPaneId by remember { mutableStateOf<String?>(null) }
+
+    fun handleTvRailFocus(hasFocus: Boolean) {
+        if (!isTv) return
+        tvRailCollapseJob?.cancel()
+        tvRailCollapseJob = null
+        if (hasFocus) {
+            tvRailExpanded = true
+        } else {
+            tvRailCollapseJob = tvRailFocusScope.launch {
+                delay(120)
+                tvRailExpanded = false
+            }
+        }
+    }
 
     fun addToMultiview(pane: MultiviewPane) {
         if (multiviewPanes.any { it.streamUrl == pane.streamUrl }) {
@@ -178,7 +198,7 @@ private fun RebuildRoot() {
                     NavigationRailItem(
                         selected = current == item,
                         onClick = { current = item },
-                        modifier = Modifier.onFocusChanged { state -> if (isTv) tvRailExpanded = state.hasFocus },
+                        modifier = Modifier.onFocusChanged { state -> handleTvRailFocus(state.hasFocus) },
                         icon = { Icon(item.icon, item.label) },
                         label = if (showRailLabel) ({ Text(item.label, maxLines = 1) }) else null,
                         alwaysShowLabel = showRailLabel,
