@@ -61,6 +61,8 @@ import com.astrawave.app.core.MultiviewSession
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
 import com.astrawave.app.data.IptvSourceStore
+import com.astrawave.app.data.StremioCatalogAggregator
+import com.astrawave.app.data.StremioCatalogRow
 import com.astrawave.app.data.TmdbCatalogPage
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.ui.AstraWaveArtwork
@@ -110,6 +112,11 @@ private sealed interface CatalogLoadState {
     data object Loading : CatalogLoadState
     data class Ready(val page: TmdbCatalogPage) : CatalogLoadState
     data class Error(val message: String) : CatalogLoadState
+}
+
+private sealed interface AddonCatalogLoadState {
+    data object Loading : AddonCatalogLoadState
+    data class Ready(val rows: List<StremioCatalogRow>) : AddonCatalogLoadState
 }
 
 @Composable
@@ -227,7 +234,7 @@ private fun RebuildRoot() {
                 }
                 RebuildDestination.Audio -> AudioLibraryScreen(profileId = activeProfileId)
                 RebuildDestination.Addons -> StremioAddonScreen(profileId = activeProfileId)
-                RebuildDestination.Discover -> CatalogLanding("Discover", movieCatalogs + tvCatalogs)
+                RebuildDestination.Discover -> CombinedDiscoverScreen(profileId = activeProfileId)
                 RebuildDestination.Search -> UniversalSearchScreen()
                 RebuildDestination.My -> MyAstraWaveHub(
                     account = AccountOverview(
@@ -348,6 +355,112 @@ private fun CatalogLanding(title: String, catalogs: List<AstraWaveCatalog>, show
                 is CatalogLoadState.Error -> ErrorCatalogRow(catalog, state.message)
             }
         }
+    }
+}
+
+@Composable
+private fun CombinedDiscoverScreen(profileId: String) {
+    val context = LocalContext.current
+    val token = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
+    val tmdb = remember(token) { TmdbCatalogRepository(token) }
+    val addonAggregator = remember { StremioCatalogAggregator(context) }
+    val catalogs = movieCatalogs + tvCatalogs
+    val tmdbStates = remember(catalogs, token) {
+        mutableStateMapOf<AstraWaveCatalog, CatalogLoadState>().apply {
+            catalogs.forEach { put(it, CatalogLoadState.Loading) }
+        }
+    }
+    var addonState by remember(profileId) { mutableStateOf<AddonCatalogLoadState>(AddonCatalogLoadState.Loading) }
+
+    LaunchedEffect(catalogs, token, profileId) {
+        if (tmdb.isConfigured()) {
+            catalogs.forEach { catalog ->
+                tmdbStates[catalog] = try {
+                    CatalogLoadState.Ready(withContext(Dispatchers.IO) { tmdb.load(catalog) })
+                } catch (error: Exception) {
+                    CatalogLoadState.Error(error.message ?: "Unable to load catalog")
+                }
+            }
+        }
+        addonState = AddonCatalogLoadState.Ready(
+            withContext(Dispatchers.IO) { addonAggregator.load(profileId = profileId, maxItemsPerCatalog = 16) },
+        )
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
+        Text("Discover", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "AstraWave discovery combines built-in TMDB metadata with catalogs from your enabled compatible addons.",
+            color = AstraWaveColors.SecondaryText,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(Modifier.height(22.dp))
+
+        if (tmdb.isConfigured()) {
+            catalogs.forEach { catalog ->
+                when (val state = tmdbStates[catalog] ?: CatalogLoadState.Loading) {
+                    CatalogLoadState.Loading -> LoadingCatalogRow(catalog)
+                    is CatalogLoadState.Ready -> RealCatalogRow(state.page)
+                    is CatalogLoadState.Error -> ErrorCatalogRow(catalog, state.message)
+                }
+            }
+        } else {
+            ConfigurationCard("TMDB setup needed", "TMDB rows are unavailable, but compatible enabled addon catalogs can still appear below.")
+            Spacer(Modifier.height(18.dp))
+        }
+
+        when (val state = addonState) {
+            AddonCatalogLoadState.Loading -> ConfigurationCard("Loading addon catalogs…", "Refreshing metadata from your enabled compatible addons.")
+            is AddonCatalogLoadState.Ready -> {
+                if (state.rows.isNotEmpty()) {
+                    Text("From Your Addons", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(12.dp))
+                }
+                state.rows.forEach { row -> AddonDiscoverRow(row) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddonDiscoverRow(row: StremioCatalogRow) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+        Text(row.catalog.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+        Text("${row.addonName} • ${row.catalog.type}", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.height(9.dp))
+        if (row.error != null) {
+            ConfigurationCard("${row.catalog.name} unavailable", row.error)
+        } else if (row.items.isEmpty()) {
+            ConfigurationCard("Nothing to show", "This addon catalog returned no metadata items.")
+        } else {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                row.items.forEach { item ->
+                    AstraWaveFocusableCard(Modifier.width(184.dp)) {
+                        Column {
+                            AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(10.dp))
+                            Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                            item.releaseInfo?.let {
+                                Spacer(Modifier.height(4.dp))
+                                Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                item.description ?: "Metadata from ${row.addonName}. Playback requires an eligible authorized source.",
+                                color = AstraWaveColors.SecondaryText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 3,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
     }
 }
 
