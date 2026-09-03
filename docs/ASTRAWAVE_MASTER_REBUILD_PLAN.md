@@ -9,6 +9,8 @@ Rebuild the current AstraWave client around the Nuvio media core while preservin
 - TiviMate/Xfinity-quality Live TV and EPG
 - AstraWave sports, Free TV, cloud sync, music/podcasts, profiles, source aggregation, AI discovery, multiview, diagnostics, remote control, and premium household features
 
+The visual and interaction benchmark is higher than the products used as references: AstraWave must be more polished than stock Nuvio, cleaner and more modern than TiviMate, and faster to understand than either. Nuvio and TiviMate are baselines to surpass, not visual targets to copy.
+
 The current working Firebase-ready AstraWave beta remains intact on the existing branch while this rebuild is developed on `feature/nuvio-core-rebuild`.
 
 ## Non-negotiable feature preservation
@@ -193,8 +195,9 @@ Duplicate channels should normalize by tvg-id, channel name, region, broadcaster
 
 ## Guide / EPG
 
-Build a TiviMate/Xfinity-style guide with:
+Build a guide that exceeds TiviMate/Xfinity in polish, readability, and speed while preserving the rapid D-pad interaction expert IPTV users expect.
 
+Requirements:
 - Now
 - Tonight
 - Tomorrow
@@ -215,8 +218,39 @@ Build a TiviMate/Xfinity-style guide with:
 - last-channel shortcut
 - preview pane
 - fast channel switching
+- premium channel logo treatment
+- clear current-time line and time-axis hierarchy
+- smooth horizontal/vertical navigation with remembered position
+- subtle live progress indicators
+- compact and expanded program details
+- quick actions without opening cluttered menus
 
 ## Sports Guide and Game Day
+
+### Premium sports schedule visual standard
+The sports experience is a flagship AstraWave surface and must look substantially more premium than a conventional IPTV schedule or generic list.
+
+The visual target is the polish of a top-tier sports network/streaming app, with AstraWave's own identity. Requirements:
+- cinematic league/team branding where permitted
+- large date/day selector with Today / Tomorrow / upcoming shortcuts
+- league tabs and personalized favorite-team filters
+- featured-game hero for the most relevant live/upcoming matchup
+- matchup cards with team marks, records, rankings, start time, live state, network and source status
+- LIVE badges, possession/game-state indicators and score hierarchy where data exists
+- game progress/status without overwhelming the card
+- countdowns for starting-soon events
+- clear Watch, Add to Multiview, Remind Me and Game Details actions
+- broadcaster/source badges with health/availability state
+- premium empty/loading/offline states instead of generic cards
+- compact schedule density option and cinematic card option
+- horizontal TV layout optimized for 10-foot viewing
+- phone layout optimized for one-handed scanning
+- smooth D-pad transitions and strong focus treatment
+- favorite teams visually prioritized without hiding the rest of the schedule
+- league color accents used sparingly; AstraWave design language remains dominant
+- optional scoreboard rail for live games
+- Game Day detail view with matchup, standings/records, injuries/lineups/news where available, venue, weather where relevant, broadcaster/source, related radio/podcasts, alerts and multiview
+- sports mosaic launcher showing up to four live games with one-click audio switching
 
 ### Coverage roadmap
 - NFL
@@ -912,11 +946,19 @@ Normal users should never need to see this.
 ## Visual goal
 AstraWave must be beautiful, clean, premium, and immediately understandable.
 
+AstraWave is required to exceed the reference apps rather than imitate them:
+- better visual hierarchy and content presentation than Nuvio
+- faster, cleaner and more premium Live TV/Guide interaction than TiviMate
+- simpler first-use experience than either
+- richer but less cluttered sports presentation than conventional IPTV apps
+- consistent design language across phone, tablet, Android TV, Fire TV and web
+
 Reference qualities:
 - Tuvora simplicity
 - Nuvio content organization
 - TiviMate Live TV interaction
 - premium streaming-service polish
+- premium sports-network schedule/game presentation
 - unmistakable AstraWave identity
 
 ## Design system requirements
@@ -1049,13 +1091,20 @@ Title page should include:
 ## Sports design
 
 Sports pages should have:
+- flagship-level sports schedule presentation, not a generic list
 - league/team branding where allowed
-- matchup cards
-- clear live/upcoming states
-- score/state hierarchy
+- featured matchup hierarchy
+- premium matchup cards
+- clear live/upcoming/completed visual states
+- score and game-state hierarchy
 - broadcaster/source status
 - Watch CTA
-- multiview entry
+- Add to Multiview CTA
+- reminders/follow controls
+- date/league/favorite-team filtering
+- scoreboard rail where appropriate
+- cinematic Game Day detail pages
+- responsive TV/phone layouts designed independently
 
 ## Music/podcast design
 
@@ -1107,6 +1156,9 @@ Reject release for:
 - accidental debug data
 - dead buttons
 - ugly empty states
+- sports schedule that looks like a generic data table or IPTV utility
+- Guide/Live TV UX that is materially less polished or less usable than TiviMate
+- discovery/home presentation that is materially less polished than Nuvio
 
 # AstraWave+ product layer
 
@@ -1176,8 +1228,11 @@ Exit gate: clean Nuvio baseline APK builds reproducibly.
 - top-level navigation
 - loading/error/empty-state components
 - D-pad focus system
+- benchmark and surpass Nuvio visual polish
+- benchmark and surpass TiviMate Live TV/Guide usability and presentation
+- establish premium sports-card/schedule components shared across Sports, Home and Game Day
 
-Exit gate: app looks polished before feature modules are ported.
+Exit gate: app looks polished before feature modules are ported and passes the AstraWave-vs-Nuvio/TiviMate visual benchmark.
 
 ## Phase 3 — TMDB + native catalogs
 - Wire TMDB configuration.
@@ -1245,8 +1300,9 @@ Exit gate: only healthy rights-approved channels appear.
 - fast switching
 - failover
 - start-over/timeshift where supported
+- premium visual hierarchy and TV focus behavior that exceeds TiviMate benchmark
 
-Exit gate: premium TV experience on phone and TV.
+Exit gate: premium TV experience on phone and TV that meets or exceeds the AstraWave-vs-TiviMate benchmark.
 
 ## Phase 9 — Sports Command Center
 - schedule ingestion
@@ -1257,8 +1313,14 @@ Exit gate: premium TV experience on phone and TV.
 - score alerts
 - sports home rows
 - event pages
+- premium date/league filtering
+- featured matchup hero
+- premium matchup cards with live/upcoming/completed states
+- scoreboard rail where data allows
+- Watch / Multiview / Reminder actions
+- dedicated phone and 10-foot TV sports layouts
 
-Exit gate: event-to-channel resolution works where authorized sources exist.
+Exit gate: event-to-channel resolution works where authorized sources exist and the sports schedule passes the premium flagship visual QA gate.
 
 ## Phase 10 — Multiview
 - 2/3/4 panes
@@ -1414,8 +1476,11 @@ Test:
 - profiles
 - accessibility
 - visual quality
+- Nuvio comparison pass for Home/Movies/TV/Discover
+- TiviMate comparison pass for Live TV/Guide/D-pad speed
+- premium sports-schedule comparison pass on phone and TV
 
-Exit gate: no known critical crashes, dead navigation, fake operational claims, broken focus, ugly screens, or untested core flows.
+Exit gate: no known critical crashes, dead navigation, fake operational claims, broken focus, ugly screens, untested core flows, or benchmark regressions versus Nuvio/TiviMate reference quality.
 
 ## Phase 23 — Release
 - production signing
@@ -1477,15 +1542,15 @@ Exit gate: no known critical crashes, dead navigation, fake operational claims, 
 1. Keep current Firebase beta green.
 2. Finish pinned Nuvio baseline build.
 3. Bring Nuvio source under AstraWave-controlled rebuild structure.
-4. Build AstraWave premium design system.
+4. Build AstraWave premium design system that surpasses Nuvio/TiviMate benchmarks.
 5. Rebrand shell/navigation.
 6. Wire TMDB native catalogs.
 7. Preserve/expand Stremio catalogs/addons.
 8. Build Universal Search/Watch/Watchlist.
 9. Port existing M3U/Xtream/XMLTV/source-ranking logic.
 10. Connect AstraWave Free TV registry and daily checker.
-11. Build Combined Guide and automatic failover.
-12. Build Sports Command Center and Game Day.
+11. Build Combined Guide and automatic failover with premium TiviMate-beating TV UX.
+12. Build Sports Command Center and flagship premium Game Day/schedule UI.
 13. Add Multiview.
 14. Add Music & Podcasts.
 15. Port Firebase cloud state.
@@ -1497,7 +1562,7 @@ Exit gate: no known critical crashes, dead navigation, fake operational claims, 
 21. Add diagnostics/admin console/feature flags.
 22. Add AstraWave+ entitlements.
 23. Finish accessibility/privacy/parental controls.
-24. Full device and visual QA.
+24. Full device and visual QA including Nuvio/TiviMate/sports benchmark comparisons.
 25. Production release.
 
 # Definition of done
@@ -1508,6 +1573,9 @@ AstraWave is not complete until:
 - current AstraWave feature set is preserved
 - Nuvio-derived flows are fully rebranded/integrated
 - UI is beautiful, clean, consistent, and responsive
+- UI/UX is demonstrably more polished than stock Nuvio
+- Live TV/Guide is at least as fast and materially more premium than TiviMate
+- Sports schedule/Game Day looks and behaves like a flagship premium sports streaming product
 - user M3U/Xtream works
 - AstraWave Free TV is rights-gated and health-checked daily
 - TMDB catalogs work by default
