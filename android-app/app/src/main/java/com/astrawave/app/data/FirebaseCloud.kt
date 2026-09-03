@@ -12,6 +12,7 @@ import com.google.firebase.auth.AuthResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.QuerySnapshot
 
 object AstraWaveFirebase {
     fun configured(): Boolean = BuildConfig.FIREBASE_API_KEY.isNotBlank() &&
@@ -54,6 +55,11 @@ class FirebaseCloudRepository(context: Context) {
     fun signOut() {
         auth?.signOut()
     }
+
+    fun readWatchlist(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "watchlist")?.get()
+    fun readFavorites(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "favorites")?.get()
+    fun readLists(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "lists")?.get()
+    fun readProgress(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "progress")?.get()
 
     fun saveProgress(
         mediaId: String,
@@ -196,4 +202,8 @@ class FirebaseCloudRepository(context: Context) {
 
     fun saveFavoriteTeam(teamId: String, name: String, league: String?) =
         addFavoriteTeam(teamId, name, league)
+
+    private fun profileCollection(profileId: String, collection: String) = currentUserId?.let { uid ->
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)?.collection(collection)
+    }
 }
