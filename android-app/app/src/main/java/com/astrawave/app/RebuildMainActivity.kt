@@ -235,7 +235,7 @@ private fun RebuildRoot() {
                 RebuildDestination.Audio -> AudioLibraryScreen(profileId = activeProfileId)
                 RebuildDestination.Addons -> StremioAddonScreen(profileId = activeProfileId)
                 RebuildDestination.Discover -> CombinedDiscoverScreen(profileId = activeProfileId)
-                RebuildDestination.Search -> UniversalSearchScreen()
+                RebuildDestination.Search -> UniversalSearchScreen(profileId = activeProfileId)
                 RebuildDestination.My -> MyAstraWaveHub(
                     account = AccountOverview(
                         userId = "local",
