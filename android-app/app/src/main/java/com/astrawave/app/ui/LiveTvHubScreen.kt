@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.IptvSource
+import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.data.CombinedLiveTvRepository
 import com.astrawave.app.data.CombinedLiveTvSnapshot
 import com.astrawave.app.data.StreamHealthChecker
@@ -49,6 +51,9 @@ private sealed interface LiveTvLoadState {
 fun LiveTvHubScreen(
     sources: List<IptvSource>,
     onSourcesChanged: (List<IptvSource>) -> Unit,
+    multiviewCount: Int = 0,
+    onAddToMultiview: (MultiviewPane) -> Unit = {},
+    onOpenMultiview: () -> Unit = {},
     repository: CombinedLiveTvRepository = remember { CombinedLiveTvRepository() },
 ) {
     val context = LocalContext.current
@@ -83,6 +88,9 @@ fun LiveTvHubScreen(
         ) {
             LiveModeButton("Channels", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
             LiveModeButton("Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+            if (multiviewCount > 0) {
+                LiveModeButton("Multiview ($multiviewCount)", false, onOpenMultiview)
+            }
         }
 
         when (mode) {
@@ -110,19 +118,36 @@ fun LiveTvHubScreen(
                         } else {
                             snapshot.groups.take(300).forEach { group ->
                                 val candidate = group.bestCandidate
-                                AstraWaveFocusableCard(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .then(candidate?.url?.let { Modifier.clickable { play(it) } } ?: Modifier),
-                                ) {
+                                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                     Column {
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                             Column(Modifier.weight(1f)) {
                                                 Text(group.displayName, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                                                 Text(candidate?.source ?: "Source pending", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
                                             }
-                                            Text(if (candidate != null) "Play" else "Unavailable", color = if (candidate != null) AstraWaveColors.Success else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
+                                            if (candidate != null) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                    Text("Play", color = AstraWaveColors.Success, modifier = Modifier.clickable { play(candidate.url) }, style = MaterialTheme.typography.labelLarge)
+                                                    Text(
+                                                        if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
+                                                        color = if (multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
+                                                        modifier = Modifier.clickable(enabled = multiviewCount < 4) {
+                                                            onAddToMultiview(
+                                                                MultiviewPane(
+                                                                    id = "live:${group.canonicalName}",
+                                                                    title = group.displayName,
+                                                                    streamUrl = candidate.url,
+                                                                    sourceName = candidate.source,
+                                                                    channelId = candidate.id,
+                                                                ),
+                                                            )
+                                                        },
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                    )
+                                                }
+                                            } else {
+                                                Text("Unavailable", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
+                                            }
                                         }
                                         group.currentProgram?.title?.let { now ->
                                             Spacer(Modifier.height(5.dp))
