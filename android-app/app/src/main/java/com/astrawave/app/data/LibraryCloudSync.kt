@@ -52,20 +52,21 @@ class LibraryCloudSync(context: Context) {
     }
 
     private fun mergeWatchlist(profileId: String, snapshot: QuerySnapshot): Int {
-        val localIds = local.watchlist(profileId).map { it.item.id }.toMutableSet()
+        val localById = local.watchlist(profileId).associateBy { it.item.id }.toMutableMap()
         var imported = 0
         snapshot.documents.forEach { doc ->
             val item = decodeItem(doc) ?: return@forEach
-            if (localIds.add(item.id)) {
-                local.setWatchlist(
-                    WatchlistEntry(
-                        profileId = profileId,
-                        item = item,
-                        createdAtEpochMs = timestampMs(doc, "updatedAt"),
-                        notifyWhenAvailable = doc.getBoolean("notifyWhenAvailable") ?: true,
-                    ),
-                    enabled = true,
+            val remoteTimestamp = timestampMs(doc, "updatedAt")
+            val existing = localById[item.id]
+            if (existing == null || remoteTimestamp > existing.createdAtEpochMs) {
+                val remote = WatchlistEntry(
+                    profileId = profileId,
+                    item = item,
+                    createdAtEpochMs = remoteTimestamp,
+                    notifyWhenAvailable = doc.getBoolean("notifyWhenAvailable") ?: true,
                 )
+                local.setWatchlist(remote, enabled = true)
+                localById[item.id] = remote
                 imported++
             }
         }
@@ -73,15 +74,16 @@ class LibraryCloudSync(context: Context) {
     }
 
     private fun mergeFavorites(profileId: String, snapshot: QuerySnapshot): Int {
-        val localIds = local.favorites(profileId).map { it.item.id }.toMutableSet()
+        val localById = local.favorites(profileId).associateBy { it.item.id }.toMutableMap()
         var imported = 0
         snapshot.documents.forEach { doc ->
             val item = decodeItem(doc) ?: return@forEach
-            if (localIds.add(item.id)) {
-                local.setFavorite(
-                    FavoriteEntry(profileId, item, timestampMs(doc, "updatedAt")),
-                    enabled = true,
-                )
+            val remoteTimestamp = timestampMs(doc, "updatedAt")
+            val existing = localById[item.id]
+            if (existing == null || remoteTimestamp > existing.createdAtEpochMs) {
+                val remote = FavoriteEntry(profileId, item, remoteTimestamp)
+                local.setFavorite(remote, enabled = true)
+                localById[item.id] = remote
                 imported++
             }
         }
