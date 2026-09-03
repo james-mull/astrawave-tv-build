@@ -90,39 +90,39 @@ fun AstraWaveGuideScreen(
                     )
                 } else {
                     snapshot.rows.take(150).forEach { row ->
-                        Row(
+                        AstraWaveFocusableCard(
                             Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
-                                .padding(16.dp),
+                                .padding(vertical = 4.dp),
                         ) {
-                            Column(Modifier.width(150.dp)) {
-                                Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                            Row {
+                                Column(Modifier.width(150.dp)) {
+                                    Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                                    Text(
+                                        row.preferredSource ?: "Source pending",
+                                        color = AstraWaveColors.Accent,
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        row.now?.title ?: "No current program data",
+                                        color = AstraWaveColors.PrimaryText,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                    Text(
+                                        row.group ?: "Uncategorized",
+                                        color = AstraWaveColors.SecondaryText,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
                                 Text(
-                                    row.preferredSource ?: "Source pending",
-                                    color = AstraWaveColors.Accent,
+                                    "${row.playableCandidateCount} source${if (row.playableCandidateCount == 1) "" else "s"}",
+                                    color = AstraWaveColors.SecondaryText,
                                     style = MaterialTheme.typography.labelMedium,
                                 )
                             }
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    row.now?.title ?: "No current program data",
-                                    color = AstraWaveColors.PrimaryText,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                Text(
-                                    row.group ?: "Uncategorized",
-                                    color = AstraWaveColors.SecondaryText,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                            Text(
-                                "${row.playableCandidateCount} source${if (row.playableCandidateCount == 1) "" else "s"}",
-                                color = AstraWaveColors.SecondaryText,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
                         }
                     }
                 }
