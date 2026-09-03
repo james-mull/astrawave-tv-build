@@ -13,6 +13,7 @@ concurrency:
 jobs:
   release-candidate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: android-app
@@ -26,6 +27,7 @@ jobs:
       ASTRAWAVE_RELEASE_STORE_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_STORE_PASSWORD }}
       ASTRAWAVE_RELEASE_KEY_ALIAS: ${{ secrets.ASTRAWAVE_RELEASE_KEY_ALIAS }}
       ASTRAWAVE_RELEASE_KEY_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_KEY_PASSWORD }}
+      ASTRAWAVE_GIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -46,6 +48,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Run release core invariant tests
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
+
       - name: Prepare optional release signing
         shell: bash
         run: |
@@ -54,21 +59,31 @@ jobs:
             KEYSTORE_PATH="$RUNNER_TEMP/astrawave-release.jks"
             printf '%s' "$ASTRAWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
             echo "ASTRAWAVE_RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+            echo "ASTRAWAVE_RELEASE_SIGNED=true" >> "$GITHUB_ENV"
             echo "Release signing credentials detected; signed release artifacts will be produced."
           else
+            echo "ASTRAWAVE_RELEASE_SIGNED=false" >> "$GITHUB_ENV"
             echo "Release signing secrets are incomplete; producing unsigned release-candidate artifacts only."
           fi
 
       - name: Build release APK and AAB
-        run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
+        run: ./gradlew --no-daemon --stacktrace :app:assembleRelease :app:bundleRelease
 
-      - name: Generate SHA-256 checksums
+      - name: Generate release provenance and SHA-256 checksums
         shell: bash
         run: |
           set -euo pipefail
           cd app/build/outputs
           find . -type f \( -name '*.apk' -o -name '*.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          {
+            echo "git_sha=${GITHUB_SHA}"
+            echo "git_ref=${GITHUB_REF}"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "signed=${ASTRAWAVE_RELEASE_SIGNED:-false}"
+            echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } > RELEASE_METADATA.txt
           cat SHA256SUMS.txt
+          cat RELEASE_METADATA.txt
 
       - name: Upload release candidate
         uses: actions/upload-artifact@v4
@@ -80,3 +95,4 @@ jobs:
             android-app/app/build/outputs/**/*.apk
             android-app/app/build/outputs/**/*.aab
             android-app/app/build/outputs/SHA256SUMS.txt
+            android-app/app/build/outputs/RELEASE_METADATA.txt
