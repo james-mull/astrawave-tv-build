@@ -90,6 +90,11 @@ private fun Phase2VisualQaScreen() {
     var lastRemoteKey by remember { mutableStateOf("None yet") }
     var disabledFocusViolation by remember { mutableStateOf(false) }
 
+    val visitedExpected = visitedControls.intersect(expectedFocusControls)
+    val traversalComplete = visitedExpected.size == expectedFocusControls.size
+    val traversalPassed = traversalComplete && !disabledFocusViolation
+    val missingControls = expectedFocusControls - visitedExpected
+
     fun recordFocus(label: String) {
         focusedControl = label
         if (label.startsWith("ERROR:")) {
@@ -98,6 +103,16 @@ private fun Phase2VisualQaScreen() {
         }
         visitedControls = visitedControls + label
         focusTrail = (focusTrail + label).takeLast(8)
+    }
+
+    fun resetTraversal() {
+        activationMessage = "Traversal reset. Use the D-pad to visit every expected control."
+        focusedControl = "Waiting for focus"
+        visitedControls = emptySet()
+        focusTrail = emptyList()
+        lastRemoteKey = "None yet"
+        disabledFocusViolation = false
+        runCatching { firstFocus.requestFocus() }
     }
 
     fun remoteKeyLabel(key: Key): String? = when (key) {
@@ -143,7 +158,23 @@ private fun Phase2VisualQaScreen() {
         )
         AstraWaveStatePanel(
             title = "D-pad traversal coverage",
-            message = "${visitedControls.intersect(expectedFocusControls).size}/${expectedFocusControls.size} expected controls visited • last remote key: $lastRemoteKey • disabled-focus violation: ${if (disabledFocusViolation) "YES" else "no"}. Trail: ${focusTrail.joinToString(" → ").ifBlank { "none yet" }}",
+            message = "${visitedExpected.size}/${expectedFocusControls.size} expected controls visited • last remote key: $lastRemoteKey • disabled-focus violation: ${if (disabledFocusViolation) "YES" else "no"}. Trail: ${focusTrail.joinToString(" → ").ifBlank { "none yet" }}",
+        )
+        AstraWaveStatePanel(
+            title = when {
+                disabledFocusViolation -> "Traversal FAILED"
+                traversalPassed -> "Traversal PASS candidate"
+                else -> "Traversal incomplete"
+            },
+            message = when {
+                disabledFocusViolation -> "A disabled control received focus. Phase 2 D-pad verification must not pass on this device until that focus-path defect is fixed."
+                traversalPassed -> "All expected controls were visited with no disabled-control focus violation. Record the device result and still complete the visual readability/polish check before closing Phase 2."
+                else -> "Missing: ${missingControls.joinToString()}. Visit every expected control and confirm the visible focus ring matches the telemetry."
+            },
+        )
+        AstraWaveSecondaryButton(
+            label = "Reset traversal test",
+            onClick = ::resetTraversal,
         )
 
         AstraWaveSectionHeader(
