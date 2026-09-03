@@ -51,7 +51,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.AccountOverview
-import com.astrawave.app.core.AstraWaveList
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
 import com.astrawave.app.data.IptvSourceStore
@@ -147,10 +146,7 @@ private fun RebuildRoot() {
                         planName = "AstraWave Free",
                         cloudSyncEnabled = false,
                     ),
-                    lists = listOf(
-                        AstraWaveList("family-night", activeProfileId, "Family Night", "Movies everyone can agree on", isPinned = true),
-                        AstraWaveList("mind-benders", activeProfileId, "Mind-Benders", "Thrillers, sci-fi and mysteries"),
-                    ),
+                    lists = emptyList(),
                 )
             }
 
