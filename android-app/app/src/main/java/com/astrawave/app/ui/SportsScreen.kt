@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.IptvSource
 import com.astrawave.app.core.MultiviewPane
+import com.astrawave.app.data.ProfileSafetyStore
 import com.astrawave.app.data.SportsGuideItem
 import com.astrawave.app.data.SportsGuideRepository
 import com.astrawave.app.data.SportsGuideSnapshot
@@ -52,9 +53,23 @@ fun AstraWaveSportsScreen(
     multiviewCount: Int = 0,
     onAddToMultiview: (MultiviewPane) -> Unit = {},
     onOpenMultiview: () -> Unit = {},
+    profileId: String = "default",
     repository: SportsGuideRepository = remember { SportsGuideRepository() },
 ) {
     val context = LocalContext.current
+    val safety = remember(profileId) { ProfileSafetyStore(context).load(profileId) }
+    if (safety.kids.enabled && !safety.kids.allowSports) {
+        Column(Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp)) {
+            AstraWavePageHeader("Sports", "Sports is disabled for this kids profile.")
+            Spacer(Modifier.height(18.dp))
+            AstraWaveStatePanel(
+                "Restricted by profile settings",
+                "A household administrator can enable Sports for this profile from Privacy & Parental Controls.",
+            )
+        }
+        return
+    }
+
     val scope = rememberCoroutineScope()
     var state by remember(sources) { mutableStateOf<SportsLoadState>(SportsLoadState.Loading) }
     var selectedLeague by remember { mutableStateOf<String?>(null) }
