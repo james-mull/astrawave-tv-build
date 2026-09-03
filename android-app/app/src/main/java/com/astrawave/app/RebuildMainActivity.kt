@@ -56,6 +56,7 @@ import com.astrawave.app.data.AstraWaveCatalog
 import com.astrawave.app.data.IptvSourceStore
 import com.astrawave.app.data.TmdbCatalogPage
 import com.astrawave.app.data.TmdbCatalogRepository
+import com.astrawave.app.ui.AstraWaveArtwork
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveFocusableCard
 import com.astrawave.app.ui.AstraWaveGuideScreen
@@ -277,6 +278,11 @@ private fun RealCatalogRow(page: TmdbCatalogPage) {
                 page.items.take(12).forEach { item ->
                     AstraWaveFocusableCard(Modifier.width(184.dp)) {
                         Column {
+                            AstraWaveArtwork(
+                                title = item.title,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(10.dp))
                             Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                             Spacer(Modifier.height(6.dp))
                             Text(
