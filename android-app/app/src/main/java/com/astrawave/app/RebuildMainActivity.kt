@@ -59,6 +59,7 @@ import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.MyAstraWaveHub
+import com.astrawave.app.ui.MyIptvScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -120,7 +121,7 @@ private fun RebuildRoot() {
                 RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
-                RebuildDestination.Live -> PlaceholderScreen("Live TV", "AstraWave Free TV, My IPTV and Combined mode")
+                RebuildDestination.Live -> MyIptvScreen(sources = emptyList())
                 RebuildDestination.Guide -> PlaceholderScreen("Guide", "Fast merged EPG with TV-first navigation")
                 RebuildDestination.Sports -> PlaceholderScreen("Sports", "Schedules, broadcaster matching and Watch actions")
                 RebuildDestination.Audio -> PlaceholderScreen("Music & Podcasts", "Music, podcasts, video podcasts and radio")
