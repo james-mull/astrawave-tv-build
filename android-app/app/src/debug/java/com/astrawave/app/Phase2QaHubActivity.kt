@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +44,7 @@ class Phase2QaHubActivity : ComponentActivity() {
 private fun Phase2QaHubScreen() {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val verificationStore = remember(context) { Phase2QaVerificationStore(context) }
     val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
     val isFireTv = isTv && (
         Build.MANUFACTURER.equals("Amazon", ignoreCase = true) ||
@@ -53,6 +58,20 @@ private fun Phase2QaHubScreen() {
     }
     val commitSha = BuildConfig.GIT_SHA.ifBlank { "local-untracked" }
     val commitKnown = commitSha != "local-untracked" && commitSha.length >= 7
+
+    var modalCommit by remember(deviceClass) { mutableStateOf(verificationStore.modalVerifiedCommit(deviceClass)) }
+    var sportsCommit by remember(deviceClass) { mutableStateOf(verificationStore.sportsVerifiedCommit(deviceClass)) }
+    var verifiedCommit by remember(deviceClass) { mutableStateOf(verificationStore.verifiedCommit(deviceClass)) }
+
+    fun refreshEvidence() {
+        modalCommit = verificationStore.modalVerifiedCommit(deviceClass)
+        sportsCommit = verificationStore.sportsVerifiedCommit(deviceClass)
+        verifiedCommit = verificationStore.verifiedCommit(deviceClass)
+    }
+
+    val modalReady = verificationStore.isModalVerified(deviceClass) && modalCommit == commitSha
+    val sportsReady = verificationStore.isSportsVerified(deviceClass) && sportsCommit == commitSha
+    val deviceReady = verificationStore.isVerified(deviceClass) && verifiedCommit == commitSha
 
     Column(
         modifier = Modifier
@@ -74,6 +93,30 @@ private fun Phase2QaHubScreen() {
             },
         )
         AstraWaveStatePanel(
+            title = "Modal Focus QA • ${if (modalReady) "PASS" else "REQUIRED"}",
+            message = if (modalReady) {
+                "Same-device, same-build modal focus evidence is recorded for ${commitSha.take(12)}."
+            } else {
+                "Open Modal Focus QA and record it on this $deviceClass build before final device verification."
+            },
+        )
+        AstraWaveStatePanel(
+            title = "Sports Visual QA • ${if (sportsReady) "PASS" else "REQUIRED"}",
+            message = if (sportsReady) {
+                "Same-device, same-build sports visual evidence is recorded for ${commitSha.take(12)}."
+            } else {
+                "Open Sports Visual QA and record the premium sports benchmark on this $deviceClass build."
+            },
+        )
+        AstraWaveStatePanel(
+            title = "Final device verification • ${if (deviceReady) "PASS" else "INCOMPLETE"}",
+            message = if (deviceReady) {
+                "$deviceClass is recorded as verified for this exact build. A newer commit invalidates this evidence."
+            } else {
+                "Final verification remains blocked until same-build Modal QA, Sports QA, core traversal, and visual benchmark checks are complete."
+            },
+        )
+        AstraWaveStatePanel(
             title = "Exit-gate reminder",
             message = "Phase 2 is not complete until the exact build is visually benchmarked on Phone, Tablet, Android TV, and Fire TV. TV-class checks must use a real remote for D-pad and Back behavior.",
         )
@@ -88,6 +131,10 @@ private fun Phase2QaHubScreen() {
         AstraWaveSecondaryButton(
             label = "Open Sports Visual QA",
             onClick = { context.startActivity(Intent(context, Phase2SportsQaActivity::class.java)) },
+        )
+        AstraWaveSecondaryButton(
+            label = "Refresh QA status",
+            onClick = ::refreshEvidence,
         )
         Text(
             text = "Use docs/PHASE2_DEVICE_VISUAL_QA_CHECKLIST.md to record the exact-build benchmark. Do not use this hub as evidence by itself.",
