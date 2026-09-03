@@ -1,8 +1,12 @@
 package com.astrawave.app.ui
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,12 +15,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -41,6 +48,32 @@ fun AstraWavePageHeader(
         if (!subtitle.isNullOrBlank()) {
             Spacer(Modifier.height(6.dp))
             Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+fun AstraWaveSectionHeader(
+    title: String,
+    subtitle: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        trailing?.let {
+            Spacer(Modifier.size(LocalAstraWaveSpacing.current.md))
+            it()
         }
     }
 }
@@ -76,8 +109,8 @@ fun AstraWaveStatePanel(
 }
 
 /**
- * Focus primitive for Android TV / Fire TV. The card scales and gains a visible ring without
- * changing layout bounds, which keeps D-pad movement predictable and avoids clipped focus states.
+ * Focus primitive for Android TV / Fire TV. Focus uses the shared AstraWave motion/elevation tokens,
+ * keeps layout bounds stable, and can be reduced to instant transitions through AstraWaveTheme.
  */
 @Composable
 fun AstraWaveFocusableCard(
@@ -85,7 +118,19 @@ fun AstraWaveFocusableCard(
     content: @Composable () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val scale = if (focused) LocalAstraWaveSizing.current.focusScale else 1f
+    val sizing = LocalAstraWaveSizing.current
+    val elevationTokens = LocalAstraWaveElevation.current
+    val motion = LocalAstraWaveMotion.current
+    val scale by animateFloatAsState(
+        targetValue = if (focused) sizing.focusScale else 1f,
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-focus-scale",
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (focused) elevationTokens.focused else elevationTokens.resting,
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-focus-elevation",
+    )
 
     Box(
         modifier
@@ -93,6 +138,7 @@ fun AstraWaveFocusableCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .shadow(elevation = elevation, shape = MaterialTheme.shapes.medium, clip = false)
             .border(
                 width = if (focused) 2.dp else 0.dp,
                 color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Surface,
@@ -109,19 +155,93 @@ fun AstraWaveFocusableCard(
 }
 
 @Composable
+fun AstraWaveActionRow(
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+    trailing: @Composable () -> Unit,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        Spacer(Modifier.size(LocalAstraWaveSpacing.current.md))
+        trailing()
+    }
+}
+
+@Composable
 fun AstraWavePrimaryButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier,
         colors = ButtonDefaults.buttonColors(
             containerColor = AstraWaveColors.Accent,
             contentColor = AstraWaveColors.PrimaryText,
+            disabledContainerColor = AstraWaveColors.SurfaceRaised,
+            disabledContentColor = AstraWaveColors.TertiaryText,
         ),
     ) {
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
+}
+
+@Composable
+fun AstraWaveSecondaryButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = AstraWaveColors.PrimaryText,
+            disabledContentColor = AstraWaveColors.TertiaryText,
+        ),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+fun AstraWaveDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    dismissLabel: String = "Cancel",
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, color = AstraWaveColors.PrimaryText) },
+        text = { Text(message, color = AstraWaveColors.SecondaryText) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(confirmLabel) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(dismissLabel) }
+        },
+        containerColor = AstraWaveColors.SurfaceRaised,
+    )
 }
