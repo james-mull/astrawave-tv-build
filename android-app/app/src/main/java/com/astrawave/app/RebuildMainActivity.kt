@@ -62,9 +62,11 @@ import com.astrawave.app.ui.AstraWaveGuideScreen
 import com.astrawave.app.ui.AstraWaveSportsScreen
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
+import com.astrawave.app.ui.LibraryActionRow
 import com.astrawave.app.ui.LiveTvHubScreen
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.UniversalSearchScreen
+import com.astrawave.app.ui.toLibraryItemRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -273,7 +275,7 @@ private fun RealCatalogRow(page: TmdbCatalogPage) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 page.items.take(12).forEach { item ->
-                    AstraWaveFocusableCard(Modifier.width(168.dp)) {
+                    AstraWaveFocusableCard(Modifier.width(184.dp)) {
                         Column {
                             Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                             Spacer(Modifier.height(6.dp))
@@ -281,8 +283,10 @@ private fun RealCatalogRow(page: TmdbCatalogPage) {
                                 item.overview.ifBlank { "Open for details and Watch options." },
                                 color = AstraWaveColors.SecondaryText,
                                 style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 4,
+                                maxLines = 3,
                             )
+                            Spacer(Modifier.height(10.dp))
+                            LibraryActionRow(item = item.toLibraryItemRef(), profileId = "default")
                         }
                     }
                 }
