@@ -104,7 +104,7 @@ private fun RebuildRoot() {
     val wide = LocalConfiguration.current.screenWidthDp >= 840
     val context = LocalContext.current
     val activeProfileId = "default"
-    val iptvSources = remember(activeProfileId) { IptvSourceStore(context).load(activeProfileId) }
+    var iptvSources by remember(activeProfileId) { mutableStateOf(IptvSourceStore(context).load(activeProfileId)) }
     var current by remember { mutableStateOf(RebuildDestination.Home) }
 
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
@@ -130,7 +130,10 @@ private fun RebuildRoot() {
                 RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
-                RebuildDestination.Live -> MyIptvScreen(sources = iptvSources)
+                RebuildDestination.Live -> MyIptvScreen(
+                    sources = iptvSources,
+                    onSourcesChanged = { iptvSources = it },
+                )
                 RebuildDestination.Guide -> AstraWaveGuideScreen(sources = iptvSources)
                 RebuildDestination.Sports -> AstraWaveSportsScreen(sources = iptvSources)
                 RebuildDestination.Audio -> AudioLibraryScreen(subscriptions = emptyList(), stations = emptyList())
