@@ -33,13 +33,19 @@ interface ProviderAdapter {
 
 object StreamRanker {
     fun rank(streams: List<CandidateStream>): List<CandidateStream> = streams
+        .asSequence()
         .filter { it.authorized }
+        .filter { it.url.isNotBlank() }
+        .distinctBy { "${it.providerId}:${it.url}" }
         .sortedWith(
             compareByDescending<CandidateStream> { qualityScore(it.quality) }
                 .thenByDescending { it.uptimePercent ?: 0.0 }
                 .thenBy { it.latencyMs ?: Int.MAX_VALUE }
                 .thenByDescending { it.bitrateKbps ?: 0 }
         )
+        .toList()
+
+    fun best(streams: List<CandidateStream>): CandidateStream? = rank(streams).firstOrNull()
 
     private fun qualityScore(value: String?): Int = when (value?.uppercase()) {
         "8K" -> 5
