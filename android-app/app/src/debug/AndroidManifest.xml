@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
+            android:name=".Phase2QaHubActivity"
+            android:exported="true"
+            android:label="AstraWave Phase 2 QA Hub" />
+        <activity
             android:name=".Phase2VisualQaActivity"
             android:exported="true"
             android:label="AstraWave Phase 2 QA" />
