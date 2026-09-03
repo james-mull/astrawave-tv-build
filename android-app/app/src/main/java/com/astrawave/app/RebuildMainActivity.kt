@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.AccountOverview
+import com.astrawave.app.core.AccountSection
 import com.astrawave.app.core.MultiviewLayout
 import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.core.MultiviewSession
@@ -69,6 +70,7 @@ import com.astrawave.app.ui.AstraWaveArtwork
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveFocusableCard
 import com.astrawave.app.ui.AstraWaveGuideScreen
+import com.astrawave.app.ui.AstraWaveNavigationContract
 import com.astrawave.app.ui.AstraWaveSportsScreen
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
@@ -94,20 +96,20 @@ class RebuildMainActivity : ComponentActivity() {
     }
 }
 
-private enum class RebuildDestination(val label: String, val icon: ImageVector) {
-    Home("Home", Icons.Default.Home),
-    Movies("Movies", Icons.Default.Movie),
-    Shows("TV", Icons.Default.Tv),
-    Live("Live TV", Icons.Default.LiveTv),
-    Guide("Guide", Icons.Default.CalendarMonth),
-    Sports("Sports", Icons.Default.SportsFootball),
-    Multiview("Multiview", Icons.Default.Tv),
-    Audio("Music & Podcasts", Icons.Default.MusicNote),
-    PersonalMedia("Personal Media", Icons.Default.Tv),
-    Addons("Addons", Icons.Default.Explore),
-    Discover("Discover", Icons.Default.Explore),
-    Search("Search", Icons.Default.Search),
-    My("My AstraWave", Icons.Default.AccountCircle),
+private enum class RebuildDestination(val route: String, val label: String, val icon: ImageVector) {
+    Home("home", "Home", Icons.Default.Home),
+    Movies("movies", "Movies", Icons.Default.Movie),
+    Shows("tv", "TV", Icons.Default.Tv),
+    Live("live", "Live TV", Icons.Default.LiveTv),
+    Guide("guide", "Guide", Icons.Default.CalendarMonth),
+    Sports("sports", "Sports", Icons.Default.SportsFootball),
+    Multiview("multiview", "Multiview", Icons.Default.Tv),
+    Audio("audio", "Music & Podcasts", Icons.Default.MusicNote),
+    PersonalMedia("personal-media", "Personal Media", Icons.Default.Tv),
+    Addons("addons", "Addons", Icons.Default.Explore),
+    Discover("discover", "Discover", Icons.Default.Explore),
+    Search("search", "Search", Icons.Default.Search),
+    My("my", "My AstraWave", Icons.Default.AccountCircle),
 }
 
 private sealed interface CatalogLoadState {
@@ -128,6 +130,10 @@ private fun RebuildRoot() {
     val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
     val useRail = isTv || configuration.screenWidthDp >= 840
     val activeProfileId = "default"
+    val primaryDestinations = remember(isTv) {
+        val contract = if (isTv) AstraWaveNavigationContract.tv else AstraWaveNavigationContract.mobileTablet
+        contract.mapNotNull { nav -> RebuildDestination.entries.firstOrNull { it.route == nav.route } }
+    }
     var tvRailExpanded by remember(isTv) { mutableStateOf(!isTv) }
     var iptvSources by remember(activeProfileId) { mutableStateOf(IptvSourceStore(context).load(activeProfileId)) }
     var current by remember { mutableStateOf(RebuildDestination.Home) }
@@ -167,7 +173,7 @@ private fun RebuildRoot() {
                     maxLines = 1,
                 )
                 Spacer(Modifier.height(10.dp))
-                RebuildDestination.entries.forEach { item ->
+                primaryDestinations.forEach { item ->
                     val showRailLabel = !isTv || tvRailExpanded
                     NavigationRailItem(
                         selected = current == item,
@@ -182,7 +188,7 @@ private fun RebuildRoot() {
         }
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            if (!useRail) SectionStrip(current) { current = it }
+            if (!useRail) SectionStrip(current, primaryDestinations) { current = it }
             when (current) {
                 RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
@@ -243,6 +249,15 @@ private fun RebuildRoot() {
                         cloudSyncEnabled = false,
                     ),
                     lists = emptyList(),
+                    onOpenAccountSection = { section ->
+                        current = when (section) {
+                            AccountSection.IPTV -> RebuildDestination.Live
+                            AccountSection.PERSONAL_MEDIA -> RebuildDestination.PersonalMedia
+                            AccountSection.ADDONS -> RebuildDestination.Addons
+                            AccountSection.SPORTS -> RebuildDestination.Sports
+                            else -> current
+                        }
+                    },
                 )
             }
 
@@ -279,12 +294,16 @@ private val tvCatalogs = listOf(
 )
 
 @Composable
-private fun SectionStrip(current: RebuildDestination, onSelect: (RebuildDestination) -> Unit) {
+private fun SectionStrip(
+    current: RebuildDestination,
+    items: List<RebuildDestination>,
+    onSelect: (RebuildDestination) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).background(AstraWaveColors.BackgroundRaised).padding(10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        RebuildDestination.entries.forEach { item ->
+        items.forEach { item ->
             FilterChip(
                 selected = current == item,
                 onClick = { onSelect(item) },
