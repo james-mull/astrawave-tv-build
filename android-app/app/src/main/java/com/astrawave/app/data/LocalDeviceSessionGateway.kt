@@ -5,6 +5,7 @@ import com.astrawave.app.core.AstraWaveDevice
 import com.astrawave.app.core.AstraWaveDeviceType
 import com.astrawave.app.core.DeviceSessionGateway
 import com.astrawave.app.core.DeviceSessionState
+import com.astrawave.app.core.DeviceSessionValidation
 import com.astrawave.app.core.PairingSession
 import com.astrawave.app.core.PlaybackHandoff
 import com.astrawave.app.core.RemoteCommandEnvelope
@@ -37,10 +38,15 @@ class LocalDeviceSessionGateway(context: Context) : DeviceSessionGateway {
     override fun pair(qrPayload: String): AstraWaveDevice {
         val root = JSONObject(qrPayload)
         require(root.optString("scheme") == "astrawave-pair") { "Invalid AstraWave pairing payload" }
-        val expiresAt = root.optLong("expiresAt")
-        require(expiresAt > System.currentTimeMillis()) { "Pairing session has expired" }
-        val id = root.optString("targetDeviceId").takeIf { it.isNotBlank() && it != "null" }
-            ?: UUID.randomUUID().toString()
+        val session = PairingSession(
+            sessionId = root.optString("sessionId"),
+            qrPayload = qrPayload,
+            expiresAtEpochMs = root.optLong("expiresAt"),
+            targetDeviceId = root.optString("targetDeviceId").takeIf { it.isNotBlank() && it != "null" },
+        )
+        require(DeviceSessionValidation.pairingValid(session)) { "Pairing session is invalid or expired" }
+
+        val id = session.targetDeviceId ?: UUID.randomUUID().toString()
         val existing = loadDevices().firstOrNull { it.id == id }
         val device = (existing ?: AstraWaveDevice(
             id = id,
@@ -52,13 +58,15 @@ class LocalDeviceSessionGateway(context: Context) : DeviceSessionGateway {
     }
 
     override fun sendRemoteCommand(command: RemoteCommandEnvelope): Boolean {
-        val connected = loadDevices().any { it.id == command.deviceId && it.state == DeviceSessionState.CONNECTED }
+        if (command.sessionId.isBlank() || command.deviceId.isBlank()) return false
+        val connected = loadDevices().any { it.id == command.deviceId && it.state == DeviceSessionState.CONNECTED && it.supportsRemote }
         if (!connected) return false
         prefs.edit().putString(KEY_LAST_REMOTE, encodeRemote(command).toString()).apply()
         return true
     }
 
     override fun handoff(playback: PlaybackHandoff): Boolean {
+        if (!DeviceSessionValidation.handoffValid(playback)) return false
         val target = loadDevices().firstOrNull { it.id == playback.targetDeviceId } ?: return false
         if (!target.supportsHandoff || target.state != DeviceSessionState.CONNECTED) return false
         prefs.edit().putString(KEY_PENDING_HANDOFF, encodeHandoff(playback).toString()).apply()
@@ -66,7 +74,9 @@ class LocalDeviceSessionGateway(context: Context) : DeviceSessionGateway {
     }
 
     fun pendingHandoff(): PlaybackHandoff? = prefs.getString(KEY_PENDING_HANDOFF, null)?.let { raw ->
-        runCatching { decodeHandoff(JSONObject(raw)) }.getOrNull()
+        runCatching { decodeHandoff(JSONObject(raw)) }
+            .getOrNull()
+            ?.takeIf(DeviceSessionValidation::handoffValid)
     }
 
     fun clearPendingHandoff() {
