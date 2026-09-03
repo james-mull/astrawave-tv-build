@@ -18,6 +18,7 @@ import com.astrawave.app.core.FavoriteEntry
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.core.WatchlistEntry
+import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LocalLibraryStore
 import com.astrawave.app.data.TmdbItem
 
@@ -40,6 +41,7 @@ fun LibraryActionRow(
 ) {
     val context = LocalContext.current
     val store = remember { LocalLibraryStore(context) }
+    val cloud = remember { FirebaseCloudRepository(context) }
     var inWatchlist by remember(item.id, profileId) {
         mutableStateOf(store.watchlist(profileId).any { it.item.id == item.id })
     }
@@ -51,7 +53,11 @@ fun LibraryActionRow(
         AstraWaveFocusableCard(
             Modifier.clickable {
                 inWatchlist = !inWatchlist
-                store.setWatchlist(WatchlistEntry(profileId = profileId, item = item), inWatchlist)
+                val entry = WatchlistEntry(profileId = profileId, item = item)
+                store.setWatchlist(entry, inWatchlist)
+                if (cloud.signedIn) {
+                    if (inWatchlist) cloud.saveWatchlist(entry) else cloud.removeWatchlist(profileId, item.id)
+                }
             },
         ) {
             Text(
@@ -64,7 +70,11 @@ fun LibraryActionRow(
         AstraWaveFocusableCard(
             Modifier.clickable {
                 favorite = !favorite
-                store.setFavorite(FavoriteEntry(profileId = profileId, item = item), favorite)
+                val entry = FavoriteEntry(profileId = profileId, item = item)
+                store.setFavorite(entry, favorite)
+                if (cloud.signedIn) {
+                    if (favorite) cloud.saveFavorite(entry) else cloud.removeFavorite(profileId, item.id)
+                }
             },
         ) {
             Text(
