@@ -76,7 +76,7 @@ fun UniversalSearchScreen() {
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Movies, shows, people…") },
+            label = { Text("Movies and shows") },
         )
         Spacer(Modifier.height(10.dp))
         Button(
@@ -103,7 +103,7 @@ fun UniversalSearchScreen() {
         Spacer(Modifier.height(20.dp))
 
         when (val current = state) {
-            SearchState.Idle -> SearchMessage("Start searching", "Enter a title, series, or person to search AstraWave discovery.")
+            SearchState.Idle -> SearchMessage("Start searching", "Enter a movie or TV title to search AstraWave discovery.")
             SearchState.Loading -> Row(Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) {
                 CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
                 Spacer(Modifier.padding(6.dp))
@@ -129,6 +129,8 @@ fun UniversalSearchScreen() {
                                     style = MaterialTheme.typography.bodyMedium,
                                     maxLines = 3,
                                 )
+                                Spacer(Modifier.height(10.dp))
+                                LibraryActionRow(item = item.toLibraryItemRef())
                             }
                         }
                     }
