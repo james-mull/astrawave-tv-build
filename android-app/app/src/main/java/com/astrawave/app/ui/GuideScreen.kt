@@ -29,8 +29,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.IptvSource
+import com.astrawave.app.core.ProfileSafetyPolicy
 import com.astrawave.app.data.GuideRepository
 import com.astrawave.app.data.GuideSnapshot
+import com.astrawave.app.data.ProfileSafetyStore
 import com.astrawave.app.data.StreamHealthChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,9 +47,23 @@ private sealed interface GuideLoadState {
 @Composable
 fun AstraWaveGuideScreen(
     sources: List<IptvSource>,
+    profileId: String = "default",
     repository: GuideRepository = remember { GuideRepository() },
 ) {
     val context = LocalContext.current
+    val safety = remember(profileId) { ProfileSafetyStore(context).load(profileId) }
+    if (!ProfileSafetyPolicy.liveTvAllowed(safety)) {
+        Column(Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp)) {
+            AstraWavePageHeader("Guide", "Live TV and guide access are disabled for this kids profile.")
+            Spacer(Modifier.height(18.dp))
+            AstraWaveStatePanel(
+                "Restricted by profile settings",
+                "A household administrator can enable Live TV for this profile from Privacy & Parental Controls.",
+            )
+        }
+        return
+    }
+
     val scope = rememberCoroutineScope()
     var state by remember(sources) { mutableStateOf<GuideLoadState>(GuideLoadState.Loading) }
 
