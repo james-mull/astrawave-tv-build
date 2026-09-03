@@ -23,21 +23,30 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.IptvSource
 import com.astrawave.app.core.IptvSourceStatus
 import com.astrawave.app.core.IptvSourceType
+import com.astrawave.app.data.IptvSourceStore
 
 @Composable
 fun MyIptvScreen(
     sources: List<IptvSource>,
-    onAddM3u: () -> Unit = {},
-    onAddXtream: () -> Unit = {},
-    onOpenSource: (IptvSource) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val store = remember { IptvSourceStore(context) }
+    val profileId = sources.firstOrNull()?.profileId ?: "default"
+    var managedSources by remember(sources) { mutableStateOf(sources) }
+    var editingSource by remember { mutableStateOf<IptvSource?>(null) }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .background(AstraWaveColors.Background).padding(24.dp),
@@ -54,12 +63,12 @@ fun MyIptvScreen(
         Text("MY IPTV", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AddSourceButton("Add M3U", onAddM3u)
-            AddSourceButton("Add Xtream", onAddXtream)
+            AddSourceButton("Add M3U") { editingSource = newIptvSource(profileId, IptvSourceType.M3U) }
+            AddSourceButton("Add Xtream") { editingSource = newIptvSource(profileId, IptvSourceType.XTREAM) }
         }
 
         Spacer(Modifier.height(18.dp))
-        if (sources.isEmpty()) {
+        if (managedSources.isEmpty()) {
             Column(
                 Modifier.fillMaxWidth().background(AstraWaveColors.Surface, RoundedCornerShape(18.dp)).padding(18.dp),
             ) {
@@ -72,8 +81,8 @@ fun MyIptvScreen(
                 )
             }
         } else {
-            sources.sortedBy { it.priority }.forEach { source ->
-                SourceRow(source, onOpenSource)
+            managedSources.sortedBy { it.priority }.forEach { source ->
+                SourceRow(source) { editingSource = it }
             }
         }
 
@@ -90,6 +99,26 @@ fun MyIptvScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
+    }
+
+    editingSource?.let { source ->
+        val isExisting = managedSources.any { it.id == source.id }
+        IptvSourceEditorDialog(
+            source = source,
+            onDismiss = { editingSource = null },
+            onSave = { saved ->
+                store.upsert(saved)
+                managedSources = store.load(saved.profileId)
+                editingSource = null
+            },
+            onDelete = if (isExisting) {
+                { deleting ->
+                    store.delete(deleting.profileId, deleting.id)
+                    managedSources = store.load(deleting.profileId)
+                    editingSource = null
+                }
+            } else null,
+        )
     }
 }
 
@@ -109,23 +138,25 @@ private fun AddSourceButton(label: String, onClick: () -> Unit) {
 @Composable
 private fun SourceRow(source: IptvSource, onOpenSource: (IptvSource) -> Unit) {
     val (icon, tint) = sourceStatusIcon(source.status)
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp)
-            .background(AstraWaveColors.Surface, RoundedCornerShape(16.dp))
-            .clickable { onOpenSource(source) }.padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    AstraWaveFocusableCard(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp)
+            .clickable { onOpenSource(source) },
     ) {
-        Icon(icon, null, tint = tint)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(source.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${source.type.displayName()} • ${source.channelCount} channels • ${source.guideProgramCount} guide items",
-                color = AstraWaveColors.SecondaryText,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            source.lastError?.takeIf { it.isNotBlank() }?.let {
-                Text(it, color = AstraWaveColors.Error, style = MaterialTheme.typography.labelMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = tint)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(source.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "${source.type.displayName()} • ${source.channelCount} channels • ${source.guideProgramCount} guide items",
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                source.lastError?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, color = AstraWaveColors.Error, style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }
