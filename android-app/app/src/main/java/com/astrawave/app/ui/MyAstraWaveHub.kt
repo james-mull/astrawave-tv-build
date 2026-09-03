@@ -67,6 +67,7 @@ fun MyAstraWaveHub(
     var activeView by remember { mutableStateOf<PersonalLibraryView?>(null) }
     var createList by remember { mutableStateOf(false) }
     var showSetup by remember { mutableStateOf(false) }
+    var showSafety by remember { mutableStateOf(false) }
 
     fun refresh() { snapshot = store.snapshot(profileId) }
 
@@ -74,6 +75,11 @@ fun MyAstraWaveHub(
         cloudSync.restore(profileId) { result ->
             if (result.isSuccess) refresh()
         }
+    }
+
+    if (showSafety) {
+        SafetySettingsScreen(profileId = profileId, onBack = { showSafety = false })
+        return
     }
 
     if (showSetup) {
@@ -86,7 +92,7 @@ fun MyAstraWaveHub(
                     OnboardingStep.ADDONS -> onOpenAccountSection(AccountSection.ADDONS)
                     OnboardingStep.PERSONAL_MEDIA -> onOpenAccountSection(AccountSection.PERSONAL_MEDIA)
                     OnboardingStep.DEVICE_PAIRING -> onOpenAccountSection(AccountSection.DEVICES)
-                    OnboardingStep.PRIVACY -> onOpenAccountSection(AccountSection.PRIVACY)
+                    OnboardingStep.PRIVACY -> showSafety = true
                     OnboardingStep.TMDB,
                     OnboardingStep.AUDIO,
                     OnboardingStep.WELCOME,
@@ -160,7 +166,14 @@ fun MyAstraWaveHub(
         Text("ACCOUNT & SETTINGS", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         SetupRow { showSetup = true }
-        AccountSection.entries.forEach { section -> AccountRow(section) { onOpenAccountSection(section) } }
+        AccountSection.entries.forEach { section ->
+            AccountRow(section) {
+                when (section) {
+                    AccountSection.PARENTAL_CONTROLS, AccountSection.PRIVACY -> showSafety = true
+                    else -> onOpenAccountSection(section)
+                }
+            }
+        }
     }
 
     if (createList) {
