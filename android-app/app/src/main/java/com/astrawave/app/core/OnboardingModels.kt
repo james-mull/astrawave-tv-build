@@ -30,7 +30,14 @@ data class SetupReadiness(
     val personalMediaReady: Boolean,
     val audioReady: Boolean,
     val devicePairingReady: Boolean,
-)
+) {
+    /** Profile is mandatory; at least one entertainment source path must be usable. */
+    val hasUsableEntertainmentPath: Boolean
+        get() = discoveryReady || liveTvReady || addonsReady || personalMediaReady || audioReady
+
+    val minimumReady: Boolean
+        get() = profileReady && hasUsableEntertainmentPath
+}
 
 object OnboardingFlow {
     val orderedSteps = listOf(
@@ -49,5 +56,23 @@ object OnboardingFlow {
     fun next(state: OnboardingState): OnboardingStep {
         val currentIndex = orderedSteps.indexOf(state.currentStep).coerceAtLeast(0)
         return orderedSteps.drop(currentIndex + 1).firstOrNull { !state.isDone(it) } ?: OnboardingStep.COMPLETE
+    }
+
+    /**
+     * Completion is only valid when the user has a profile and at least one usable media path.
+     * Optional setup steps may still be skipped and configured later from My AstraWave.
+     */
+    fun canComplete(state: OnboardingState, readiness: SetupReadiness): Boolean =
+        readiness.minimumReady && state.isDone(OnboardingStep.PROFILE) && state.isDone(OnboardingStep.PRIVACY)
+
+    fun next(state: OnboardingState, readiness: SetupReadiness): OnboardingStep {
+        val proposed = next(state)
+        if (proposed != OnboardingStep.COMPLETE || canComplete(state, readiness)) return proposed
+        return when {
+            !state.isDone(OnboardingStep.PROFILE) || !readiness.profileReady -> OnboardingStep.PROFILE
+            !state.isDone(OnboardingStep.PRIVACY) -> OnboardingStep.PRIVACY
+            !readiness.hasUsableEntertainmentPath -> OnboardingStep.TMDB
+            else -> OnboardingStep.PRIVACY
+        }
     }
 }
