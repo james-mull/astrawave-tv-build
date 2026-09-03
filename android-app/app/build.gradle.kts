@@ -27,10 +27,15 @@ android {
         val firebaseSenderId = providers.gradleProperty("ASTRAWAVE_FIREBASE_SENDER_ID").orNull
             ?: providers.environmentVariable("ASTRAWAVE_FIREBASE_SENDER_ID").orNull
             ?: ""
+        val tmdbBearerToken = providers.gradleProperty("ASTRAWAVE_TMDB_BEARER_TOKEN").orNull
+            ?: providers.environmentVariable("ASTRAWAVE_TMDB_BEARER_TOKEN").orNull
+            ?: ""
+
         buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"$firebaseSenderId\"")
+        buildConfigField("String", "TMDB_BEARER_TOKEN", "\"$tmdbBearerToken\"")
     }
 
     buildFeatures {
