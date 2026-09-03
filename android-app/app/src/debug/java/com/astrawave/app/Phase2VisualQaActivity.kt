@@ -37,11 +37,18 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.ui.AstraWaveArtwork
 import com.astrawave.app.ui.AstraWaveColors
+import com.astrawave.app.ui.AstraWaveEmptyState
+import com.astrawave.app.ui.AstraWaveErrorState
 import com.astrawave.app.ui.AstraWaveFocusableCard
+import com.astrawave.app.ui.AstraWaveLoadingState
+import com.astrawave.app.ui.AstraWaveNoSourceState
+import com.astrawave.app.ui.AstraWaveOfflineState
 import com.astrawave.app.ui.AstraWavePageHeader
+import com.astrawave.app.ui.AstraWavePartialDataState
 import com.astrawave.app.ui.AstraWavePrimaryButton
 import com.astrawave.app.ui.AstraWaveSecondaryButton
 import com.astrawave.app.ui.AstraWaveSectionHeader
+import com.astrawave.app.ui.AstraWaveStaleSourceState
 import com.astrawave.app.ui.AstraWaveStatePanel
 import com.astrawave.app.ui.AstraWaveTheme
 
@@ -244,17 +251,36 @@ private fun Phase2VisualQaScreen() {
         }
 
         AstraWaveSectionHeader(
-            title = "States",
-            subtitle = "No loading, empty, error, or unavailable destination should degrade into a blank screen.",
+            title = "Canonical operational states",
+            subtitle = "Every state below must remain readable, intentional, action-safe, and visually consistent on each required device class.",
         )
-        AstraWaveStatePanel(
+        AstraWaveLoadingState(
             title = "Refreshing catalogs",
             message = "Loading state remains readable and visually intentional.",
-            loading = true,
         )
-        AstraWaveStatePanel(
+        AstraWaveEmptyState(
             title = "Nothing here yet",
-            message = "Empty state communicates what happened and what the user can do next.",
+            message = "Empty state communicates what happened and offers a safe next action.",
+            actionLabel = "Browse movies",
+            onAction = { activationMessage = "Empty-state action activated." },
+        )
+        AstraWaveErrorState(
+            title = "Source unavailable",
+            message = "Errors explain failure without implying unavailable media is playable.",
+            retryLabel = "Try again",
+            onRetry = { activationMessage = "Retry action activated." },
+        )
+        AstraWaveOfflineState(
+            message = "Network access is unavailable. Previously loaded local data may still be usable.",
+        )
+        AstraWavePartialDataState(
+            message = "Some providers responded while others are unavailable; only confirmed data is shown.",
+        )
+        AstraWaveNoSourceState(
+            message = "No eligible playback source is currently available for this item.",
+        )
+        AstraWaveStaleSourceState(
+            message = "This playlist has not refreshed successfully and may be out of date.",
         )
 
         Spacer(Modifier.height(12.dp))
