@@ -94,6 +94,22 @@ fun AstraWavePartialDataState(
 }
 
 @Composable
+fun AstraWaveUnauthenticatedState(
+    message: String = "Sign in to use account-synced features on this device.",
+    modifier: Modifier = Modifier,
+    actionLabel: String? = "Sign in",
+    onAction: (() -> Unit)? = null,
+) {
+    AstraWaveActionableState(
+        title = "Sign in required",
+        message = message,
+        modifier = modifier,
+        actionLabel = actionLabel,
+        onAction = onAction,
+    )
+}
+
+@Composable
 fun AstraWaveNoSourceState(
     message: String = "No eligible playable source is available for this item.",
     modifier: Modifier = Modifier,
@@ -118,6 +134,22 @@ fun AstraWaveStaleSourceState(
 ) {
     AstraWaveActionableState(
         title = "Source needs refreshing",
+        message = message,
+        modifier = modifier,
+        actionLabel = refreshLabel,
+        onAction = onRefresh,
+    )
+}
+
+@Composable
+fun AstraWaveEpgUnavailableState(
+    message: String = "Program guide data is unavailable right now. Channel playback remains separate from guide availability.",
+    modifier: Modifier = Modifier,
+    refreshLabel: String? = "Refresh guide",
+    onRefresh: (() -> Unit)? = null,
+) {
+    AstraWaveActionableState(
+        title = "Guide unavailable",
         message = message,
         modifier = modifier,
         actionLabel = refreshLabel,
