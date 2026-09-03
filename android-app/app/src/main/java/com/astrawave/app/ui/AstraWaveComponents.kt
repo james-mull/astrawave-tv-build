@@ -15,14 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -287,6 +285,11 @@ fun AstraWaveSecondaryButton(
     }
 }
 
+/**
+ * Compatibility entry point for feature modules that still call AstraWaveDialog.
+ * Delegate to the canonical focus-aware dialog so every shared dialog uses identical
+ * initial focus, D-pad traversal, focus ring, typography, and action treatment.
+ */
 @Composable
 fun AstraWaveDialog(
     title: String,
@@ -296,17 +299,12 @@ fun AstraWaveDialog(
     onDismiss: () -> Unit,
     dismissLabel: String = "Cancel",
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, color = AstraWaveColors.PrimaryText) },
-        text = { Text(message, color = AstraWaveColors.SecondaryText) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(confirmLabel) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(dismissLabel) }
-        },
-        containerColor = AstraWaveColors.SurfaceRaised,
-        shape = MaterialTheme.shapes.large,
+    AstraWaveFocusDialog(
+        title = title,
+        message = message,
+        confirmLabel = confirmLabel,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+        dismissLabel = dismissLabel,
     )
 }
