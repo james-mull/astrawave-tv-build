@@ -198,7 +198,7 @@ private fun SectionStrip(current: RebuildDestination, onSelect: (RebuildDestinat
 @Composable
 private fun CatalogLanding(title: String, catalogs: List<AstraWaveCatalog>, showIntro: Boolean = false) {
     val context = LocalContext.current
-    val token = remember { AppSettingsStore(context).tmdbBearerToken.orEmpty() }
+    val token = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val repository = remember(token) { TmdbCatalogRepository(token) }
     val states = remember(catalogs, token) {
         mutableStateMapOf<AstraWaveCatalog, CatalogLoadState>().apply {
