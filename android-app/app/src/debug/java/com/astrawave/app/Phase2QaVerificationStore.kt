@@ -13,8 +13,14 @@ import android.content.Context
 internal class Phase2QaVerificationStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun isVerified(deviceClass: String): Boolean =
-        preferences.getBoolean(verifiedKey(deviceClass), false)
+    fun isVerified(deviceClass: String): Boolean {
+        val visualCommit = verifiedCommit(deviceClass)
+        val modalCommit = modalVerifiedCommit(deviceClass)
+        return preferences.getBoolean(verifiedKey(deviceClass), false) &&
+            preferences.getBoolean(modalVerifiedKey(deviceClass), false) &&
+            !visualCommit.isNullOrBlank() &&
+            visualCommit == modalCommit
+    }
 
     fun verifiedCommit(deviceClass: String): String? =
         preferences.getString(commitKey(deviceClass), null)
@@ -26,6 +32,9 @@ internal class Phase2QaVerificationStore(context: Context) {
         preferences.getString(modalCommitKey(deviceClass), null)
 
     fun markVerified(deviceClass: String, commitSha: String) {
+        // A Phase 2 device result is only valid if focus-aware modal QA was
+        // already completed on this same device class and exact commit.
+        if (!isModalVerified(deviceClass) || modalVerifiedCommit(deviceClass) != commitSha) return
         preferences.edit()
             .putBoolean(verifiedKey(deviceClass), true)
             .putString(commitKey(deviceClass), commitSha)
