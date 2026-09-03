@@ -25,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.data.AppSettingsStore
+import com.astrawave.app.data.StremioCatalogAggregator
+import com.astrawave.app.data.StremioSearchHit
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.data.TmdbItem
 import kotlinx.coroutines.Dispatchers
@@ -34,15 +36,21 @@ import kotlinx.coroutines.withContext
 private sealed interface SearchState {
     data object Idle : SearchState
     data object Loading : SearchState
-    data class Ready(val items: List<TmdbItem>) : SearchState
+    data class Ready(
+        val tmdbItems: List<TmdbItem>,
+        val addonItems: List<StremioSearchHit>,
+        val tmdbError: String? = null,
+        val addonError: String? = null,
+    ) : SearchState
     data class Error(val message: String) : SearchState
 }
 
 @Composable
-fun UniversalSearchScreen() {
+fun UniversalSearchScreen(profileId: String = "default") {
     val context = LocalContext.current
     val token = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
-    val repository = remember(token) { TmdbCatalogRepository(token) }
+    val tmdbRepository = remember(token) { TmdbCatalogRepository(token) }
+    val addonSearch = remember { StremioCatalogAggregator(context) }
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var state by remember { mutableStateOf<SearchState>(SearchState.Idle) }
@@ -57,18 +65,18 @@ fun UniversalSearchScreen() {
         Text("Search", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(6.dp))
         Text(
-            "Search AstraWave discovery now; IPTV, addons and personal media plug into this same surface as they are connected.",
+            "Search built-in TMDB discovery and metadata from your enabled addons in one place.",
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.bodyLarge,
         )
         Spacer(Modifier.height(18.dp))
 
-        if (!repository.isConfigured()) {
+        if (!tmdbRepository.isConfigured()) {
             SearchMessage(
-                "TMDB setup needed",
-                "Connect a TMDB bearer token in My AstraWave to enable movie and TV search. Other connected AstraWave sources remain independent.",
+                "TMDB not configured",
+                "Addon search still works. Connect TMDB in My AstraWave to add built-in movie and TV results.",
             )
-            return@Column
+            Spacer(Modifier.height(12.dp))
         }
 
         OutlinedTextField(
@@ -76,7 +84,7 @@ fun UniversalSearchScreen() {
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Movies and shows") },
+            label = { Text("Movies, shows and addon catalogs") },
         )
         Spacer(Modifier.height(10.dp))
         Button(
@@ -88,8 +96,20 @@ fun UniversalSearchScreen() {
                     state = SearchState.Loading
                     scope.launch {
                         state = try {
-                            val items = withContext(Dispatchers.IO) { repository.search(trimmed) }
-                            SearchState.Ready(items)
+                            withContext(Dispatchers.IO) {
+                                val tmdbResult = if (tmdbRepository.isConfigured()) {
+                                    runCatching { tmdbRepository.search(trimmed) }
+                                } else {
+                                    Result.success(emptyList())
+                                }
+                                val addonResult = runCatching { addonSearch.search(trimmed, profileId) }
+                                SearchState.Ready(
+                                    tmdbItems = tmdbResult.getOrDefault(emptyList()),
+                                    addonItems = addonResult.getOrDefault(emptyList()),
+                                    tmdbError = tmdbResult.exceptionOrNull()?.message,
+                                    addonError = addonResult.exceptionOrNull()?.message,
+                                )
+                            }
                         } catch (error: Exception) {
                             SearchState.Error(error.message ?: "Search failed")
                         }
@@ -103,36 +123,74 @@ fun UniversalSearchScreen() {
         Spacer(Modifier.height(20.dp))
 
         when (val current = state) {
-            SearchState.Idle -> SearchMessage("Start searching", "Enter a movie or TV title to search AstraWave discovery.")
+            SearchState.Idle -> SearchMessage("Start searching", "Enter a title or keyword to search AstraWave discovery.")
             SearchState.Loading -> Row(Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) {
                 CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
                 Spacer(Modifier.padding(6.dp))
-                Text("Searching…", color = AstraWaveColors.SecondaryText)
+                Text("Searching all connected discovery sources…", color = AstraWaveColors.SecondaryText)
             }
             is SearchState.Error -> SearchMessage("Search unavailable", current.message)
             is SearchState.Ready -> {
-                if (current.items.isEmpty()) {
-                    SearchMessage("No matches", "No movie or TV results matched this search.")
+                if (current.tmdbItems.isEmpty() && current.addonItems.isEmpty()) {
+                    SearchMessage("No matches", "No connected movie, TV or addon metadata matched this search.")
                 } else {
-                    current.items.take(50).forEach { item ->
-                        AstraWaveFocusableCard(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 5.dp),
-                        ) {
-                            Column {
-                                Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    item.overview.ifBlank { "Open for details and Watch options." },
-                                    color = AstraWaveColors.SecondaryText,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 3,
-                                )
-                                Spacer(Modifier.height(10.dp))
-                                LibraryActionRow(item = item.toLibraryItemRef())
+                    if (current.tmdbItems.isNotEmpty()) {
+                        Text("AstraWave / TMDB", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(8.dp))
+                        current.tmdbItems.take(40).forEach { item ->
+                            AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                Column {
+                                    Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        item.overview.ifBlank { "Open for details and Watch options." },
+                                        color = AstraWaveColors.SecondaryText,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 3,
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    LibraryActionRow(item = item.toLibraryItemRef(), profileId = profileId)
+                                }
                             }
                         }
+                        Spacer(Modifier.height(18.dp))
+                    }
+
+                    if (current.addonItems.isNotEmpty()) {
+                        Text("From Your Addons", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(8.dp))
+                        current.addonItems.take(40).forEach { hit ->
+                            AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                Column {
+                                    Text(hit.item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "${hit.addonName} • ${hit.catalogName} • ${hit.item.type}",
+                                        color = AstraWaveColors.Accent,
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                    hit.item.description?.takeIf { it.isNotBlank() }?.let { description ->
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(description, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        "Metadata result • playback requires an authorized eligible source",
+                                        color = AstraWaveColors.TertiaryText,
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    current.tmdbError?.let {
+                        Spacer(Modifier.height(12.dp))
+                        SearchMessage("TMDB partial failure", it)
+                    }
+                    current.addonError?.let {
+                        Spacer(Modifier.height(12.dp))
+                        SearchMessage("Addon search partial failure", it)
                     }
                 }
             }
