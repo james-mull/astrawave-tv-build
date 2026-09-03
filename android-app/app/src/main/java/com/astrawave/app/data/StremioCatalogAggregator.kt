@@ -2,6 +2,7 @@ package com.astrawave.app.data
 
 import android.content.Context
 import com.astrawave.app.core.InstalledAddon
+import com.astrawave.app.core.ProfileSafetyPolicy
 import com.astrawave.app.core.StremioCatalogDescriptor
 import com.astrawave.app.core.StremioMetaItem
 import com.astrawave.app.core.StremioResource
@@ -33,6 +34,7 @@ class StremioCatalogAggregator(
     private val gateway: StremioHttpGateway = StremioHttpGateway(),
 ) {
     private val store = StremioAddonStore(context)
+    private val safetyStore = ProfileSafetyStore(context)
 
     fun load(profileId: String = "default", maxItemsPerCatalog: Int = 24): List<StremioCatalogRow> {
         return eligibleAddons(profileId).flatMap { addon ->
@@ -106,7 +108,11 @@ class StremioCatalogAggregator(
                     .thenBy { it.name.lowercase() },
             )
 
-    private fun eligibleAddons(profileId: String): List<InstalledAddon> = store.load(profileId)
-        .filter { it.enabled }
-        .filter { StremioResource.CATALOG in it.manifest.resources || it.manifest.catalogs.isNotEmpty() }
+    private fun eligibleAddons(profileId: String): List<InstalledAddon> {
+        val safety = safetyStore.load(profileId)
+        if (!ProfileSafetyPolicy.externalAddonsAllowed(safety)) return emptyList()
+        return store.load(profileId)
+            .filter { it.enabled }
+            .filter { StremioResource.CATALOG in it.manifest.resources || it.manifest.catalogs.isNotEmpty() }
+    }
 }
