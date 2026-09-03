@@ -69,6 +69,26 @@ data class RemoteCommandEnvelope(
     val sentAtEpochMs: Long,
 )
 
+object DeviceSessionValidation {
+    private const val HANDOFF_MAX_AGE_MS = 10 * 60 * 1000L
+
+    fun pairingValid(session: PairingSession, nowEpochMs: Long = System.currentTimeMillis()): Boolean =
+        session.sessionId.isNotBlank() &&
+            session.qrPayload.isNotBlank() &&
+            session.expiresAtEpochMs > nowEpochMs
+
+    fun handoffValid(handoff: PlaybackHandoff, nowEpochMs: Long = System.currentTimeMillis()): Boolean =
+        handoff.mediaId.isNotBlank() &&
+            handoff.mediaType.isNotBlank() &&
+            handoff.sourceDeviceId.isNotBlank() &&
+            handoff.targetDeviceId.isNotBlank() &&
+            handoff.sourceDeviceId != handoff.targetDeviceId &&
+            handoff.positionMs >= 0L &&
+            handoff.durationMs >= 0L &&
+            (handoff.durationMs == 0L || handoff.positionMs <= handoff.durationMs) &&
+            handoff.createdAtEpochMs in (nowEpochMs - HANDOFF_MAX_AGE_MS)..nowEpochMs
+}
+
 interface DeviceSessionGateway {
     fun discover(): List<AstraWaveDevice>
     fun createPairingSession(targetDeviceId: String? = null): PairingSession
