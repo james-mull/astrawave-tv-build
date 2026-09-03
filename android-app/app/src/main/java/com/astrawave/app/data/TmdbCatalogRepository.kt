@@ -202,6 +202,9 @@ class TmdbCatalogRepository(
         }
 
         val title = root.optString("title").ifBlank { root.optString("name") }
+        val posterPath = root.optString("poster_path").takeIf { it.isNotBlank() && it != "null" }
+        val backdropPath = root.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" }
+        ArtworkRegistry.register(title, posterPath ?: backdropPath)
         val runtime = root.optInt("runtime", 0).takeIf { it > 0 }
             ?: root.optJSONArray("episode_run_time")?.optInt(0, 0)?.takeIf { it > 0 }
         return TmdbTitleDetails(
@@ -209,8 +212,8 @@ class TmdbCatalogRepository(
             mediaType = mediaType,
             title = title,
             overview = root.optString("overview"),
-            posterPath = root.optString("poster_path").takeIf { it.isNotBlank() && it != "null" },
-            backdropPath = root.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" },
+            posterPath = posterPath,
+            backdropPath = backdropPath,
             releaseDate = root.optString(if (mediaType == "movie") "release_date" else "first_air_date").takeIf { it.isNotBlank() },
             runtimeMinutes = runtime,
             genres = genres,
@@ -227,13 +230,16 @@ class TmdbCatalogRepository(
                 val obj = array.optJSONObject(i) ?: continue
                 val title = obj.optString("title").ifBlank { obj.optString("name") }
                 if (title.isBlank()) continue
+                val posterPath = obj.optString("poster_path").takeIf { it.isNotBlank() && it != "null" }
+                val backdropPath = obj.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" }
+                ArtworkRegistry.register(title, posterPath ?: backdropPath)
                 add(
                     TmdbItem(
                         id = obj.optLong("id"),
                         title = title,
                         overview = obj.optString("overview"),
-                        posterPath = obj.optString("poster_path").takeIf { it.isNotBlank() && it != "null" },
-                        backdropPath = obj.optString("backdrop_path").takeIf { it.isNotBlank() && it != "null" },
+                        posterPath = posterPath,
+                        backdropPath = backdropPath,
                         mediaType = obj.optString("media_type").takeIf { it.isNotBlank() } ?: fallbackMediaType,
                     )
                 )
