@@ -3,7 +3,7 @@ package com.astrawave.app.data
 import java.util.Locale
 
 /** Sports event metadata normalized before channel/source resolution. */
-data class SportsEvent(
+data class SportsGuideEvent(
     val id: String,
     val league: String,
     val homeTeam: String,
@@ -23,7 +23,7 @@ data class SportsWatchCandidate(
 )
 
 data class SportsResolution(
-    val event: SportsEvent,
+    val event: SportsGuideEvent,
     val candidates: List<SportsWatchCandidate>,
 ) {
     val best: SportsWatchCandidate? get() = candidates.firstOrNull()
@@ -35,7 +35,7 @@ data class SportsResolution(
  * Playback still goes through the normal stream health/eligibility path before launch.
  */
 class SportsChannelResolver {
-    fun resolve(event: SportsEvent, channelGroups: List<LiveChannelGroup>): SportsResolution {
+    fun resolve(event: SportsGuideEvent, channelGroups: List<LiveChannelGroup>): SportsResolution {
         val broadcasters = event.broadcasterNames.map(::normalize).filter { it.isNotBlank() }
         if (broadcasters.isEmpty()) return SportsResolution(event, emptyList())
 
