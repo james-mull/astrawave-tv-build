@@ -1,5 +1,7 @@
 package com.astrawave.app
 
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.data.SportsEvent
 import com.astrawave.app.data.SportsGuideItem
@@ -40,6 +43,21 @@ class Phase2SportsQaActivity : ComponentActivity() {
 
 @Composable
 private fun Phase2SportsQaScreen() {
+    val configuration = LocalConfiguration.current
+    val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    val isFireTv = isTv && (
+        Build.MANUFACTURER.equals("Amazon", ignoreCase = true) ||
+            Build.BRAND.equals("Amazon", ignoreCase = true)
+        )
+    val deviceClass = when {
+        isFireTv -> "Fire TV"
+        isTv -> "Android TV"
+        configuration.screenWidthDp >= 600 -> "Tablet"
+        else -> "Phone"
+    }
+    val commitSha = BuildConfig.GIT_SHA.ifBlank { "local-untracked" }
+    val commitKnown = commitSha != "local-untracked" && commitSha.length >= 7
+
     val featured = remember {
         SportsGuideItem(
             event = SportsEvent(
@@ -79,7 +97,15 @@ private fun Phase2SportsQaScreen() {
     ) {
         AstraWavePageHeader(
             title = "Phase 2 Sports Visual QA",
-            subtitle = "Inspect the real shared featured-game and schedule-card components on this device. Verify hierarchy, focus treatment, long-title wrapping, spacing, and 10-foot readability.",
+            subtitle = "$deviceClass • ${configuration.screenWidthDp}×${configuration.screenHeightDp} dp • build ${commitSha.take(12)} • inspect the real shared featured-game and schedule-card components for hierarchy, focus treatment, long-title wrapping, spacing, and 10-foot readability.",
+        )
+        AstraWaveStatePanel(
+            title = "Exact-build evidence",
+            message = if (commitKnown) {
+                "Record sports visual QA only against this exact build (${commitSha.take(12)}) and this device class ($deviceClass). A newer build must be inspected again."
+            } else {
+                "This local build has no trackable commit SHA and must not be used as Phase 2 sports visual-verification evidence."
+            },
         )
         AstraWaveStatePanel(
             title = "Synthetic QA metadata only",
@@ -111,7 +137,7 @@ private fun Phase2SportsQaScreen() {
 
         AstraWaveStatePanel(
             title = "Phase 2 benchmark reminder",
-            message = "Reject this build if the sports components clip, look like generic debug/data cards, lose focus visibility, or fail the premium flagship presentation required by the master rebuild plan.",
+            message = "Reject this exact build if the sports components clip, look like generic debug/data cards, lose focus visibility, or fail the premium flagship presentation required by the master rebuild plan.",
         )
     }
 }
