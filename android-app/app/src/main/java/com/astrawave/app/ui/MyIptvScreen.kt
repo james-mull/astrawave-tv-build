@@ -40,12 +40,19 @@ import com.astrawave.app.data.IptvSourceStore
 @Composable
 fun MyIptvScreen(
     sources: List<IptvSource>,
+    onSourcesChanged: (List<IptvSource>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val store = remember { IptvSourceStore(context) }
     val profileId = sources.firstOrNull()?.profileId ?: "default"
     var managedSources by remember(sources) { mutableStateOf(sources) }
     var editingSource by remember { mutableStateOf<IptvSource?>(null) }
+
+    fun refresh(profile: String) {
+        val refreshed = store.load(profile)
+        managedSources = refreshed
+        onSourcesChanged(refreshed)
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -108,13 +115,13 @@ fun MyIptvScreen(
             onDismiss = { editingSource = null },
             onSave = { saved ->
                 store.upsert(saved)
-                managedSources = store.load(saved.profileId)
+                refresh(saved.profileId)
                 editingSource = null
             },
             onDelete = if (isExisting) {
                 { deleting ->
                     store.delete(deleting.profileId, deleting.id)
-                    managedSources = store.load(deleting.profileId)
+                    refresh(deleting.profileId)
                     editingSource = null
                 }
             } else null,
