@@ -63,8 +63,8 @@ import com.astrawave.app.ui.AstraWaveGuideScreen
 import com.astrawave.app.ui.AstraWaveSportsScreen
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
+import com.astrawave.app.ui.LiveTvHubScreen
 import com.astrawave.app.ui.MyAstraWaveHub
-import com.astrawave.app.ui.MyIptvScreen
 import com.astrawave.app.ui.UniversalSearchScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -130,7 +130,7 @@ private fun RebuildRoot() {
                 RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
-                RebuildDestination.Live -> MyIptvScreen(
+                RebuildDestination.Live -> LiveTvHubScreen(
                     sources = iptvSources,
                     onSourcesChanged = { iptvSources = it },
                 )
