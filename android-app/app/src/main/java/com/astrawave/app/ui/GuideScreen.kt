@@ -105,7 +105,11 @@ fun AstraWaveGuideScreen(
                                 Spacer(Modifier.width(14.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(row.now?.title ?: "No current program data", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyLarge)
-                                    Text(row.group ?: "Uncategorized", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                                    row.next?.title?.let { nextTitle ->
+                                        Spacer(Modifier.height(2.dp))
+                                        Text("Next: $nextTitle", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                                    }
+                                    Text(row.group ?: "Uncategorized", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
                                 }
                                 Text(if (row.playableUrl != null) "Play" else "${row.playableCandidateCount} sources", color = if (row.playableUrl != null) AstraWaveColors.Success else AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
                             }
