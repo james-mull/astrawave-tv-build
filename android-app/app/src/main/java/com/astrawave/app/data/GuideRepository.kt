@@ -35,7 +35,7 @@ class GuideRepository(
                 logo = preferred?.logo,
                 group = preferred?.group,
                 now = group.currentProgram,
-                next = null,
+                next = group.nextProgram,
                 playableCandidateCount = group.candidates.size,
                 preferredSource = preferred?.source,
                 playableUrl = preferred?.url,
