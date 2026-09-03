@@ -81,39 +81,39 @@ fun AstraWaveSportsScreen(
                 } else {
                     current.snapshot.events.take(100).forEach { item ->
                         val candidate = item.watchCandidate
-                        Column(
+                        AstraWaveFocusableCard(
                             Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 5.dp)
-                                .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
-                                .padding(16.dp),
+                                .padding(vertical = 5.dp),
                         ) {
-                            Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                listOfNotNull(item.event.league, item.event.sport, item.event.time).joinToString(" • "),
-                                color = AstraWaveColors.SecondaryText,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            if (candidate != null) {
+                            Column {
+                                Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "Watch: ${candidate.channelName} • ${candidate.source}",
-                                    color = AstraWaveColors.Success,
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                            } else if (item.broadcasterNames.isNotEmpty()) {
-                                Text(
-                                    "Broadcaster: ${item.broadcasterNames.joinToString()} • no matching playable channel found",
+                                    listOfNotNull(item.event.league, item.event.sport, item.event.time).joinToString(" • "),
                                     color = AstraWaveColors.SecondaryText,
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.bodyMedium,
                                 )
-                            } else {
-                                Text(
-                                    "Broadcaster data not available yet — schedule shown without a fake Watch button.",
-                                    color = AstraWaveColors.TertiaryText,
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
+                                Spacer(Modifier.height(8.dp))
+                                if (candidate != null) {
+                                    Text(
+                                        "Watch: ${candidate.channelName} • ${candidate.source}",
+                                        color = AstraWaveColors.Success,
+                                        style = MaterialTheme.typography.labelLarge,
+                                    )
+                                } else if (item.broadcasterNames.isNotEmpty()) {
+                                    Text(
+                                        "Broadcaster: ${item.broadcasterNames.joinToString()} • no matching playable channel found",
+                                        color = AstraWaveColors.SecondaryText,
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                } else {
+                                    Text(
+                                        "Broadcaster data not available yet — schedule shown without a fake Watch button.",
+                                        color = AstraWaveColors.TertiaryText,
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
                             }
                         }
                     }
