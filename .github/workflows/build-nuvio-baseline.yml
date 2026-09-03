@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/build-nuvio-baseline.yml"
+      - "docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md"
+      - "nuvio-baseline/**"
   workflow_dispatch:
 
 permissions:
