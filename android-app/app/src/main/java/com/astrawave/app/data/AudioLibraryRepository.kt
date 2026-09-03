@@ -13,6 +13,7 @@ class AudioLibraryRepository {
         subscriptions: List<AudioSubscription>,
         radioStations: List<RadioStation>,
     ): AudioLibrarySnapshot {
+        val feedErrors = linkedMapOf<String, String>()
         val recentEpisodes = subscriptions.flatMap { subscription ->
             runCatching {
                 val xml = SimpleHttp.getText(subscription.feedUrl)
@@ -27,13 +28,17 @@ class AudioLibraryRepository {
                         publishedAt = episode.published,
                     )
                 }
+            }.onFailure { error ->
+                feedErrors[subscription.id] = error.message ?: error::class.java.simpleName
             }.getOrDefault(emptyList())
-        }.sortedByDescending { it.publishedAt.orEmpty() }
+        }.distinctBy { it.id }
+            .sortedByDescending { it.publishedAt.orEmpty() }
 
         return AudioLibrarySnapshot(
             subscriptions = subscriptions,
             recentEpisodes = recentEpisodes,
             radioStations = radioStations,
+            feedErrors = feedErrors,
         )
     }
 }
