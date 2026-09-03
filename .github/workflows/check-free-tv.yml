@@ -2,6 +2,13 @@ name: Check AstraWave Free TV
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - "astrawave-free-tv/check_free_tv.py"
+      - "astrawave-free-tv/sources.json"
+      - ".github/workflows/check-free-tv.yml"
   schedule:
     - cron: '17 9 * * *'
 
@@ -13,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'schedule' && github.event.repository.default_branch || github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -24,4 +33,4 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add astrawave-free-tv/status.json astrawave-free-tv/astrawave-free-tv.m3u
           git diff --cached --quiet || git commit -m "Refresh AstraWave Free TV health"
-          git push
+          git push origin HEAD:${GITHUB_REF_NAME}
