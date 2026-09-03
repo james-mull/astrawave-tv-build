@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.ui.AstraWaveArtwork
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveEmptyState
+import com.astrawave.app.ui.AstraWaveEpgUnavailableState
 import com.astrawave.app.ui.AstraWaveErrorState
 import com.astrawave.app.ui.AstraWaveFocusableCard
 import com.astrawave.app.ui.AstraWaveLoadingState
@@ -51,6 +52,7 @@ import com.astrawave.app.ui.AstraWaveSectionHeader
 import com.astrawave.app.ui.AstraWaveStaleSourceState
 import com.astrawave.app.ui.AstraWaveStatePanel
 import com.astrawave.app.ui.AstraWaveTheme
+import com.astrawave.app.ui.AstraWaveUnauthenticatedState
 
 /**
  * Debug-only Phase 2 device QA surface.
@@ -276,11 +278,17 @@ private fun Phase2VisualQaScreen() {
         AstraWavePartialDataState(
             message = "Some providers responded while others are unavailable; only confirmed data is shown.",
         )
+        AstraWaveUnauthenticatedState(
+            onAction = { activationMessage = "Sign-in action activated." },
+        )
         AstraWaveNoSourceState(
             message = "No eligible playback source is currently available for this item.",
         )
         AstraWaveStaleSourceState(
             message = "This playlist has not refreshed successfully and may be out of date.",
+        )
+        AstraWaveEpgUnavailableState(
+            onRefresh = { activationMessage = "Guide refresh action activated." },
         )
 
         Spacer(Modifier.height(12.dp))
