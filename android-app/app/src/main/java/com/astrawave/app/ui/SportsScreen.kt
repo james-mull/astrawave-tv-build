@@ -101,10 +101,10 @@ fun AstraWaveSportsScreen(
             .padding(horizontal = 24.dp, vertical = 22.dp),
     ) {
         SportsHeader(multiviewCount = multiviewCount, onOpenMultiview = onOpenMultiview)
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(18.dp))
 
         when (val current = state) {
-            SportsLoadState.Loading -> SportsInfoCard("Building Game Day…", "Loading today's schedule and matching available channels.", true)
+            SportsLoadState.Loading -> SportsInfoCard("Loading Game Day…", "Finding today's games and matching watchable channels.", true)
             is SportsLoadState.Error -> SportsInfoCard("Sports unavailable", current.message)
             is SportsLoadState.Ready -> {
                 val snapshot = current.snapshot
@@ -116,18 +116,8 @@ fun AstraWaveSportsScreen(
                     date = snapshot.date,
                     eventCount = snapshot.events.size,
                     playableCount = playableCount,
-                    sourceGroups = snapshot.combinedChannelGroups,
                 )
-                Spacer(Modifier.height(18.dp))
-
-                if (leagues.isNotEmpty()) {
-                    LeagueFilterRail(
-                        leagues = leagues,
-                        selectedLeague = selectedLeague,
-                        onSelect = { selectedLeague = it },
-                    )
-                    Spacer(Modifier.height(20.dp))
-                }
+                Spacer(Modifier.height(16.dp))
 
                 val featured = visibleEvents.firstOrNull { it.watchCandidate != null } ?: visibleEvents.firstOrNull()
                 if (featured != null) {
@@ -137,20 +127,31 @@ fun AstraWaveSportsScreen(
                         onPlay = ::play,
                         onAddToMultiview = onAddToMultiview,
                     )
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(22.dp))
                 }
 
-                Text("Today's Schedule", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+                if (leagues.isNotEmpty()) {
+                    Text("Browse by league", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    LeagueFilterRail(
+                        leagues = leagues,
+                        selectedLeague = selectedLeague,
+                        onSelect = { selectedLeague = it },
+                    )
+                    Spacer(Modifier.height(20.dp))
+                }
+
+                Text("Today's Games", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    selectedLeague ?: "All leagues",
+                    if (selectedLeague == null) "All leagues" else selectedLeague!!,
                     color = AstraWaveColors.SecondaryText,
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
 
                 if (visibleEvents.isEmpty()) {
-                    SportsInfoCard("No events", "No events match the selected league for this date.")
+                    SportsInfoCard("No games found", "No events match this league today.")
                 } else {
                     visibleEvents.take(100).forEach { item ->
                         AstraWaveSportsScheduleCard(
@@ -172,18 +173,18 @@ private fun SportsHeader(multiviewCount: Int, onOpenMultiview: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Column(Modifier.weight(1f)) {
             Text("ASTRAWAVE SPORTS", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(4.dp))
             Text("Game Day", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(5.dp))
             Text(
-                "Your premium schedule, broadcaster matches and watch options in one place.",
+                "Today's games, matched channels and watch options.",
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
         if (multiviewCount > 0) {
             AstraWaveSecondaryButton(
-                label = "Multiview  $multiviewCount/4",
+                label = "Multiview $multiviewCount/4",
                 onClick = onOpenMultiview,
             )
         }
@@ -191,15 +192,14 @@ private fun SportsHeader(multiviewCount: Int, onOpenMultiview: () -> Unit) {
 }
 
 @Composable
-private fun SportsSummaryRail(date: String, eventCount: Int, playableCount: Int, sourceGroups: Int) {
+private fun SportsSummaryRail(date: String, eventCount: Int, playableCount: Int) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SportsStatPill("TODAY", date)
-        SportsStatPill("EVENTS", eventCount.toString())
-        SportsStatPill("WATCHABLE", playableCount.toString())
-        SportsStatPill("CHANNEL GROUPS", sourceGroups.toString())
+        SportsStatPill("GAMES", eventCount.toString())
+        SportsStatPill("READY TO WATCH", playableCount.toString())
     }
 }
 
@@ -208,7 +208,7 @@ private fun SportsStatPill(label: String, value: String) {
     Column(
         Modifier
             .background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 11.dp),
     ) {
         Text(label, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
         Spacer(Modifier.height(2.dp))
@@ -242,7 +242,6 @@ private fun LeagueChip(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Shared premium sports hero used by Sports today and reusable by Home/Game Day surfaces. */
 @Composable
 fun AstraWaveFeaturedSportsCard(
     item: SportsGuideItem,
@@ -254,32 +253,31 @@ fun AstraWaveFeaturedSportsCard(
     AstraWaveFocusableCard(Modifier.fillMaxWidth()) {
         Column(Modifier.background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large).padding(22.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("FEATURED MATCHUP", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+                Text(if (candidate != null) "READY TO WATCH" else "FEATURED GAME", color = if (candidate != null) AstraWaveColors.Success else AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
                 Text(
                     item.event.time ?: item.event.date ?: "Scheduled",
                     color = AstraWaveColors.SecondaryText,
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 listOfNotNull(item.event.league, item.event.sport).joinToString(" • ").ifBlank { "Sports event" },
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyLarge,
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
             SportsSourceStatus(item)
             if (candidate != null) {
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(16.dp))
                 SportsActions(item, multiviewCount, onPlay, onAddToMultiview)
             }
         }
     }
 }
 
-/** Shared premium sports schedule card reusable by Sports, Home, and Game Day surfaces. */
 @Composable
 fun AstraWaveSportsScheduleCard(
     item: SportsGuideItem,
@@ -287,16 +285,16 @@ fun AstraWaveSportsScheduleCard(
     onPlay: (String) -> Unit,
     onAddToMultiview: (MultiviewPane) -> Unit,
 ) {
-    AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Column(Modifier.padding(4.dp)) {
+    AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.padding(2.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         item.event.league ?: item.event.sport ?: "SPORTS",
-                        color = AstraWaveColors.Accent,
+                        color = if (item.watchCandidate != null) AstraWaveColors.Success else AstraWaveColors.Accent,
                         style = MaterialTheme.typography.labelMedium,
                     )
-                    Spacer(Modifier.height(5.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
                 }
                 Text(
@@ -305,10 +303,10 @@ fun AstraWaveSportsScheduleCard(
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             SportsSourceStatus(item)
             if (item.watchCandidate != null) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 SportsActions(item, multiviewCount, onPlay, onAddToMultiview)
             }
         }
@@ -320,25 +318,20 @@ private fun SportsSourceStatus(item: SportsGuideItem) {
     val candidate = item.watchCandidate
     when {
         candidate != null -> {
-            Text("MATCHED CHANNEL", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.height(3.dp))
-            Text(
-                "${candidate.channelName} • ${candidate.source}",
-                color = AstraWaveColors.PrimaryText,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Text("Watch on ${candidate.channelName}", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(2.dp))
+            Text(candidate.source, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
         }
         item.broadcasterNames.isNotEmpty() -> {
-            Text("BROADCASTER", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.height(3.dp))
             Text(
-                "${item.broadcasterNames.joinToString()} • no matching playable channel found",
+                "Broadcast: ${item.broadcasterNames.joinToString()}",
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Text("No matching playable channel yet", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
         }
         else -> Text(
-            "Schedule available • broadcaster data not supplied",
+            "Schedule available",
             color = AstraWaveColors.TertiaryText,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -353,7 +346,7 @@ private fun SportsActions(
     onAddToMultiview: (MultiviewPane) -> Unit,
 ) {
     val candidate = item.watchCandidate ?: return
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         AstraWavePrimaryButton(
             label = "▶ Watch",
             onClick = { onPlay(candidate.streamUrl) },
