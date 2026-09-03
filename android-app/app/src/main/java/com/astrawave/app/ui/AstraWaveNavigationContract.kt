@@ -3,9 +3,10 @@ package com.astrawave.app.ui
 /**
  * Canonical Phase 2 primary-navigation contract.
  *
- * Feature destinations such as Multiview, Personal Media, and Addons remain available through
- * their owning hubs/actions, but are intentionally excluded from the top-level shell so the app
- * stays fast to understand on phone, tablet, and 10-foot TV layouts.
+ * Primary navigation stays intentionally small so AstraWave feels like a consumer streaming
+ * product instead of an admin menu. Lower-frequency destinations remain reachable from the
+ * owning hubs: Guide from Live TV, Multiview from Live TV/Sports, addon and personal-media
+ * management from My AstraWave, and broader catalog exploration from Home/Search.
  */
 data class AstraWaveNavItem(
     val route: String,
@@ -17,25 +18,20 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("home", "Home"),
         AstraWaveNavItem("movies", "Movies"),
         AstraWaveNavItem("tv", "TV"),
-        AstraWaveNavItem("live", "Live TV"),
-        AstraWaveNavItem("guide", "Guide"),
+        AstraWaveNavItem("live", "Live"),
         AstraWaveNavItem("sports", "Sports"),
-        AstraWaveNavItem("audio", "Music & Podcasts"),
-        AstraWaveNavItem("discover", "Discover"),
         AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("my", "My AstraWave"),
+        AstraWaveNavItem("my", "My"),
     )
 
     val tv = listOf(
         AstraWaveNavItem("home", "Home"),
         AstraWaveNavItem("movies", "Movies"),
         AstraWaveNavItem("tv", "TV"),
-        AstraWaveNavItem("live", "Live TV"),
-        AstraWaveNavItem("guide", "Guide"),
+        AstraWaveNavItem("live", "Live"),
         AstraWaveNavItem("sports", "Sports"),
-        AstraWaveNavItem("audio", "Music & Podcasts"),
         AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("my", "My AstraWave"),
+        AstraWaveNavItem("my", "My"),
     )
 
     init {
