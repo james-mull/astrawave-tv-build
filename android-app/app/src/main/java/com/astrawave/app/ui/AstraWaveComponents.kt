@@ -188,10 +188,36 @@ fun AstraWavePrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val sizing = LocalAstraWaveSizing.current
+    val elevationTokens = LocalAstraWaveElevation.current
+    val motion = LocalAstraWaveMotion.current
+    val scale by animateFloatAsState(
+        targetValue = if (focused && enabled) sizing.focusScale else 1f,
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-primary-action-focus-scale",
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (focused && enabled) elevationTokens.focused else elevationTokens.resting,
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-primary-action-focus-elevation",
+    )
+
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(elevation = elevation, shape = MaterialTheme.shapes.medium, clip = false)
+            .border(
+                width = if (focused && enabled) 2.dp else 0.dp,
+                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.Accent,
+                shape = MaterialTheme.shapes.medium,
+            )
+            .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.buttonColors(
             containerColor = AstraWaveColors.Accent,
             contentColor = AstraWaveColors.PrimaryText,
@@ -210,10 +236,36 @@ fun AstraWaveSecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val sizing = LocalAstraWaveSizing.current
+    val elevationTokens = LocalAstraWaveElevation.current
+    val motion = LocalAstraWaveMotion.current
+    val scale by animateFloatAsState(
+        targetValue = if (focused && enabled) sizing.focusScale else 1f,
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-secondary-action-focus-scale",
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (focused && enabled) elevationTokens.focused else elevationTokens.resting,
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-secondary-action-focus-elevation",
+    )
+
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(elevation = elevation, shape = MaterialTheme.shapes.medium, clip = false)
+            .border(
+                width = if (focused && enabled) 2.dp else 0.dp,
+                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.SecondaryText,
+                shape = MaterialTheme.shapes.medium,
+            )
+            .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = AstraWaveColors.PrimaryText,
             disabledContentColor = AstraWaveColors.TertiaryText,
