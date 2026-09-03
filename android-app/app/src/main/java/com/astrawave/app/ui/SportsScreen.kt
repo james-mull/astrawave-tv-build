@@ -4,6 +4,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.IptvSource
+import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.data.SportsGuideRepository
 import com.astrawave.app.data.SportsGuideSnapshot
 import com.astrawave.app.data.StreamHealthChecker
@@ -45,6 +47,9 @@ private sealed interface SportsLoadState {
 @Composable
 fun AstraWaveSportsScreen(
     sources: List<IptvSource>,
+    multiviewCount: Int = 0,
+    onAddToMultiview: (MultiviewPane) -> Unit = {},
+    onOpenMultiview: () -> Unit = {},
     repository: SportsGuideRepository = remember { SportsGuideRepository() },
 ) {
     val context = LocalContext.current
@@ -72,9 +77,21 @@ fun AstraWaveSportsScreen(
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(AstraWaveColors.Background).padding(24.dp)) {
-        Text("Sports", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(6.dp))
-        Text("Today's events, broadcaster metadata and matching Watch options from your available channels.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text("Sports", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+                Spacer(Modifier.height(6.dp))
+                Text("Today's events, broadcaster metadata and matching Watch options from your available channels.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge)
+            }
+            if (multiviewCount > 0) {
+                Text(
+                    "Open Multiview ($multiviewCount)",
+                    color = AstraWaveColors.Accent,
+                    modifier = Modifier.clickable(onClick = onOpenMultiview).padding(8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
         Spacer(Modifier.height(20.dp))
 
         when (val current = state) {
@@ -88,11 +105,7 @@ fun AstraWaveSportsScreen(
                 } else {
                     current.snapshot.events.take(100).forEach { item ->
                         val candidate = item.watchCandidate
-                        AstraWaveFocusableCard(
-                            Modifier.fillMaxWidth().padding(vertical = 5.dp).then(
-                                candidate?.let { Modifier.clickable { play(it.streamUrl) } } ?: Modifier
-                            ),
-                        ) {
+                        AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                             Column {
                                 Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                                 Spacer(Modifier.height(4.dp))
@@ -100,6 +113,26 @@ fun AstraWaveSportsScreen(
                                 Spacer(Modifier.height(8.dp))
                                 if (candidate != null) {
                                     Text("Watch: ${candidate.channelName} • ${candidate.source}", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelLarge)
+                                    Spacer(Modifier.height(6.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        Text("Play", color = AstraWaveColors.PrimaryText, modifier = Modifier.clickable { play(candidate.streamUrl) }, style = MaterialTheme.typography.labelLarge)
+                                        Text(
+                                            if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
+                                            color = if (multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.Accent,
+                                            modifier = Modifier.clickable(enabled = multiviewCount < 4) {
+                                                onAddToMultiview(
+                                                    MultiviewPane(
+                                                        id = "sports:${item.event.id}",
+                                                        title = item.event.name,
+                                                        streamUrl = candidate.streamUrl,
+                                                        sourceName = candidate.source,
+                                                        eventId = item.event.id,
+                                                    ),
+                                                )
+                                            },
+                                            style = MaterialTheme.typography.labelLarge,
+                                        )
+                                    }
                                 } else if (item.broadcasterNames.isNotEmpty()) {
                                     Text("Broadcaster: ${item.broadcasterNames.joinToString()} • no matching playable channel found", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
                                 } else {
