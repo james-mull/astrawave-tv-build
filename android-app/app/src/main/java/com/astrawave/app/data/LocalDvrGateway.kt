@@ -39,13 +39,9 @@ class LocalDvrGateway(context: Context) : DvrGateway {
         loadCapabilities()[sourceId] ?: LiveSourceCapabilities(sourceId = sourceId)
 
     override fun schedule(request: RecordingRequest): Recording {
-        require(request.endEpochMs > request.startEpochMs) { "Recording end time must be after start time" }
         val cap = capabilities(request.sourceId)
-        require(DvrEligibility.canSchedule(cap)) { "This source does not advertise authorized DVR support" }
-        cap.maxRecordingHours?.let { maxHours ->
-            val durationMs = request.endEpochMs - request.startEpochMs
-            require(durationMs <= maxHours * 3_600_000L) { "Recording exceeds this source's maximum duration" }
-        }
+        val validationErrors = DvrEligibility.validateRequest(request, cap)
+        require(validationErrors.isEmpty()) { validationErrors.joinToString(" • ") }
         val recording = Recording(request = request, state = RecordingState.SCHEDULED)
         upsert(recording)
         return recording
@@ -68,6 +64,7 @@ class LocalDvrGateway(context: Context) : DvrGateway {
     override fun startTimeshift(sourceId: String, channelId: String): TimeshiftSession? {
         val cap = capabilities(sourceId)
         if (!DvrEligibility.canTimeshift(cap)) return null
+        if (channelId.isBlank()) return null
         val now = System.currentTimeMillis()
         val windowMs = (cap.catchUpWindowHours ?: 2).coerceAtLeast(1) * 3_600_000L
         return TimeshiftSession(
