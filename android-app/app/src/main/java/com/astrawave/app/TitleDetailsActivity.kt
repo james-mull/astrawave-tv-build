@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astrawave.app.core.ScrapeRequest
 import com.astrawave.app.data.ResolvedSource
-import com.astrawave.app.data.SourceDiscoveryRepository
+import com.astrawave.app.data.UnifiedVodSourceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -71,7 +71,8 @@ private fun TitleDetailsScreen(
     onBack: () -> Unit,
     onPlay: (String) -> Unit,
 ) {
-    val repository = remember { SourceDiscoveryRepository() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val repository = remember { UnifiedVodSourceRepository(context) }
     var refreshToken by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -104,7 +105,7 @@ private fun TitleDetailsScreen(
         }
 
         Text(
-            "AstraWave checks every enabled approved provider, removes duplicates, tests stream health, and ranks the best playable source first.",
+            "AstraWave checks approved public sources and enabled Stremio catalogs, resolves eligible stream providers, removes duplicates, tests stream health, and ranks the best playable source first.",
             color = DetailsMuted,
             fontSize = 14.sp,
             lineHeight = 20.sp
@@ -114,7 +115,7 @@ private fun TitleDetailsScreen(
             loading -> {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                    Text("Finding playable sources…", color = DetailsPrimary)
+                    Text("Resolving playable sources…", color = DetailsPrimary)
                 }
             }
             error != null -> {
@@ -126,7 +127,7 @@ private fun TitleDetailsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("No verified source found", color = DetailsPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("AstraWave did not find a healthy approved stream for this title. Add more authorized providers or try again later.", color = DetailsMuted, fontSize = 13.sp)
+                    Text("AstraWave checked its approved public resolver plus enabled addon catalogs but did not find a healthy authorized direct stream for this title.", color = DetailsMuted, fontSize = 13.sp)
                 }
             }
             else -> {
