@@ -10,6 +10,7 @@ data class RecommendationProfile(
     val watchlistItemIds: Set<String> = emptySet(),
     val completedItemIds: Set<String> = emptySet(),
     val recentItemIds: List<String> = emptyList(),
+    val preferredMediaTypes: Set<LibraryMediaType> = emptySet(),
 )
 
 data class RecommendationCandidate(
@@ -67,6 +68,10 @@ class RecommendationEngine {
 
             val dislikedMatches = candidate.genres.intersect(profile.dislikedGenres).size
             if (dislikedMatches > 0) add(RecommendationReason("genre_dislike", "Contains genres you hide", dislikedMatches * -30.0))
+
+            if (candidate.mediaType in profile.preferredMediaTypes) {
+                add(RecommendationReason("media_type_affinity", "More like what you watch", 11.0))
+            }
 
             if (candidate.id in profile.favoriteItemIds) add(RecommendationReason("favorite", "Already a favorite", 12.0))
             if (candidate.id in profile.watchlistItemIds) add(RecommendationReason("watchlist", "On your watchlist", 9.0))
