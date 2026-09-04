@@ -57,17 +57,19 @@ data class EntitlementSnapshot(
 object AstraWaveEntitlementPolicy {
     val freeDefaults: Set<AstraWaveEntitlement> = emptySet()
 
+    /** Existing Plus contract remains intact for backward compatibility. */
     val plusDefaults: Set<AstraWaveEntitlement> = setOf(
         AstraWaveEntitlement.CLOUD_SYNC,
+        AstraWaveEntitlement.MULTIVIEW,
         AstraWaveEntitlement.DEVICE_HANDOFF,
+        AstraWaveEntitlement.DVR,
+        AstraWaveEntitlement.ADVANCED_RECOMMENDATIONS,
         AstraWaveEntitlement.PREMIUM_THEMES,
         AstraWaveEntitlement.EXTRA_PROFILES,
     )
 
+    /** Commercial $19.99 tier adds reliability and sports-specific premium capability. */
     val premiumDefaults: Set<AstraWaveEntitlement> = plusDefaults + setOf(
-        AstraWaveEntitlement.MULTIVIEW,
-        AstraWaveEntitlement.DVR,
-        AstraWaveEntitlement.ADVANCED_RECOMMENDATIONS,
         AstraWaveEntitlement.PRIORITY_SOURCE_FAILOVER,
         AstraWaveEntitlement.PREMIUM_SPORTS_HUB,
     )
