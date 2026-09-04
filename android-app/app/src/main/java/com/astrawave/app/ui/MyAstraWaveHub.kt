@@ -1,5 +1,6 @@
 package com.astrawave.app.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,9 +30,12 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +73,7 @@ fun MyAstraWaveHub(
     var showSetup by remember { mutableStateOf(false) }
     var showSafety by remember { mutableStateOf(false) }
     var showSubscription by remember { mutableStateOf(false) }
+    var showExperienceSettings by remember { mutableStateOf(false) }
 
     fun refresh() { snapshot = store.snapshot(profileId) }
 
@@ -76,6 +81,11 @@ fun MyAstraWaveHub(
         cloudSync.restore(profileId) { result ->
             if (result.isSuccess) refresh()
         }
+    }
+
+    if (showExperienceSettings) {
+        AstraWaveExperienceSettingsScreen(profileId = profileId, onBack = { showExperienceSettings = false })
+        return
     }
 
     if (showSafety) {
@@ -175,6 +185,7 @@ fun MyAstraWaveHub(
         Text("ACCOUNT & SETTINGS", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         SetupRow { showSetup = true }
+        ExperienceSettingsRow { showExperienceSettings = true }
         AccountSection.entries.forEach { section ->
             AccountRow(section) {
                 when (section) {
@@ -196,6 +207,95 @@ fun MyAstraWaveHub(
                 createList = false
             },
         )
+    }
+}
+
+@Composable
+private fun AstraWaveExperienceSettingsScreen(profileId: String, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("astrawave_experience", 0) }
+    fun key(name: String) = "$profileId:$name"
+    var theme by remember(profileId) { mutableStateOf(prefs.getString(key("theme"), "AstraWave") ?: "AstraWave") }
+    var density by remember(profileId) { mutableStateOf(prefs.getString(key("density"), "Standard") ?: "Standard") }
+    var quality by remember(profileId) { mutableStateOf(prefs.getString(key("quality"), "Auto") ?: "Auto") }
+    var subtitleLanguage by remember(profileId) { mutableStateOf(prefs.getString(key("subtitleLanguage"), "English") ?: "English") }
+    var guideDays by remember(profileId) { mutableStateOf(prefs.getInt(key("guideDays"), 7)) }
+    var reducedMotion by remember(profileId) { mutableStateOf(prefs.getBoolean(key("reducedMotion"), false)) }
+    var autoplayBest by remember(profileId) { mutableStateOf(prefs.getBoolean(key("autoplayBest"), true)) }
+
+    fun saveString(name: String, value: String) { prefs.edit().putString(key(name), value).apply() }
+    fun saveInt(name: String, value: Int) { prefs.edit().putInt(key(name), value).apply() }
+    fun saveBoolean(name: String, value: Boolean) { prefs.edit().putBoolean(key(name), value).apply() }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(AstraWaveColors.Background).padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Experience & Parity Settings", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+            Text("Back", color = AstraWaveColors.Accent, modifier = Modifier.clickable(onClick = onBack).padding(10.dp))
+        }
+        Text("These profile-scoped preferences keep the Android APK aligned with the web experience while preserving native Android TV behavior.", color = AstraWaveColors.SecondaryText)
+
+        ExperienceChoice("Theme", listOf("AstraWave", "OLED Black", "Blue Cinema"), theme) { value -> theme = value; saveString("theme", value) }
+        ExperienceChoice("Density", listOf("Compact", "Standard", "Cinematic"), density) { value -> density = value; saveString("density", value) }
+        ExperienceChoice("Preferred quality", listOf("Auto", "Best", "4K", "1080p", "720p", "Data Saver"), quality) { value -> quality = value; saveString("quality", value) }
+        ExperienceChoice("Subtitle language", listOf("English", "Spanish", "French", "German", "Portuguese", "Off"), subtitleLanguage) { value -> subtitleLanguage = value; saveString("subtitleLanguage", value) }
+        ExperienceChoice("Guide horizon", listOf("1 day", "3 days", "7 days"), "$guideDays days") { value ->
+            guideDays = when (value) { "1 day" -> 1; "3 days" -> 3; else -> 7 }
+            saveInt("guideDays", guideDays)
+        }
+
+        ExperienceToggle("Autoplay best healthy source", "Prefer AstraWave's highest-ranked verified source when available.", autoplayBest) { value -> autoplayBest = value; saveBoolean("autoplayBest", value) }
+        ExperienceToggle("Reduced motion", "Minimize decorative motion for accessibility and TV comfort.", reducedMotion) { value -> reducedMotion = value; saveBoolean("reducedMotion", value) }
+
+        AstraWaveFocusableCard(Modifier.fillMaxWidth()) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Tune, null, tint = AstraWaveColors.Accent)
+                    Spacer(Modifier.width(10.dp))
+                    Text("APK ↔ Web parity", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Current shared feature families: profiles & Kids, expanded VOD/discovery, title/franchise context, watch progress, sports, Guide, Multiview, source management, personal media, player controls, onboarding, appearance preferences, and diagnostics.", color = AstraWaveColors.SecondaryText)
+                Spacer(Modifier.height(10.dp))
+                Text("Android-only capabilities remain native where appropriate, including TV remote focus, Media3 playback, secure personal-media credentials, and device-native PiP.", color = AstraWaveColors.TertiaryText)
+            }
+        }
+
+        AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable {
+            Toast.makeText(context, "Experience settings saved for this profile.", Toast.LENGTH_SHORT).show()
+        }) {
+            Text("Save / confirm profile settings", color = AstraWaveColors.Accent, style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun ExperienceChoice(title: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(7.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { option ->
+                val isSelected = selected.equals(option, ignoreCase = true) || (title == "Guide horizon" && selected.startsWith(option.substringBefore(' ')))
+                FilterChip(selected = isSelected, onClick = { onSelect(option) }, label = { Text(option) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExperienceToggle(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(AstraWaveColors.Surface, RoundedCornerShape(16.dp)).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -271,6 +371,21 @@ private fun SetupRow(onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text("Setup & Onboarding", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyLarge)
                 Text("Resume or review AstraWave setup", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = AstraWaveColors.TertiaryText)
+        }
+    }
+}
+
+@Composable
+private fun ExperienceSettingsRow(onClick: () -> Unit) {
+    AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 4.dp).clickable(onClick = onClick)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Tune, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Experience & Web Parity", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyLarge)
+                Text("Theme, density, playback, subtitles and Guide preferences", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
             }
             Icon(Icons.Default.ChevronRight, null, tint = AstraWaveColors.TertiaryText)
         }
