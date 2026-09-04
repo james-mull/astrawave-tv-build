@@ -28,10 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astrawave.app.core.ScrapeRequest
 import com.astrawave.app.data.AppSettingsStore
+import com.astrawave.app.data.LocalLibraryStore
 import com.astrawave.app.data.ResolvedSource
 import com.astrawave.app.data.StremioEpisode
 import com.astrawave.app.data.StremioSeriesEpisodeRepository
 import com.astrawave.app.data.TmdbCatalogRepository
+import com.astrawave.app.data.TmdbSeriesEpisodeRepository
 import com.astrawave.app.data.TmdbTitleDetails
 import com.astrawave.app.data.UnifiedVodSourceRepository
 import kotlinx.coroutines.Dispatchers
@@ -72,7 +74,7 @@ class TitleDetailsActivity : ComponentActivity() {
                             } ?: title
                             val baseId = sourceId?.takeIf { it.isNotBlank() }
                                 ?: "title:${title.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')}"
-                            val playbackId = episode?.let { "$baseId:s${it.season}e${it.episode}" } ?: baseId
+                            val playbackId = episode?.id?.takeIf { it.isNotBlank() } ?: baseId
                             val playbackType = if (episode != null) "EPISODE" else mediaType?.takeIf { it.isNotBlank() } ?: "MOVIE"
                             val playbackSourceId = episode?.id?.takeIf { it.isNotBlank() } ?: sourceId
                             startActivity(
@@ -128,11 +130,14 @@ private fun TitleDetailsScreen(
 ) {
     val context = LocalContext.current
     val sourceRepository = remember { UnifiedVodSourceRepository(context) }
-    val episodeRepository = remember { StremioSeriesEpisodeRepository() }
+    val stremioEpisodeRepository = remember { StremioSeriesEpisodeRepository() }
+    val nativeEpisodeRepository = remember { TmdbSeriesEpisodeRepository() }
+    val localLibrary = remember { LocalLibraryStore(context) }
     val tmdbToken = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val tmdbRepository = remember(tmdbToken) { TmdbCatalogRepository(tmdbToken) }
-    val seriesMode = mediaType == "SERIES" || stremioType.equals("series", true) || stremioType.equals("tv", true)
+    val seriesMode = mediaType == "SERIES" || mediaType == "TV" || stremioType.equals("series", true) || stremioType.equals("tv", true)
     val tmdbMediaType = if (seriesMode) "tv" else "movie"
+    val hasEpisodeCatalog = seriesMode && (!stremioId.isNullOrBlank() || tmdbId != null)
 
     var sourcesMode by remember { mutableStateOf(false) }
     var refreshToken by remember { mutableIntStateOf(0) }
@@ -158,29 +163,40 @@ private fun TitleDetailsScreen(
         detailsLoading = false
     }
 
-    LaunchedEffect(sourcesMode, seriesMode, stremioId, refreshToken) {
-        if (!sourcesMode || !seriesMode || stremioId.isNullOrBlank()) return@LaunchedEffect
+    LaunchedEffect(sourcesMode, seriesMode, stremioId, tmdbId, refreshToken) {
+        if (!sourcesMode || !hasEpisodeCatalog) return@LaunchedEffect
         episodeLoading = true
         val loaded = withContext(Dispatchers.IO) {
-            runCatching { episodeRepository.load(stremioId) }.getOrDefault(emptyList())
+            when {
+                !stremioId.isNullOrBlank() -> runCatching { stremioEpisodeRepository.load(stremioId) }.getOrDefault(emptyList())
+                tmdbId != null -> runCatching { nativeEpisodeRepository.load(tmdbId) }.getOrDefault(emptyList())
+                else -> emptyList()
+            }
         }
         episodes = loaded
-        if (selectedSeason == 0) selectedSeason = loaded.firstOrNull()?.season ?: 0
+        if (selectedSeason == 0 || loaded.none { it.season == selectedSeason }) {
+            selectedSeason = loaded.firstOrNull()?.season ?: 0
+        }
         episodeLoading = false
     }
 
-    LaunchedEffect(sourcesMode, title, year, stremioId, selectedEpisode, refreshToken) {
-        if (!sourcesMode || (seriesMode && !stremioId.isNullOrBlank() && selectedEpisode == null)) {
+    LaunchedEffect(sourcesMode, title, year, stremioId, tmdbId, selectedEpisode, refreshToken) {
+        if (!sourcesMode || (hasEpisodeCatalog && selectedEpisode == null)) {
             loading = false
             sources = emptyList()
             return@LaunchedEffect
         }
         loading = true
         error = null
-        val exactId = selectedEpisode?.id ?: stremioId
-        val exactType = if (selectedEpisode != null) "series" else stremioType
+        val episodeIsStremio = selectedEpisode?.id?.startsWith("tmdbtv:", ignoreCase = true) == false
+        val exactId = selectedEpisode?.id?.takeIf { episodeIsStremio } ?: stremioId?.takeIf { selectedEpisode == null }
+        val exactType = when {
+            selectedEpisode != null && episodeIsStremio -> "series"
+            selectedEpisode == null -> stremioType
+            else -> null
+        }
         val request = ScrapeRequest(
-            title = selectedEpisode?.title ?: title,
+            title = title,
             year = year ?: details?.releaseDate?.take(4)?.toIntOrNull(),
             season = selectedEpisode?.season,
             episode = selectedEpisode?.episode,
@@ -192,6 +208,10 @@ private fun TitleDetailsScreen(
             .onFailure { error = it.message ?: "Source discovery failed" }
             .getOrDefault(emptyList())
         loading = false
+    }
+
+    val progressByEpisode = remember(episodes, sourcesMode) {
+        localLibrary.progress("default").associateBy { it.item.id }
     }
 
     Column(
@@ -258,10 +278,14 @@ private fun TitleDetailsScreen(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp),
             ) {
-                Text(if (seriesMode && !stremioId.isNullOrBlank()) "Episodes & Sources" else "Find Watch Options", fontWeight = FontWeight.Bold)
+                Text(if (hasEpisodeCatalog) "Episodes & Sources" else "Find Watch Options", fontWeight = FontWeight.Bold)
             }
             Text(
-                "Playback discovery starts only when you ask for watch options. AstraWave ranks eligible healthy sources and automatically keeps backups ready.",
+                if (hasEpisodeCatalog) {
+                    "AstraWave loads native seasons and episodes, keeps resume state per episode, then ranks eligible sources when you choose an episode."
+                } else {
+                    "Playback discovery starts only when you ask for watch options. AstraWave ranks eligible healthy sources and automatically keeps backups ready."
+                },
                 color = DetailsMuted,
                 fontSize = 12.sp,
             )
@@ -269,8 +293,8 @@ private fun TitleDetailsScreen(
         }
 
         Text(
-            if (seriesMode && !stremioId.isNullOrBlank()) {
-                "Choose an episode, then AstraWave resolves that exact episode and ranks healthy eligible sources."
+            if (hasEpisodeCatalog) {
+                "Choose an episode, then AstraWave resolves that episode and ranks healthy eligible sources. Native TMDB shows use the same resume and Up Next pipeline as compatible Cinemeta series."
             } else {
                 "AstraWave checks approved sources and enabled addons, removes duplicates, verifies stream health, and ranks the best playable source first."
             },
@@ -279,13 +303,14 @@ private fun TitleDetailsScreen(
             lineHeight = 20.sp,
         )
 
-        if (seriesMode && !stremioId.isNullOrBlank() && selectedEpisode == null) {
+        if (hasEpisodeCatalog && selectedEpisode == null) {
             when {
                 episodeLoading -> LoadingRow("Loading seasons and episodes…")
-                episodes.isEmpty() -> EmptyPanel("No episode metadata found", "This series did not return a compatible episode list yet.")
+                episodes.isEmpty() -> EmptyPanel("No episode metadata found", "This series did not return a compatible native or Cinemeta episode list yet.")
                 else -> SeriesEpisodeBrowser(
                     episodes = episodes,
                     selectedSeason = selectedSeason,
+                    progress = progressByEpisode,
                     onSeason = { selectedSeason = it },
                     onEpisode = { selectedEpisode = it },
                 )
@@ -397,6 +422,7 @@ private fun LoadingRow(label: String) {
 private fun SeriesEpisodeBrowser(
     episodes: List<StremioEpisode>,
     selectedSeason: Int,
+    progress: Map<String, LocalLibraryStore.PlaybackProgress>,
     onSeason: (Int) -> Unit,
     onEpisode: (StremioEpisode) -> Unit,
 ) {
@@ -408,13 +434,25 @@ private fun SeriesEpisodeBrowser(
         }
     }
     episodes.filter { it.season == selectedSeason }.forEach { episode ->
+        val saved = progress[episode.id]
+        val percent = saved?.takeIf { it.durationMs > 0L }?.let { ((it.positionMs * 100L) / it.durationMs).coerceIn(0L, 100L) }
         Column(
             Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(16.dp)).clickable { onEpisode(episode) }.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Text("S${episode.season} E${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
+            episode.released?.takeIf { it.isNotBlank() }?.let { Text(it.take(10), color = DetailsMuted, fontSize = 11.sp) }
             episode.overview?.let { Text(it, color = DetailsMuted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
-            Text("Resolve episode sources", color = DetailsAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                when {
+                    saved?.completed == true -> "Watched • Play again"
+                    percent != null && percent > 0 -> "Resume • $percent% watched"
+                    else -> "Resolve episode sources"
+                },
+                color = if (percent != null && percent > 0) DetailsSuccess else DetailsAccent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
