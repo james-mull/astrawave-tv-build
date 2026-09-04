@@ -8,7 +8,7 @@ import com.astrawave.app.core.IptvSource
  * Sources are layered so AstraWave can merge duplicates and health-check the
  * best candidate at playback time. The Nexus US lineup is loaded first because
  * its tvg-id values are generated to match the public Nexus XMLTV guide.
- * Other free playlists remain alternate stream candidates.
+ * Other reviewed/public playlists remain alternate stream candidates.
  */
 class AstraWaveFreeTvRepository(
     private val playlistUrl: String = DEFAULT_PLAYLIST_URL,
@@ -20,66 +20,48 @@ class AstraWaveFreeTvRepository(
 ) {
     fun loadChannels(): List<LiveChannel> {
         val liveTv = LiveTvRepository()
-        val nexus = runCatching {
-            liveTv.loadM3u(
-                url = nexusUsPlaylistUrl,
-                source = "AstraWave Nexus US",
-                priority = 4,
-            )
-        }.getOrDefault(emptyList())
-        val reviewed = runCatching {
-            liveTv.loadM3u(
-                url = playlistUrl,
-                source = "AstraWave Free TV",
-                priority = 5,
-            )
-        }.getOrDefault(emptyList())
-        val publicBroadcasters = runCatching {
-            liveTv.loadM3u(
-                url = publicBroadcasterPlaylistUrl,
-                source = "AstraWave Public TV",
-                priority = 8,
-            )
-        }.getOrDefault(emptyList())
-        val freeTvPublic = runCatching {
-            liveTv.loadM3u(
-                url = freeTvPlaylistUrl,
-                source = "Free-TV Public",
-                priority = 9,
-            )
-        }.getOrDefault(emptyList())
-        val iptvOrg = iptvOrgPlaylistUrls.flatMap { url ->
+
+        fun load(url: String, source: String, priority: Int): List<LiveChannel> =
             runCatching {
-                liveTv.loadM3u(
-                    url = url,
-                    source = "IPTV.org Public",
-                    priority = 10,
-                )
+                liveTv.loadM3u(url = url, source = source, priority = priority)
             }.getOrDefault(emptyList())
+
+        val nexus = load(nexusUsPlaylistUrl, "AstraWave Nexus US", 4)
+        val reviewed = load(playlistUrl, "AstraWave Free TV", 5)
+        val publicBroadcasters = load(publicBroadcasterPlaylistUrl, "AstraWave Public TV", 8)
+        val freeTvPublic = load(freeTvPlaylistUrl, "Free-TV Public", 9)
+        val iptvOrg = iptvOrgPlaylistUrls.distinct().flatMapIndexed { index, url ->
+            load(url, iptvOrgSourceName(url), 10 + index.coerceAtMost(4))
         }
-        val worldIptv = runCatching {
-            liveTv.loadM3u(
-                url = worldIptvPlaylistUrl,
-                source = "World IPTV Verified",
-                priority = 12,
-            )
-        }.getOrDefault(emptyList())
+        val worldIptv = load(worldIptvPlaylistUrl, "World IPTV Verified", 15)
 
         val nexusByName = nexus.associateBy { it.normalizedName }
         fun canonicalize(channel: LiveChannel): LiveChannel {
             val canonical = nexusByName[channel.normalizedName] ?: return channel
             val canonicalTvgId = canonical.tvgId?.takeIf(String::isNotBlank) ?: return channel
-            return channel.copy(
-                id = canonicalTvgId,
-                tvgId = canonicalTvgId,
-            )
+            return channel.copy(id = canonicalTvgId, tvgId = canonicalTvgId)
         }
 
         val alternates = (reviewed + publicBroadcasters + freeTvPublic + iptvOrg + worldIptv)
             .map(::canonicalize)
 
         return (nexus + alternates)
+            .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
             .distinctBy { "${it.normalizedName}:${it.url}" }
+    }
+
+    private fun iptvOrgSourceName(url: String): String = when {
+        "/countries/us.m3u" in url -> "IPTV.org US"
+        "/categories/sports.m3u" in url -> "IPTV.org Sports"
+        "/categories/news.m3u" in url -> "IPTV.org News"
+        "/categories/entertainment.m3u" in url -> "IPTV.org Entertainment"
+        "/categories/movies.m3u" in url -> "IPTV.org Movies"
+        "/categories/documentary.m3u" in url -> "IPTV.org Documentary"
+        "/categories/music.m3u" in url -> "IPTV.org Music"
+        "/categories/kids.m3u" in url -> "IPTV.org Kids"
+        "/categories/science.m3u" in url -> "IPTV.org Science"
+        "/categories/weather.m3u" in url -> "IPTV.org Weather"
+        else -> "IPTV.org Public"
     }
 
     companion object {
@@ -101,6 +83,11 @@ class AstraWaveFreeTvRepository(
             "https://iptv-org.github.io/iptv/categories/news.m3u",
             "https://iptv-org.github.io/iptv/categories/entertainment.m3u",
             "https://iptv-org.github.io/iptv/categories/movies.m3u",
+            "https://iptv-org.github.io/iptv/categories/documentary.m3u",
+            "https://iptv-org.github.io/iptv/categories/music.m3u",
+            "https://iptv-org.github.io/iptv/categories/kids.m3u",
+            "https://iptv-org.github.io/iptv/categories/science.m3u",
+            "https://iptv-org.github.io/iptv/categories/weather.m3u",
         )
 
         const val DEFAULT_WORLD_IPTV_PLAYLIST_URL =
