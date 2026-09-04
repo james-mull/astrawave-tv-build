@@ -12,11 +12,17 @@ import org.json.JSONObject
 class StremioAddonStore(context: Context) {
     private val prefs = context.getSharedPreferences("astrawave_stremio_addons_v1", Context.MODE_PRIVATE)
 
-    fun load(profileId: String): List<InstalledAddon> = decodeAll()
-        .filter { addon -> addon.enabledProfileIds.isEmpty() || profileId in addon.enabledProfileIds }
-        .sortedBy { it.sortOrder }
+    fun load(profileId: String): List<InstalledAddon> {
+        ensureReviewedDefaults()
+        return decodeAll()
+            .filter { addon -> addon.enabledProfileIds.isEmpty() || profileId in addon.enabledProfileIds }
+            .sortedBy { it.sortOrder }
+    }
 
-    fun loadAll(): List<InstalledAddon> = decodeAll().sortedBy { it.sortOrder }
+    fun loadAll(): List<InstalledAddon> {
+        ensureReviewedDefaults()
+        return decodeAll().sortedBy { it.sortOrder }
+    }
 
     fun save(addon: InstalledAddon) {
         val current = decodeAll().filterNot { it.manifest.id == addon.manifest.id }
@@ -48,6 +54,15 @@ class StremioAddonStore(context: Context) {
         )
         save(installed)
         return installed
+    }
+
+    private fun ensureReviewedDefaults() {
+        if (prefs.getBoolean(KEY_REVIEWED_DEFAULTS_SEEDED, false)) return
+        val gateway = StremioHttpGateway()
+        REVIEWED_DEFAULT_MANIFESTS.forEach { manifestUrl ->
+            runCatching { install(manifestUrl, gateway) }
+        }
+        prefs.edit().putBoolean(KEY_REVIEWED_DEFAULTS_SEEDED, true).apply()
     }
 
     private fun decodeAll(): List<InstalledAddon> {
@@ -156,5 +171,14 @@ class StremioAddonStore(context: Context) {
 
     companion object {
         private const val KEY_ADDONS = "installed"
+        private const val KEY_REVIEWED_DEFAULTS_SEEDED = "reviewed_defaults_seeded_v1"
+
+        val REVIEWED_DEFAULT_MANIFESTS = listOf(
+            "https://v3-cinemeta.strem.io/manifest.json",
+            "https://v3-channels.strem.io/manifest.json",
+            "https://watchhub.strem.io/manifest.json",
+            "https://caching.stremio.net/publicdomainmovies.now.sh/manifest.json",
+            "https://opensubtitles-v3.strem.io/manifest.json",
+        )
     }
 }
