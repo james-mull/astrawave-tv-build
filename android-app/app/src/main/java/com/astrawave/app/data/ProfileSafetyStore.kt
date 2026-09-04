@@ -26,7 +26,7 @@ class ProfileSafetyStore(context: Context) {
                     allowLiveTv = kids.optBoolean("allowLiveTv", false),
                     allowSports = kids.optBoolean("allowSports", true),
                     allowExternalAddons = kids.optBoolean("allowExternalAddons", false),
-                    requirePinForProfileExit = kids.optBoolean("requirePinForProfileExit", true),
+                    requirePinForProfileExit = kids.optBoolean("requirePinForProfileExit", false),
                 ),
                 privacy = PrivacyPreferences(
                     analyticsEnabled = privacy.optBoolean("analyticsEnabled", false),
