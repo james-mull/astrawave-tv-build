@@ -34,7 +34,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
-/** Reusable visual primitives for the AstraWave shell and feature modules. */
+/** Reusable premium visual primitives for the AstraWave shell and feature modules. */
 @Composable
 fun AstraWavePageHeader(
     title: String,
@@ -94,15 +94,16 @@ fun AstraWaveStatePanel(
     Row(
         modifier
             .fillMaxWidth()
-            .border(1.dp, AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large)
-            .background(AstraWaveColors.Surface, MaterialTheme.shapes.large)
+            .shadow(10.dp, MaterialTheme.shapes.large, clip = false)
+            .border(1.dp, AstraWaveColors.Divider, MaterialTheme.shapes.large)
+            .background(AstraWaveColors.GlassRaised, MaterialTheme.shapes.large)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (loading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(22.dp),
-                color = AstraWaveColors.Accent,
+                color = AstraWaveColors.AccentStrong,
                 strokeWidth = 2.dp,
             )
             Spacer(Modifier.size(14.dp))
@@ -116,8 +117,8 @@ fun AstraWaveStatePanel(
 }
 
 /**
- * Focus primitive for Android TV / Fire TV. Focus uses the shared AstraWave motion/elevation tokens,
- * keeps layout bounds stable, and can be reduced to instant transitions through AstraWaveTheme.
+ * TV/Fire TV focus primitive. Focus uses subtle scale, premium elevation and a bright lavender ring.
+ * Layout bounds stay stable so rails never jitter while navigating with a remote.
  */
 @Composable
 fun AstraWaveFocusableCard(
@@ -148,7 +149,7 @@ fun AstraWaveFocusableCard(
             .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.SurfaceRaised,
+                color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Divider,
                 shape = MaterialTheme.shapes.large,
             )
             .clip(MaterialTheme.shapes.large)
@@ -171,7 +172,8 @@ fun AstraWaveActionRow(
     Row(
         modifier
             .fillMaxWidth()
-            .border(1.dp, AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large)
+            .shadow(8.dp, MaterialTheme.shapes.large, clip = false)
+            .border(1.dp, AstraWaveColors.Divider, MaterialTheme.shapes.large)
             .background(AstraWaveColors.Surface, MaterialTheme.shapes.large)
             .padding(horizontal = 18.dp, vertical = 17.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -271,7 +273,7 @@ fun AstraWaveSecondaryButton(
             .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
             .border(
                 width = if (focused && enabled) 2.dp else 1.dp,
-                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.SurfaceRaised,
+                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.Divider,
                 shape = MaterialTheme.shapes.large,
             )
             .onFocusChanged { focused = it.isFocused },
@@ -285,11 +287,6 @@ fun AstraWaveSecondaryButton(
     }
 }
 
-/**
- * Compatibility entry point for feature modules that still call AstraWaveDialog.
- * Delegate to the canonical focus-aware dialog so every shared dialog uses identical
- * initial focus, D-pad traversal, focus ring, typography, and action treatment.
- */
 @Composable
 fun AstraWaveDialog(
     title: String,
