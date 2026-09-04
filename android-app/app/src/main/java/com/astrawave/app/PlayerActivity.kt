@@ -1,9 +1,11 @@
 package com.astrawave.app
 
+import android.app.AlertDialog
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -14,10 +16,16 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Rational
+import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -27,10 +35,13 @@ import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LocalLibraryStore
+import kotlin.math.roundToInt
 
 class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var playerView: PlayerView? = null
+    private var quickControls: LinearLayout? = null
+    private var sourceButton: Button? = null
     private var streamUrls: List<String> = emptyList()
     private var streamIndex: Int = 0
     private var retryCountForCurrentStream: Int = 0
@@ -45,6 +56,7 @@ class PlayerActivity : ComponentActivity() {
     private var networkCallbackRegistered = false
     private var lastCloudSyncAtMs = 0L
     private var lastLocalSyncAtMs = 0L
+    private var playbackSpeed = 1f
 
     private val handler = Handler(Looper.getMainLooper())
     private val progressTicker = object : Runnable {
@@ -125,9 +137,7 @@ class PlayerActivity : ComponentActivity() {
 
         configurePictureInPicture()
         registerNetworkCallback()
-
-        playerView = PlayerView(this).apply { useController = true }
-        setContentView(playerView)
+        buildPlayerSurface()
 
         player = ExoPlayer.Builder(this).build().also { exo ->
             playerView?.player = exo
@@ -146,31 +156,27 @@ class PlayerActivity : ComponentActivity() {
                         retryCountForCurrentStream < MAX_RETRIES_PER_STREAM -> {
                             retryCountForCurrentStream += 1
                             Toast.makeText(this@PlayerActivity, "Stream interrupted. Reconnecting…", Toast.LENGTH_SHORT).show()
-                            handler.postDelayed({
-                                player?.let { playCurrent(it, lastKnownPositionMs) }
-                            }, RETRY_DELAY_MS)
+                            handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, RETRY_DELAY_MS)
                         }
                         streamIndex + 1 < streamUrls.size -> {
                             streamIndex += 1
                             retryCountForCurrentStream = 0
+                            updateSourceButton()
                             Toast.makeText(
                                 this@PlayerActivity,
                                 "Switching to backup ${streamIndex + 1} of ${streamUrls.size}…",
                                 Toast.LENGTH_SHORT,
                             ).show()
-                            handler.postDelayed({
-                                player?.let { playCurrent(it, lastKnownPositionMs) }
-                            }, BACKUP_FAILOVER_DELAY_MS)
+                            handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, BACKUP_FAILOVER_DELAY_MS)
                         }
-                        else -> {
-                            Toast.makeText(this@PlayerActivity, "All available streams failed.", Toast.LENGTH_LONG).show()
-                        }
+                        else -> Toast.makeText(this@PlayerActivity, "All available streams failed.", Toast.LENGTH_LONG).show()
                     }
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) {
                         retryCountForCurrentStream = 0
+                        exo.setPlaybackSpeed(playbackSpeed)
                         if (!historyRecorded) {
                             libraryItem?.let { item -> libraryStore?.recordHistory(profileId, item) }
                             historyRecorded = true
@@ -181,14 +187,55 @@ class PlayerActivity : ComponentActivity() {
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    if (isPlaying) {
-                        lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
-                    }
+                    if (isPlaying) lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
                 }
             })
             playCurrent(exo, resumePositionMs)
         }
         handler.postDelayed(progressTicker, LOCAL_PROGRESS_INTERVAL_MS)
+    }
+
+    private fun buildPlayerSurface() {
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        playerView = PlayerView(this).apply {
+            useController = true
+            controllerShowTimeoutMs = 4_500
+            controllerAutoShow = true
+        }
+        root.addView(
+            playerView,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
+        )
+
+        quickControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(10, 10, 10, 10)
+            setBackgroundColor(0x99000000.toInt())
+        }
+
+        sourceButton = quickButton(sourceLabel()) { showSourcePicker() }.also { quickControls?.addView(it) }
+        quickControls?.addView(quickButton("Speed") { showSpeedPicker() })
+        quickControls?.addView(quickButton("Audio") { showTrackPicker(C.TRACK_TYPE_AUDIO) })
+        quickControls?.addView(quickButton("Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })
+        quickControls?.addView(quickButton("Stats") { showDiagnostics() })
+
+        val controlsParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or Gravity.END
+            topMargin = 18
+            rightMargin = 18
+        }
+        root.addView(quickControls, controlsParams)
+        setContentView(root)
+    }
+
+    private fun quickButton(label: String, action: () -> Unit): Button = Button(this).apply {
+        text = label
+        isAllCaps = false
+        setOnClickListener { action() }
+        setPadding(20, 8, 20, 8)
+        minimumWidth = 0
+        minWidth = 0
     }
 
     private fun playCurrent(exo: ExoPlayer, positionMs: Long = 0L) {
@@ -199,6 +246,151 @@ class PlayerActivity : ComponentActivity() {
         if (positionMs > 0L) exo.seekTo(positionMs)
         exo.prepare()
         exo.playWhenReady = true
+        updateSourceButton()
+    }
+
+    private fun sourceLabel(): String = if (streamUrls.size <= 1) "Source" else "Source ${streamIndex + 1}/${streamUrls.size}"
+
+    private fun updateSourceButton() {
+        sourceButton?.text = sourceLabel()
+    }
+
+    private fun showSourcePicker() {
+        if (streamUrls.size <= 1) {
+            Toast.makeText(this, "Only one source is available for this playback.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = streamUrls.mapIndexed { index, url ->
+            val host = runCatching { Uri.parse(url).host }.getOrNull().orEmpty().ifBlank { "Stream ${index + 1}" }
+            "${if (index == streamIndex) "✓ " else ""}Source ${index + 1} • $host"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Playback source")
+            .setItems(labels) { _, which ->
+                if (which == streamIndex) return@setItems
+                val exo = player ?: return@setItems
+                lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
+                streamIndex = which
+                retryCountForCurrentStream = 0
+                playCurrent(exo, lastKnownPositionMs)
+                Toast.makeText(this, "Switched to source ${which + 1}.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showSpeedPicker() {
+        val speeds = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+        val labels = speeds.map { speed -> if (speed == 1f) "1.0× • Normal" else "${speed}×" }.toTypedArray()
+        val checked = speeds.indexOfFirst { it == playbackSpeed }.coerceAtLeast(2)
+        AlertDialog.Builder(this)
+            .setTitle("Playback speed")
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                playbackSpeed = speeds[which]
+                player?.setPlaybackSpeed(playbackSpeed)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private data class TrackChoice(val label: String, val language: String?)
+
+    private fun showTrackPicker(trackType: Int) {
+        val exo = player ?: return
+        val choices = mutableListOf<TrackChoice>()
+        if (trackType == C.TRACK_TYPE_TEXT) choices += TrackChoice("Off", null)
+        exo.currentTracks.groups
+            .filter { it.type == trackType }
+            .forEach { group ->
+                for (index in 0 until group.length) {
+                    val format = group.getTrackFormat(index)
+                    val language = format.language
+                    val label = format.label?.takeIf { it.isNotBlank() }
+                        ?: language?.takeIf { it.isNotBlank() }?.uppercase()
+                        ?: if (trackType == C.TRACK_TYPE_AUDIO) "Audio ${choices.size + 1}" else "Subtitle ${choices.size + 1}"
+                    if (choices.none { it.label == label && it.language == language }) choices += TrackChoice(label, language)
+                }
+            }
+
+        if (choices.isEmpty() || (trackType == C.TRACK_TYPE_TEXT && choices.size == 1)) {
+            Toast.makeText(this, if (trackType == C.TRACK_TYPE_AUDIO) "No alternate audio tracks detected." else "No subtitle tracks detected.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(if (trackType == C.TRACK_TYPE_AUDIO) "Audio track" else "Subtitles")
+            .setItems(choices.map { it.label }.toTypedArray()) { _, which ->
+                val selected = choices[which]
+                val builder = exo.trackSelectionParameters.buildUpon()
+                if (trackType == C.TRACK_TYPE_AUDIO) {
+                    builder.setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                    builder.setPreferredAudioLanguage(selected.language)
+                } else {
+                    if (selected.language == null) {
+                        builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    } else {
+                        builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        builder.setPreferredTextLanguage(selected.language)
+                    }
+                }
+                exo.trackSelectionParameters = builder.build()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showDiagnostics() {
+        val exo = player ?: return
+        val video = exo.videoFormat
+        val audio = exo.audioFormat
+        val bufferedMs = (exo.bufferedPosition - exo.currentPosition).coerceAtLeast(0L)
+        val videoDescription = video?.let(::formatVideo) ?: "No video format reported"
+        val audioDescription = audio?.let(::formatAudio) ?: "No audio format reported"
+        val host = streamUrls.getOrNull(streamIndex)?.let { runCatching { Uri.parse(it).host }.getOrNull() }.orEmpty().ifBlank { "Unknown" }
+        val message = buildString {
+            appendLine("Source: ${streamIndex + 1}/${streamUrls.size} • $host")
+            appendLine("Network: ${if (hasValidatedNetwork()) "Validated" else "Unavailable / unvalidated"}")
+            appendLine("State: ${playbackStateLabel(exo.playbackState)}${if (exo.isPlaying) " • Playing" else ""}")
+            appendLine("Speed: ${playbackSpeed}×")
+            appendLine("Buffered: ${bufferedMs / 1000}s")
+            appendLine("Position: ${exo.currentPosition / 1000}s")
+            appendLine("Video: $videoDescription")
+            appendLine("Audio: $audioDescription")
+            append("Dropped source retries: $retryCountForCurrentStream")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Playback diagnostics")
+            .setMessage(message)
+            .setPositiveButton("Close", null)
+            .setNeutralButton("Retry source") { _, _ ->
+                lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
+                retryCountForCurrentStream = 0
+                playCurrent(exo, lastKnownPositionMs)
+            }
+            .show()
+    }
+
+    private fun formatVideo(format: Format): String {
+        val size = if (format.width > 0 && format.height > 0) "${format.width}×${format.height}" else "adaptive"
+        val bitrate = format.bitrate.takeIf { it > 0 }?.let { " • ${(it / 1000f).roundToInt()} kbps" }.orEmpty()
+        val mime = format.sampleMimeType?.substringAfter('/') ?: "video"
+        return "$size • $mime$bitrate"
+    }
+
+    private fun formatAudio(format: Format): String {
+        val language = format.language?.uppercase() ?: "default"
+        val channels = format.channelCount.takeIf { it > 0 }?.let { " • ${it}ch" }.orEmpty()
+        val mime = format.sampleMimeType?.substringAfter('/') ?: "audio"
+        return "$language • $mime$channels"
+    }
+
+    private fun playbackStateLabel(state: Int): String = when (state) {
+        Player.STATE_IDLE -> "Idle"
+        Player.STATE_BUFFERING -> "Buffering"
+        Player.STATE_READY -> "Ready"
+        Player.STATE_ENDED -> "Ended"
+        else -> "Unknown"
     }
 
     private fun persistProgress(exo: ExoPlayer?, allowCloud: Boolean = false) {
@@ -239,9 +431,7 @@ class PlayerActivity : ComponentActivity() {
         networkLost = !hasValidatedNetwork()
         runCatching {
             connectivity.registerNetworkCallback(
-                NetworkRequest.Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build(),
+                NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(),
                 networkCallback,
             )
             networkCallbackRegistered = true
@@ -283,6 +473,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         playerView?.useController = !isInPictureInPictureMode
+        quickControls?.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
     }
 
     private fun intentLibraryItem(): LibraryItemRef? {
@@ -308,9 +499,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onStop() {
         persistProgress(player, allowCloud = shouldCloudSync(force = true))
         super.onStop()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInPictureInPictureMode) {
-            releasePlayer()
-        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInPictureInPictureMode) releasePlayer()
     }
 
     override fun onDestroy() {
