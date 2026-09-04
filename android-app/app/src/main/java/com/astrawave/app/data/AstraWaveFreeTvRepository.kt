@@ -102,7 +102,12 @@ class CombinedLiveTvRepository(
     private val handoffRepository: FreeTvHandoffRepository = FreeTvHandoffRepository(),
     private val userSources: IptvSourceRepository = IptvSourceRepository(),
     private val liveTv: LiveTvRepository = LiveTvRepository(),
+    private val publicEpgUrl: String = DEFAULT_PUBLIC_EPG_URL,
 ) {
+    private val publicProgrammes: List<XmlTvProgramme> by lazy {
+        runCatching { liveTv.loadXmlTv(publicEpgUrl) }.getOrDefault(emptyList())
+    }
+
     fun load(userSourcesConfig: List<IptvSource>): CombinedLiveTvSnapshot {
         val free = runCatching { freeTv.loadChannels() }.getOrDefault(emptyList())
         val handoffs = runCatching { handoffRepository.load() }.getOrDefault(emptyList())
@@ -110,9 +115,11 @@ class CombinedLiveTvRepository(
         val userChannels = enabled.flatMap { source ->
             runCatching { userSources.loadChannels(source) }.getOrDefault(emptyList())
         }
-        val programmes = enabled.flatMap { source ->
+        val userProgrammes = enabled.flatMap { source ->
             runCatching { userSources.loadGuide(source) }.getOrDefault(emptyList())
         }
+        val programmes = (publicProgrammes + userProgrammes)
+            .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
         val groups = liveTv.merge(
             channelLists = listOf(free, userChannels),
             programmes = programmes,
@@ -125,5 +132,10 @@ class CombinedLiveTvRepository(
             userChannelCount = userChannels.size,
             totalChannelGroups = groups.size + handoffs.size,
         )
+    }
+
+    companion object {
+        const val DEFAULT_PUBLIC_EPG_URL =
+            "https://dearbulut.github.io/iptv/epg/us.xml"
     }
 }
