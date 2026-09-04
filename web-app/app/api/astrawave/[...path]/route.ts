@@ -197,6 +197,30 @@ async function sources(kind: string, id: string) {
   return archiveSources(title, date);
 }
 
+async function resolveTmdbId(kind: 'movie' | 'series', id: string): Promise<string | null> {
+  if (/^\d+$/.test(id)) return id;
+  if (!/^tt\d+$/i.test(id)) return null;
+  const found = await tmdb(`/find/${encodeURIComponent(id)}?external_source=imdb_id`);
+  if (!found) return null;
+  const results = kind === 'movie' ? found.movie_results : found.tv_results;
+  return results?.[0]?.id ? String(results[0].id) : null;
+}
+
+async function contentRating(kind: 'movie' | 'series', id: string) {
+  const tmdbId = await resolveTmdbId(kind, id);
+  if (!tmdbId) return { rating: null, source: 'tmdb', resolved: false };
+  if (kind === 'movie') {
+    const data = await tmdb(`/movie/${encodeURIComponent(tmdbId)}/release_dates`);
+    const us = data?.results?.find((x: any) => x.iso_3166_1 === 'US');
+    const certifications = (us?.release_dates || []).map((x: any) => String(x.certification || '').trim()).filter(Boolean);
+    const rating = certifications.find((x: string) => ['G', 'PG', 'PG-13', 'R', 'NC-17'].includes(x)) || certifications[0] || null;
+    return { rating, source: 'tmdb', resolved: true, tmdbId };
+  }
+  const data = await tmdb(`/tv/${encodeURIComponent(tmdbId)}/content_ratings`);
+  const us = data?.results?.find((x: any) => x.iso_3166_1 === 'US');
+  return { rating: us?.rating || null, source: 'tmdb', resolved: true, tmdbId };
+}
+
 async function homeRows() {
   const [moviesRaw, showsRaw, live, sports] = await Promise.all([tmdb('/trending/movie/day'), tmdb('/trending/tv/day'), liveChannels(), sportsToday()]);
   const movies = moviesRaw ? mapTmdb(moviesRaw.results || [], 'movie') : [];
@@ -226,6 +250,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
     }
     if (route === '/v1/live/channels' || route === '/v1/live/guide') return NextResponse.json(await liveChannels());
     if (route === '/v1/sports/today') return NextResponse.json(await sportsToday());
+    const ratingMatch = route.match(/^\/v1\/rating\/(movie|series)\/([^/]+)$/);
+    if (ratingMatch) return NextResponse.json(await contentRating(ratingMatch[1] as 'movie' | 'series', decodeURIComponent(ratingMatch[2])));
     const sourceMatch = route.match(/^\/v1\/sources\/([^/]+)\/([^/]+)$/);
     if (sourceMatch) return NextResponse.json(await sources(decodeURIComponent(sourceMatch[1]), decodeURIComponent(sourceMatch[2])));
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
