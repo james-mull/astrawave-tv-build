@@ -2,8 +2,11 @@ package com.astrawave.app.data
 
 import android.content.Context
 import com.astrawave.app.core.LibraryMediaType
+import com.astrawave.app.core.PersonalMediaGateway
+import com.astrawave.app.core.PersonalMediaProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -26,6 +29,7 @@ class UnifiedSearchRepository(context: Context) {
         val sourceId: String? = null,
         val streamUrls: List<String> = emptyList(),
         val listQuery: String? = null,
+        val listQueries: List<String> = emptyList(),
         val listGenre: String? = null,
         val listMediaType: LibraryMediaType? = null,
         val score: Int = 0,
@@ -41,6 +45,10 @@ class UnifiedSearchRepository(context: Context) {
     private val live = CombinedLiveTvRepository()
     private val sports = TheSportsDbClient()
     private val library = LocalLibraryStore(appContext)
+    private val plexGateway = PlexPersonalMediaGateway(appContext)
+    private val embyFamilyGateway = EmbyFamilyPersonalMediaGateway(appContext)
+    private val webDavGateway = WebDavPersonalMediaGateway(appContext)
+    private val collections = AstraWaveCollectionSearchIndex.entries
 
     suspend fun search(query: String, profileId: String, restrictedToKids: Boolean = false): List<Result> = coroutineScope {
         val q = query.trim()
@@ -48,14 +56,14 @@ class UnifiedSearchRepository(context: Context) {
 
         val metadataTask = async(Dispatchers.IO) { runCatching { searchMetadata(q) }.getOrDefault(emptyList()) }
         val libraryTask = async(Dispatchers.IO) { searchLibrary(q, profileId) }
-        val listTask = async(Dispatchers.IO) { searchLists(q) }
+        val listTask = async(Dispatchers.Default) { searchLists(q) }
 
         val liveTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchLive(q, profileId) }.getOrDefault(emptyList()) }
         val sportsTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchSports(q, profileId) }.getOrDefault(emptyList()) }
         val audioTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchAudio(q) }.getOrDefault(emptyList()) }
-        val personalTask = if (restrictedToKids) null else async(Dispatchers.IO) { searchPersonal(q, profileId) }
+        val personalTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchPersonal(q, profileId) }.getOrDefault(emptyList()) }
 
-        val all = buildList {
+        buildList {
             addAll(metadataTask.await())
             addAll(libraryTask.await())
             addAll(listTask.await())
@@ -64,15 +72,15 @@ class UnifiedSearchRepository(context: Context) {
             audioTask?.let { addAll(it.await()) }
             personalTask?.let { addAll(it.await()) }
         }
-        all.distinctBy { "${it.kind}:${it.id}" }
+            .distinctBy { "${it.kind}:${it.id}" }
             .sortedWith(compareByDescending<Result> { it.score }.thenBy { it.title.lowercase() })
-            .take(120)
+            .take(160)
     }
 
     fun suggestions(query: String, profileId: String): List<String> {
         val q = normalize(query)
         val recent = SearchHistoryStore(appContext).recent(profileId)
-        val candidates = (recent + LIST_INDEX.map { it.title } + QUICK_SUGGESTIONS).distinct()
+        val candidates = (recent + collections.map { it.title } + QUICK_SUGGESTIONS).distinct()
         if (q.isBlank()) return candidates.take(10)
         return candidates.map { it to fuzzyScore(q, normalize(it)) }
             .filter { it.second >= 30 }
@@ -120,7 +128,15 @@ class UnifiedSearchRepository(context: Context) {
                 LibraryMediaType.SERIES, LibraryMediaType.EPISODE -> Kind.TV
                 else -> Kind.LIBRARY
             }
-            Result(kind, "library:${item.id}", item.title, "From your library", artworkUrl = item.posterUrl, sourceId = item.sourceId, score = 70 + score)
+            Result(
+                kind = kind,
+                id = "library:${item.id}",
+                title = item.title,
+                subtitle = "From your library",
+                artworkUrl = item.posterUrl,
+                sourceId = item.sourceId,
+                score = 70 + score,
+            )
         }
     }
 
@@ -128,7 +144,12 @@ class UnifiedSearchRepository(context: Context) {
         val q = normalize(query)
         val groups = liveGroups(profileId)
         return groups.mapNotNull { group ->
-            val searchable = listOfNotNull(group.displayName, group.currentProgram?.title, group.nextProgram?.title, group.bestCandidate?.group).joinToString(" ")
+            val searchable = listOfNotNull(
+                group.displayName,
+                group.currentProgram?.title,
+                group.nextProgram?.title,
+                group.bestCandidate?.group,
+            ).joinToString(" ")
             val score = fuzzyScore(q, normalize(searchable))
             if (score < 35) return@mapNotNull null
             val candidates = group.candidates.sortedBy { it.priority }
@@ -170,50 +191,122 @@ class UnifiedSearchRepository(context: Context) {
     }
 
     private fun searchAudio(query: String): List<Result> {
+        val normalizedQuery = normalize(query)
         val radio = runCatching { audio.searchRadio(query, 16) }.getOrDefault(emptyList()).map { station ->
-            Result(Kind.RADIO, station.id, station.name, listOfNotNull(station.genre, station.country).joinToString(" • ").ifBlank { null }, artworkUrl = station.logoUrl, streamUrls = listOf(station.streamUrl), score = 75 + fuzzyScore(normalize(query), normalize(station.name)))
+            Result(
+                Kind.RADIO,
+                station.id,
+                station.name,
+                listOfNotNull(station.genre, station.country).joinToString(" • ").ifBlank { null },
+                artworkUrl = station.logoUrl,
+                streamUrls = listOf(station.streamUrl),
+                score = 75 + fuzzyScore(normalizedQuery, normalize(station.name)),
+            )
         }
         val music = runCatching { audio.searchMusic(query, 18) }.getOrDefault(emptyList()).map { item ->
-            Result(Kind.MUSIC, item.id, item.title, item.subtitle, artworkUrl = item.artworkUrl, streamUrls = listOfNotNull(item.mediaUrl), score = 75 + fuzzyScore(normalize(query), normalize(item.title)))
+            Result(
+                Kind.MUSIC,
+                item.id,
+                item.title,
+                item.subtitle,
+                artworkUrl = item.artworkUrl,
+                streamUrls = listOfNotNull(item.mediaUrl),
+                score = 75 + fuzzyScore(normalizedQuery, normalize(item.title)),
+            )
         }
         val podcasts = runCatching { audio.searchPodcasts(query, 16) }.getOrDefault(emptyList()).map { pod ->
-            Result(Kind.PODCAST, pod.id, pod.title, "Podcast", artworkUrl = pod.artworkUrl, sourceId = pod.feedUrl, score = 72 + fuzzyScore(normalize(query), normalize(pod.title)))
+            Result(
+                Kind.PODCAST,
+                pod.id,
+                pod.title,
+                "Podcast",
+                artworkUrl = pod.artworkUrl,
+                sourceId = pod.feedUrl,
+                score = 72 + fuzzyScore(normalizedQuery, normalize(pod.title)),
+            )
         }
         return (radio + music + podcasts).sortedByDescending { it.score }.take(36)
     }
 
-    private fun searchPersonal(query: String, profileId: String): List<Result> {
+    private suspend fun searchPersonal(query: String, profileId: String): List<Result> = coroutineScope {
         val q = normalize(query)
-        return personal.load(profileId).mapNotNull { connection ->
-            val score = fuzzyScore(q, normalize("${connection.name} ${connection.provider.name}"))
-            if (score < 35) return@mapNotNull null
-            Result(
-                Kind.PERSONAL,
-                connection.id,
-                connection.name,
-                "${connection.provider.name.replace('_', ' ')} • ${connection.itemCount} items",
-                description = if (connection.enabled) "Personal media connection" else "Connection disabled",
-                score = 60 + score,
-            )
-        }
+        val connections = personal.load(profileId).filter { it.enabled }
+        if (connections.isEmpty()) return@coroutineScope emptyList()
+
+        connections.map { connection ->
+            async(Dispatchers.IO) {
+                val connectionLabel = connection.provider.name.replace('_', ' ')
+                val gateway: PersonalMediaGateway = when (connection.provider) {
+                    PersonalMediaProvider.PLEX -> plexGateway
+                    PersonalMediaProvider.JELLYFIN, PersonalMediaProvider.EMBY -> embyFamilyGateway
+                    PersonalMediaProvider.WEBDAV, PersonalMediaProvider.NAS -> webDavGateway
+                }
+
+                val items = runCatching { gateway.search(connection, query, 40) }.getOrDefault(emptyList())
+                val itemResults = items.mapNotNull { item ->
+                    val searchable = listOfNotNull(item.title, item.subtitle, item.externalId).joinToString(" ")
+                    val score = fuzzyScore(q, normalize(searchable))
+                    if (score < 25) return@mapNotNull null
+                    Result(
+                        kind = Kind.PERSONAL,
+                        id = "personal:${connection.id}:${item.id}",
+                        title = item.title,
+                        subtitle = listOfNotNull(item.subtitle, connection.name).joinToString(" • ").ifBlank { connection.name },
+                        description = "$connectionLabel personal library",
+                        artworkUrl = item.posterUrl ?: item.backdropUrl,
+                        sourceId = item.externalId,
+                        streamUrls = listOfNotNull(item.streamUrl),
+                        score = 78 + score,
+                    )
+                }
+
+                val connectionScore = fuzzyScore(q, normalize("${connection.name} $connectionLabel"))
+                val connectionResult = if (connectionScore >= 45) {
+                    listOf(
+                        Result(
+                            kind = Kind.PERSONAL,
+                            id = "personal-connection:${connection.id}",
+                            title = connection.name,
+                            subtitle = "$connectionLabel • ${connection.itemCount} items",
+                            description = "Personal media server",
+                            score = 55 + connectionScore,
+                        ),
+                    )
+                } else emptyList()
+
+                itemResults + connectionResult
+            }
+        }.awaitAll().flatten()
+            .distinctBy { it.id }
+            .sortedByDescending { it.score }
+            .take(50)
     }
 
     private fun searchLists(query: String): List<Result> {
         val q = normalize(query)
-        return LIST_INDEX.mapNotNull { entry ->
-            val score = maxOf(fuzzyScore(q, normalize(entry.title)), fuzzyScore(q, normalize("${entry.title} ${entry.subtitle}")))
+        return collections.mapNotNull { entry ->
+            val searchable = buildString {
+                append(entry.title)
+                append(' ')
+                append(entry.subtitle)
+                entry.queries.forEach { append(' '); append(it) }
+            }
+            val score = maxOf(
+                fuzzyScore(q, normalize(entry.title)),
+                fuzzyScore(q, normalize(searchable)),
+            )
             if (score < 35) return@mapNotNull null
             Result(
-                Kind.LIST,
-                "list:${entry.mediaType}:${entry.title}",
-                entry.title,
-                entry.subtitle,
-                listQuery = entry.query,
-                listGenre = entry.genre,
+                kind = Kind.LIST,
+                id = "list:${entry.mediaType}:${entry.id}",
+                title = entry.title,
+                subtitle = entry.subtitle,
+                listQuery = entry.queries.firstOrNull(),
+                listQueries = entry.queries,
                 listMediaType = entry.mediaType,
                 score = 65 + score,
             )
-        }.sortedByDescending { it.score }.take(24)
+        }.sortedByDescending { it.score }.take(40)
     }
 
     private fun liveGroups(profileId: String): List<LiveChannelGroup> {
@@ -260,66 +353,43 @@ class UnifiedSearchRepository(context: Context) {
         for (i in a.indices) {
             current[0] = i + 1
             for (j in b.indices) {
-                current[j + 1] = min(min(current[j] + 1, previous[j + 1] + 1), previous[j] + if (a[i] == b[j]) 0 else 1)
+                current[j + 1] = min(
+                    min(current[j] + 1, previous[j + 1] + 1),
+                    previous[j] + if (a[i] == b[j]) 0 else 1,
+                )
             }
             for (j in previous.indices) previous[j] = current[j]
         }
         return previous[b.length]
     }
 
-    private data class ListEntry(
-        val title: String,
-        val subtitle: String,
-        val mediaType: LibraryMediaType,
-        val query: String? = null,
-        val genre: String? = null,
-    )
-
     companion object {
         private const val LIVE_CACHE_MS = 10 * 60 * 1000L
         private val LIVE_CACHE = mutableMapOf<String, LiveCache>()
-        private val QUICK_SUGGESTIONS = listOf("Action", "Comedy", "Sci-Fi", "Crime", "Family", "Marvel", "Star Wars", "Breaking Bad", "The Bear", "NBA", "NFL", "news", "rock", "true crime")
-        private val LIST_INDEX = listOf(
-            ListEntry("Weekly Hot List", "What everyone is watching", LibraryMediaType.MOVIE, query = "popular movies"),
-            ListEntry("Top 100", "AstraWave movie essentials", LibraryMediaType.MOVIE, query = "best movies"),
-            ListEntry("Marvel Universe", "Heroes and connected stories", LibraryMediaType.MOVIE, query = "Marvel"),
-            ListEntry("Star Wars", "Galaxy-spanning saga", LibraryMediaType.MOVIE, query = "Star Wars"),
-            ListEntry("Harry Potter in Order", "Wizarding World marathon", LibraryMediaType.MOVIE, query = "Harry Potter"),
-            ListEntry("Mission: Impossible", "Ethan Hunt missions", LibraryMediaType.MOVIE, query = "Mission Impossible"),
-            ListEntry("John Wick", "The complete action franchise", LibraryMediaType.MOVIE, query = "John Wick"),
-            ListEntry("Action", "High-energy favorites", LibraryMediaType.MOVIE, genre = "Action"),
-            ListEntry("Comedy", "Laugh-out-loud movie picks", LibraryMediaType.MOVIE, genre = "Comedy"),
-            ListEntry("Horror", "Scares for movie night", LibraryMediaType.MOVIE, genre = "Horror"),
-            ListEntry("Sci-Fi", "Big ideas and worlds", LibraryMediaType.MOVIE, genre = "Science Fiction"),
-            ListEntry("Thrillers", "Tense and twisty", LibraryMediaType.MOVIE, genre = "Thriller"),
-            ListEntry("Family Night", "Everyone can watch", LibraryMediaType.MOVIE, genre = "Family"),
-            ListEntry("Christopher Nolan", "Big ideas and spectacle", LibraryMediaType.MOVIE, query = "Christopher Nolan"),
-            ListEntry("Tom Cruise", "Action and star power", LibraryMediaType.MOVIE, query = "Tom Cruise"),
-            ListEntry("Weekly Hot TV", "Series people are watching now", LibraryMediaType.SERIES, query = "popular tv"),
-            ListEntry("Binge Worthy", "Easy shows to keep watching", LibraryMediaType.SERIES, query = "binge worthy tv"),
-            ListEntry("Crime & Mystery", "Detectives and dark mysteries", LibraryMediaType.SERIES, genre = "Crime"),
-            ListEntry("Comedy TV", "Modern and classic comedy", LibraryMediaType.SERIES, genre = "Comedy"),
-            ListEntry("Sci-Fi TV", "Big worlds and concepts", LibraryMediaType.SERIES, genre = "Science Fiction"),
-            ListEntry("Prestige Drama", "Premium character-driven series", LibraryMediaType.SERIES, genre = "Drama"),
-            ListEntry("Limited Series", "One-and-done stories", LibraryMediaType.SERIES, query = "limited series"),
-            ListEntry("HBO Favorites", "Prestige HBO series", LibraryMediaType.SERIES, query = "HBO"),
-            ListEntry("Netflix Hits", "Streaming-era favorites", LibraryMediaType.SERIES, query = "Netflix"),
-            ListEntry("Apple TV+", "Premium Apple originals", LibraryMediaType.SERIES, query = "Apple TV"),
-            ListEntry("Anime", "Popular anime series", LibraryMediaType.SERIES, genre = "Animation"),
-            ListEntry("K-Dramas", "Popular Korean dramas", LibraryMediaType.SERIES, query = "Korean drama"),
-            ListEntry("Highly Rewatchable", "Shows worth returning to", LibraryMediaType.SERIES, query = "rewatchable tv")
+        private val QUICK_SUGGESTIONS = listOf(
+            "Action", "Comedy", "Sci-Fi", "Crime", "Family", "Marvel", "Star Wars",
+            "Breaking Bad", "The Bear", "NBA", "NFL", "news", "rock", "true crime",
         )
     }
 }
 
 private class SearchHistoryStore(context: Context) {
     private val prefs = context.getSharedPreferences("astrawave_search_history_v1", Context.MODE_PRIVATE)
-    fun recent(profileId: String): List<String> = prefs.getString("recent:$profileId", "").orEmpty().split('\n').map(String::trim).filter(String::isNotBlank).take(10)
+
+    fun recent(profileId: String): List<String> = prefs.getString("recent:$profileId", "").orEmpty()
+        .split('\n')
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .take(10)
+
     fun remember(profileId: String, query: String) {
         val value = query.trim()
         if (value.isBlank()) return
         val next = (listOf(value) + recent(profileId).filterNot { it.equals(value, true) }).take(10)
         prefs.edit().putString("recent:$profileId", next.joinToString("\n")).apply()
     }
-    fun clear(profileId: String) { prefs.edit().remove("recent:$profileId").apply() }
+
+    fun clear(profileId: String) {
+        prefs.edit().remove("recent:$profileId").apply()
+    }
 }
