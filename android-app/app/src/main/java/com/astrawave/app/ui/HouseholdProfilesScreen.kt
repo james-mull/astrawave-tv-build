@@ -34,6 +34,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.data.HouseholdProfileStore
+import com.astrawave.app.data.ParentPinStore
+import com.astrawave.app.data.ProfileSafetyStore
 
 @Composable
 fun HouseholdProfilesScreen(
@@ -44,22 +46,36 @@ fun HouseholdProfilesScreen(
 ) {
     val context = LocalContext.current
     val store = remember { HouseholdProfileStore(context) }
+    val parentPin = remember { ParentPinStore(context) }
+    val safety = remember { ProfileSafetyStore(context) }
     var profiles by remember { mutableStateOf(store.profiles()) }
     var createProfile by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<HouseholdProfileStore.Profile?>(null) }
     var pinTarget by remember { mutableStateOf<HouseholdProfileStore.Profile?>(null) }
+    var parentGateTarget by remember { mutableStateOf<HouseholdProfileStore.Profile?>(null) }
+    var missingParentPinTarget by remember { mutableStateOf<HouseholdProfileStore.Profile?>(null) }
     var deleteTarget by remember { mutableStateOf<HouseholdProfileStore.Profile?>(null) }
     var promptAtLaunch by remember { mutableStateOf(store.shouldPromptAtLaunch() || store.profiles().size > 1) }
 
     fun refresh() { profiles = store.profiles() }
+
+    fun completeSwitch(profile: HouseholdProfileStore.Profile) {
+        if (profile.pinProtected) pinTarget = profile
+        else if (store.setActive(profile.id)) onProfileChanged(profile)
+    }
 
     fun choose(profile: HouseholdProfileStore.Profile) {
         if (profile.id == activeProfileId) {
             onProfileChanged(profile)
             return
         }
-        if (profile.pinProtected) pinTarget = profile
-        else if (store.setActive(profile.id)) onProfileChanged(profile)
+        val current = profiles.firstOrNull { it.id == activeProfileId }
+        val requireParentExit = current?.kidsMode == true && safety.load(activeProfileId).kids.requirePinForProfileExit
+        if (requireParentExit) {
+            if (parentPin.hasPin()) parentGateTarget = profile else missingParentPinTarget = profile
+        } else {
+            completeSwitch(profile)
+        }
     }
 
     Column(
@@ -81,9 +97,7 @@ fun HouseholdProfilesScreen(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             profiles.forEach { profile ->
-                AstraWaveFocusableCard(
-                    Modifier.width(190.dp).clickable { choose(profile) },
-                ) {
+                AstraWaveFocusableCard(Modifier.width(190.dp).clickable { choose(profile) }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             Modifier.size(82.dp).background(
@@ -91,9 +105,7 @@ fun HouseholdProfilesScreen(
                                 CircleShape,
                             ),
                             contentAlignment = Alignment.Center,
-                        ) {
-                            Text(profile.avatar, style = MaterialTheme.typography.headlineLarge)
-                        }
+                        ) { Text(profile.avatar, style = MaterialTheme.typography.headlineLarge) }
                         Spacer(Modifier.height(12.dp))
                         Text(profile.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                         Spacer(Modifier.height(4.dp))
@@ -102,7 +114,7 @@ fun HouseholdProfilesScreen(
                                 profile.kidsMode && profile.pinProtected -> "KIDS • PIN"
                                 profile.kidsMode -> "KIDS"
                                 profile.pinProtected -> "PIN PROTECTED"
-                                else -> "ADULT",
+                                else -> "ADULT"
                             },
                             color = if (profile.kidsMode) AstraWaveColors.Success else AstraWaveColors.SecondaryText,
                             style = MaterialTheme.typography.labelMedium,
@@ -122,10 +134,9 @@ fun HouseholdProfilesScreen(
             if (profiles.size < HouseholdProfileStore.MAX_PROFILES && !launchMode) {
                 AstraWaveFocusableCard(Modifier.width(190.dp).clickable { createProfile = true }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            Modifier.size(82.dp).background(AstraWaveColors.SurfaceRaised, CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) { Text("＋", color = AstraWaveColors.Accent, style = MaterialTheme.typography.headlineLarge) }
+                        Box(Modifier.size(82.dp).background(AstraWaveColors.SurfaceRaised, CircleShape), contentAlignment = Alignment.Center) {
+                            Text("＋", color = AstraWaveColors.Accent, style = MaterialTheme.typography.headlineLarge)
+                        }
                         Spacer(Modifier.height(12.dp))
                         Text("Add Profile", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(4.dp))
@@ -154,8 +165,12 @@ fun HouseholdProfilesScreen(
             }
             Spacer(Modifier.height(10.dp))
             AstraWaveStatePanel(
-                title = "Kids profiles stay separate",
-                message = "Kids mode has its own profile ID, so watch history, Continue Watching, favorites and recommendations do not mix with adult profiles. PIN-protected profiles require the PIN before switching into them.",
+                title = "Kids exit protection",
+                message = if (parentPin.hasPin()) {
+                    "A household Parent PIN protects exits from Kids profiles when that profile requires PIN protection. Adult profile PINs can still add a second lock."
+                } else {
+                    "Set a household Parent PIN in Parental Controls to prevent a Kids profile from switching into an unprotected adult profile."
+                },
             )
         }
     }
@@ -164,7 +179,7 @@ fun HouseholdProfilesScreen(
         ProfileEditorDialog(
             initial = null,
             onDismiss = { createProfile = false },
-            onSave = { name, avatar, kids, pin, clearPin ->
+            onSave = { name, avatar, kids, pin, _ ->
                 val created = store.addProfile(name, avatar, kids, pin)
                 if (created != null) {
                     runCatching { com.astrawave.app.data.FirebaseCloudRepository(context).saveProfile(created.id, created.name, created.kidsMode) }
@@ -189,6 +204,26 @@ fun HouseholdProfilesScreen(
                     if (updated.id == activeProfileId) onProfileChanged(updated)
                 }
             },
+        )
+    }
+
+    parentGateTarget?.let { profile ->
+        ParentPinDialog(
+            onDismiss = { parentGateTarget = null },
+            verify = parentPin::verify,
+            onVerified = {
+                parentGateTarget = null
+                completeSwitch(profile)
+            },
+        )
+    }
+
+    missingParentPinTarget?.let {
+        AlertDialog(
+            onDismissRequest = { missingParentPinTarget = null },
+            title = { Text("Parent PIN required") },
+            text = { Text("This Kids profile is protected from profile exit, but no household Parent PIN has been set. Open Parental Controls from My AstraWave and create a Parent PIN first.") },
+            confirmButton = { TextButton(onClick = { missingParentPinTarget = null }) { Text("OK") } },
         )
     }
 
@@ -260,25 +295,56 @@ private fun ProfileEditorDialog(
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { value -> pin = value.filter(Char::isDigit).take(6) },
-                    label = { Text(if (initial?.pinProtected == true) "New PIN (leave blank to keep current)" else "Optional PIN") },
+                    label = { Text(if (initial?.pinProtected == true) "New profile PIN (leave blank to keep current)" else "Optional profile PIN") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                 )
                 if (initial?.pinProtected == true) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = clearPin, onCheckedChange = { clearPin = it })
-                        Text("Remove PIN protection")
+                        Text("Remove profile PIN protection")
                     }
                 }
-                onDelete?.let {
-                    TextButton(onClick = it) { Text("Delete profile", color = AstraWaveColors.Error) }
-                }
+                onDelete?.let { TextButton(onClick = it) { Text("Delete profile", color = AstraWaveColors.Error) } }
             }
         },
         confirmButton = {
             TextButton(enabled = name.isNotBlank(), onClick = { onSave(name, avatar, kidsMode, pin.takeIf { it.isNotBlank() }, clearPin) }) {
                 Text(if (initial == null) "Add" else "Save")
             }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ParentPinDialog(
+    onDismiss: () -> Unit,
+    onVerified: () -> Unit,
+    verify: (String) -> Boolean,
+) {
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter Parent PIN") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it.filter(Char::isDigit).take(6); error = false },
+                    label = { Text("Parent PIN") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                )
+                if (error) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Incorrect Parent PIN", color = AstraWaveColors.Error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { if (verify(pin)) onVerified() else error = true }) { Text("Unlock") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
@@ -301,7 +367,7 @@ private fun PinDialog(
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { pin = it.filter(Char::isDigit).take(6); error = false },
-                    label = { Text("PIN") },
+                    label = { Text("Profile PIN") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                 )
@@ -312,9 +378,7 @@ private fun PinDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                if (verify(pin)) onVerified() else error = true
-            }) { Text("Unlock") }
+            TextButton(onClick = { if (verify(pin)) onVerified() else error = true }) { Text("Unlock") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
