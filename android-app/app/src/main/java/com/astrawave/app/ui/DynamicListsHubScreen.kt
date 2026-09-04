@@ -37,6 +37,7 @@ import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.AstraWaveMetadataGateway
 import com.astrawave.app.data.DynamicCollectionRepository
+import com.astrawave.app.data.PersonalizedCollectionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -93,9 +94,10 @@ private val dynamicTvRows = listOf(
 )
 
 @Composable
-fun DynamicMovieListsScreen() = DynamicListsHub(
+fun DynamicMovieListsScreen(profileId: String = "default") = DynamicListsHub(
     title = "Movies",
-    subtitle = "Live Top 100 and genre charts that refresh automatically, plus AstraWave's 100+ curated collections.",
+    subtitle = "Personalized shelves, live Top 100 and genre charts, plus AstraWave's 100+ curated collections.",
+    profileId = profileId,
     media = DynamicCollectionRepository.Media.MOVIE,
     mediaType = LibraryMediaType.MOVIE,
     rows = dynamicMovieRows,
@@ -103,9 +105,10 @@ fun DynamicMovieListsScreen() = DynamicListsHub(
 )
 
 @Composable
-fun DynamicTvListsScreen() = DynamicListsHub(
+fun DynamicTvListsScreen(profileId: String = "default") = DynamicListsHub(
     title = "TV Shows",
-    subtitle = "Live TV charts and genre lists that refresh automatically, plus AstraWave's 70+ curated collections.",
+    subtitle = "Personalized binge shelves, live TV charts and genre lists, plus AstraWave's 70+ curated collections.",
+    profileId = profileId,
     media = DynamicCollectionRepository.Media.SERIES,
     mediaType = LibraryMediaType.SERIES,
     rows = dynamicTvRows,
@@ -116,6 +119,7 @@ fun DynamicTvListsScreen() = DynamicListsHub(
 private fun DynamicListsHub(
     title: String,
     subtitle: String,
+    profileId: String,
     media: DynamicCollectionRepository.Media,
     mediaType: LibraryMediaType,
     rows: List<Pair<String, List<DynamicListSpec>>>,
@@ -123,8 +127,12 @@ private fun DynamicListsHub(
 ) {
     val context = LocalContext.current
     val repository = remember { DynamicCollectionRepository() }
+    val personalizer = remember { PersonalizedCollectionRepository(context) }
     val states = remember { mutableStateMapOf<String, DynamicListState>() }
+    var personalized by remember(profileId, media) { mutableStateOf<List<PersonalizedCollectionRepository.Shelf>>(emptyList()) }
+    var personalizedLoading by remember(profileId, media) { mutableStateOf(true) }
     var selected by remember { mutableStateOf<DynamicListSpec?>(null) }
+    var selectedPersonal by remember { mutableStateOf<PersonalizedCollectionRepository.Shelf?>(null) }
     var mode by remember { mutableStateOf("Live Lists") }
 
     if (mode == "All Collections") {
@@ -141,17 +149,25 @@ private fun DynamicListsHub(
         return
     }
 
+    LaunchedEffect(profileId, media) {
+        personalizedLoading = true
+        personalized = withContext(Dispatchers.IO) {
+            runCatching { personalizer.shelves(profileId, media) }.getOrDefault(emptyList())
+        }
+        personalized.forEach { shelf ->
+            shelf.items.forEach { ArtworkRegistry.register(it.name, it.posterUrl ?: it.backdropUrl) }
+        }
+        personalizedLoading = false
+    }
+
     LaunchedEffect(rows, media) {
         rows.flatMap { it.second }.forEach { spec ->
             if (states.containsKey(spec.id)) return@forEach
             states[spec.id] = DynamicListState.Loading
             states[spec.id] = try {
                 val items = withContext(Dispatchers.IO) {
-                    val loaded = if (spec.genre.isNullOrBlank()) {
-                        repository.top(media, spec.pages)
-                    } else {
-                        repository.genre(media, spec.genre, spec.pages)
-                    }
+                    val loaded = if (spec.genre.isNullOrBlank()) repository.top(media, spec.pages)
+                    else repository.genre(media, spec.genre, spec.pages)
                     loaded.distinctBy { it.id }.take(100).onEach {
                         ArtworkRegistry.register(it.name, it.posterUrl ?: it.backdropUrl)
                     }
@@ -163,25 +179,23 @@ private fun DynamicListsHub(
         }
     }
 
+    selectedPersonal?.let { shelf ->
+        PersonalizedListDetail(
+            shelf = shelf,
+            mediaType = mediaType,
+            onBack = { selectedPersonal = null },
+            onOpen = { openTitle(context, it, mediaType) },
+        )
+        return
+    }
+
     selected?.let { spec ->
         DynamicListDetail(
             spec = spec,
             state = states[spec.id] ?: DynamicListState.Loading,
             mediaType = mediaType,
             onBack = { selected = null },
-            onOpen = { item ->
-                val sourceId = if (item.id.startsWith("tt", true)) {
-                    "stremio:cinemeta:${if (mediaType == LibraryMediaType.MOVIE) "movie" else "series"}:${item.id}"
-                } else {
-                    "tmdb:${item.id}"
-                }
-                context.startActivity(
-                    Intent(context, TitleDetailsActivity::class.java)
-                        .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
-                        .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, mediaType.name)
-                        .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, sourceId),
-                )
-            },
+            onOpen = { openTitle(context, it, mediaType) },
         )
         return
     }
@@ -198,6 +212,26 @@ private fun DynamicListsHub(
         }
         Spacer(Modifier.height(18.dp))
 
+        if (personalizedLoading) {
+            AstraWaveStatePanel(
+                "Personalizing your lists…",
+                "Using this profile's watch history, favorites and saved titles.",
+                loading = true,
+            )
+            Spacer(Modifier.height(22.dp))
+        } else if (personalized.isNotEmpty()) {
+            Text("Made For You", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Built from your recent viewing, favorites, watchlist and inferred genres",
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(10.dp))
+            PersonalizedShelfCards(personalized) { selectedPersonal = it }
+            Spacer(Modifier.height(26.dp))
+        }
+
         rows.forEach { (rowTitle, specs) ->
             Text(rowTitle, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
@@ -213,38 +247,113 @@ private fun DynamicListsHub(
             ) {
                 specs.forEach { spec ->
                     val items = (states[spec.id] as? DynamicListState.Ready)?.items.orEmpty()
-                    AstraWaveFocusableCard(Modifier.width(250.dp).clickable { selected = spec }) {
-                        Column {
-                            Box(Modifier.fillMaxWidth().height(140.dp)) {
-                                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    val covers = if (items.isEmpty()) listOf<AstraWaveMetadataGateway.Item?>(null, null, null)
-                                    else List(3) { index -> items.getOrNull(index % items.size) }
-                                    covers.forEach { item ->
-                                        Box(Modifier.weight(1f).fillMaxHeight()) {
-                                            AstraWaveArtwork(title = item?.name ?: spec.title, modifier = Modifier.fillMaxSize())
-                                        }
-                                    }
-                                }
-                                Text(
-                                    if (states[spec.id] is DynamicListState.Loading) "…" else items.size.toString(),
-                                    color = AstraWaveColors.PrimaryText,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                                        .background(AstraWaveColors.Background.copy(alpha = 0.82f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 7.dp, vertical = 4.dp),
-                                )
-                            }
-                            Spacer(Modifier.height(9.dp))
-                            Text(spec.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                            Spacer(Modifier.height(3.dp))
-                            Text(spec.subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2)
-                        }
-                    }
+                    CollectionCard(
+                        title = spec.title,
+                        subtitle = spec.subtitle,
+                        items = items,
+                        loading = states[spec.id] is DynamicListState.Loading,
+                        onClick = { selected = spec },
+                    )
                 }
             }
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+@Composable
+private fun PersonalizedShelfCards(
+    shelves: List<PersonalizedCollectionRepository.Shelf>,
+    onSelect: (PersonalizedCollectionRepository.Shelf) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        shelves.forEach { shelf ->
+            CollectionCard(
+                title = shelf.title,
+                subtitle = shelf.subtitle,
+                items = shelf.items,
+                loading = false,
+                onClick = { onSelect(shelf) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CollectionCard(
+    title: String,
+    subtitle: String,
+    items: List<AstraWaveMetadataGateway.Item>,
+    loading: Boolean,
+    onClick: () -> Unit,
+) {
+    AstraWaveFocusableCard(Modifier.width(250.dp).clickable(onClick = onClick)) {
+        Column {
+            Box(Modifier.fillMaxWidth().height(140.dp)) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    val covers = if (items.isEmpty()) listOf<AstraWaveMetadataGateway.Item?>(null, null, null)
+                    else List(3) { index -> items.getOrNull(index % items.size) }
+                    covers.forEach { item ->
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            AstraWaveArtwork(title = item?.name ?: title, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                }
+                Text(
+                    if (loading) "…" else items.size.toString(),
+                    color = AstraWaveColors.PrimaryText,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                        .background(AstraWaveColors.Background.copy(alpha = 0.82f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                )
+            }
+            Spacer(Modifier.height(9.dp))
+            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Spacer(Modifier.height(3.dp))
+            Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+        }
+    }
+}
+
+private fun openTitle(
+    context: android.content.Context,
+    item: AstraWaveMetadataGateway.Item,
+    mediaType: LibraryMediaType,
+) {
+    val sourceId = if (item.id.startsWith("tt", true)) {
+        "stremio:cinemeta:${if (mediaType == LibraryMediaType.MOVIE) "movie" else "series"}:${item.id}"
+    } else {
+        "tmdb:${item.id}"
+    }
+    context.startActivity(
+        Intent(context, TitleDetailsActivity::class.java)
+            .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
+            .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, mediaType.name)
+            .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, sourceId),
+    )
+}
+
+@Composable
+private fun PersonalizedListDetail(
+    shelf: PersonalizedCollectionRepository.Shelf,
+    mediaType: LibraryMediaType,
+    onBack: () -> Unit,
+    onOpen: (AstraWaveMetadataGateway.Item) -> Unit,
+) {
+    CollectionDetailBody(
+        title = shelf.title,
+        subtitle = shelf.subtitle,
+        items = shelf.items,
+        mediaType = mediaType,
+        status = "Personalized for this profile",
+        backLabel = "← Back to Live Lists",
+        onBack = onBack,
+        onOpen = onOpen,
+    )
 }
 
 @Composable
@@ -255,40 +364,79 @@ private fun DynamicListDetail(
     onBack: () -> Unit,
     onOpen: (AstraWaveMetadataGateway.Item) -> Unit,
 ) {
+    when (state) {
+        DynamicListState.Loading -> Column(
+            Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp),
+        ) {
+            AstraWavePageHeader(title = spec.title, subtitle = spec.subtitle)
+            Spacer(Modifier.height(18.dp))
+            AstraWaveStatePanel("Refreshing ${spec.title}…", "Loading the newest list from live metadata.", loading = true)
+        }
+        is DynamicListState.Error -> Column(
+            Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp),
+        ) {
+            AstraWavePageHeader(title = spec.title, subtitle = spec.subtitle)
+            Spacer(Modifier.height(10.dp))
+            AstraWaveSecondaryButton(label = "← Back to Live Lists", onClick = onBack)
+            Spacer(Modifier.height(18.dp))
+            AstraWaveStatePanel("List temporarily unavailable", state.message)
+        }
+        is DynamicListState.Ready -> CollectionDetailBody(
+            title = spec.title,
+            subtitle = spec.subtitle,
+            items = state.items,
+            mediaType = mediaType,
+            status = "Automatically refreshed",
+            backLabel = "← Back to Live Lists",
+            onBack = onBack,
+            onOpen = onOpen,
+        )
+    }
+}
+
+@Composable
+private fun CollectionDetailBody(
+    title: String,
+    subtitle: String,
+    items: List<AstraWaveMetadataGateway.Item>,
+    mediaType: LibraryMediaType,
+    status: String,
+    backLabel: String,
+    onBack: () -> Unit,
+    onOpen: (AstraWaveMetadataGateway.Item) -> Unit,
+) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .background(AstraWaveColors.Background).padding(horizontal = 24.dp, vertical = 20.dp),
     ) {
-        AstraWavePageHeader(title = spec.title, subtitle = spec.subtitle)
+        AstraWavePageHeader(title = title, subtitle = subtitle)
         Spacer(Modifier.height(10.dp))
-        AstraWaveSecondaryButton(label = "← Back to Live Lists", onClick = onBack)
+        AstraWaveSecondaryButton(label = backLabel, onClick = onBack)
         Spacer(Modifier.height(18.dp))
-        when (state) {
-            DynamicListState.Loading -> AstraWaveStatePanel("Refreshing ${spec.title}…", "Loading the newest list from live metadata.", loading = true)
-            is DynamicListState.Error -> AstraWaveStatePanel("List temporarily unavailable", state.message)
-            is DynamicListState.Ready -> {
-                Text("${state.items.size} titles • automatically refreshed", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(12.dp))
-                state.items.forEachIndexed { index, item ->
-                    AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp).clickable { onOpen(item) }) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("${index + 1}", color = AstraWaveColors.Accent, style = MaterialTheme.typography.titleLarge, modifier = Modifier.width(40.dp))
-                            Box(Modifier.width(118.dp)) { AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth()) }
-                            Column(Modifier.weight(1f)) {
-                                Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                                item.releaseInfo?.let {
-                                    Spacer(Modifier.height(3.dp))
-                                    Text(it, color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
-                                }
-                                Spacer(Modifier.height(5.dp))
-                                Text(
-                                    item.description ?: "Open for details and watch options.",
-                                    color = AstraWaveColors.SecondaryText,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 3,
-                                )
-                            }
+        Text(
+            "${items.size} ${if (mediaType == LibraryMediaType.MOVIE) "movies" else "series"} • $status",
+            color = AstraWaveColors.Success,
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Spacer(Modifier.height(12.dp))
+        items.forEachIndexed { index, item ->
+            AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp).clickable { onOpen(item) }) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${index + 1}", color = AstraWaveColors.Accent, style = MaterialTheme.typography.titleLarge, modifier = Modifier.width(40.dp))
+                    Box(Modifier.width(118.dp)) { AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth()) }
+                    Column(Modifier.weight(1f)) {
+                        Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                        item.releaseInfo?.let {
+                            Spacer(Modifier.height(3.dp))
+                            Text(it, color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
                         }
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            item.description ?: "Open for details and watch options.",
+                            color = AstraWaveColors.SecondaryText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 3,
+                        )
                     }
                 }
             }
