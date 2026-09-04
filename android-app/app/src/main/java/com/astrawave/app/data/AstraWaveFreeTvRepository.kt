@@ -7,13 +7,16 @@ import com.astrawave.app.core.IptvSource
  *
  * Sources are split deliberately:
  * - AstraWave's reviewed registry playlist (highest priority)
- * - FreeCastHub's public-broadcaster playlist, whose repository states that it
- *   only includes free, legal, official public streams. These remain lower
- *   priority and are still health-checked before playback.
+ * - FreeCastHub's public-broadcaster playlist
+ * - IPTV.org public playlists for US-first and category discovery
+ *
+ * Every direct candidate is still health-checked before playback. A playlist
+ * entry is never treated as proof that the stream is currently usable.
  */
 class AstraWaveFreeTvRepository(
     private val playlistUrl: String = DEFAULT_PLAYLIST_URL,
     private val publicBroadcasterPlaylistUrl: String = DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL,
+    private val iptvOrgPlaylistUrls: List<String> = DEFAULT_IPTV_ORG_PLAYLIST_URLS,
 ) {
     fun loadChannels(): List<LiveChannel> {
         val liveTv = LiveTvRepository()
@@ -31,7 +34,17 @@ class AstraWaveFreeTvRepository(
                 priority = 8,
             )
         }.getOrDefault(emptyList())
-        return (reviewed + publicBroadcasters).distinctBy { "${it.source}:${it.id}:${it.url}" }
+        val iptvOrg = iptvOrgPlaylistUrls.flatMap { url ->
+            runCatching {
+                liveTv.loadM3u(
+                    url = url,
+                    source = "IPTV.org Public",
+                    priority = 10,
+                )
+            }.getOrDefault(emptyList())
+        }
+        return (reviewed + publicBroadcasters + iptvOrg)
+            .distinctBy { "${it.source}:${it.id}:${it.url}" }
     }
 
     companion object {
@@ -40,6 +53,14 @@ class AstraWaveFreeTvRepository(
 
         const val DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL =
             "https://raw.githubusercontent.com/freecasthub/public-iptv/main/playlist.m3u"
+
+        val DEFAULT_IPTV_ORG_PLAYLIST_URLS = listOf(
+            "https://iptv-org.github.io/iptv/countries/us.m3u",
+            "https://iptv-org.github.io/iptv/categories/sports.m3u",
+            "https://iptv-org.github.io/iptv/categories/news.m3u",
+            "https://iptv-org.github.io/iptv/categories/entertainment.m3u",
+            "https://iptv-org.github.io/iptv/categories/movies.m3u",
+        )
     }
 }
 
