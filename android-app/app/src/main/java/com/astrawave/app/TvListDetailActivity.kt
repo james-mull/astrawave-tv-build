@@ -49,12 +49,13 @@ class TvListDetailActivity : ComponentActivity() {
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "AstraWave TV List" }
         val reason = intent.getStringExtra(EXTRA_REASON).orEmpty()
         val query = intent.getStringExtra(EXTRA_QUERY)
+        val queries = intent.getStringArrayListExtra(EXTRA_QUERIES).orEmpty()
         val genre = intent.getStringExtra(EXTRA_GENRE)
         val profileId = intent.getStringExtra(EXTRA_PROFILE_ID).orEmpty().ifBlank { "default" }
         setContent {
             MaterialTheme {
                 Surface(color = AstraWaveColors.Background) {
-                    TvListDetailScreen(title, reason, query, genre, profileId) { finish() }
+                    TvListDetailScreen(title, reason, query, queries, genre, profileId) { finish() }
                 }
             }
         }
@@ -64,6 +65,7 @@ class TvListDetailActivity : ComponentActivity() {
         const val EXTRA_TITLE = "list_title"
         const val EXTRA_REASON = "list_reason"
         const val EXTRA_QUERY = "list_query"
+        const val EXTRA_QUERIES = "list_queries"
         const val EXTRA_GENRE = "list_genre"
         const val EXTRA_PROFILE_ID = "profile_id"
     }
@@ -74,6 +76,7 @@ private fun TvListDetailScreen(
     title: String,
     reason: String,
     query: String?,
+    queries: List<String>,
     genre: String?,
     profileId: String,
     onBack: () -> Unit,
@@ -85,16 +88,18 @@ private fun TvListDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var items by remember { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
 
-    LaunchedEffect(title, query, genre) {
+    LaunchedEffect(title, query, queries, genre) {
         loading = true
         error = null
         items = runCatching {
             withContext(Dispatchers.IO) {
+                val seeds = (queries + listOfNotNull(query)).map(String::trim).filter(String::isNotBlank).distinctBy { it.lowercase() }
                 when {
                     !genre.isNullOrBlank() -> dynamic.genre(DynamicCollectionRepository.Media.SERIES, genre, pages = 3)
-                    !query.isNullOrBlank() -> metadata.search(query)
+                    seeds.isNotEmpty() -> seeds.flatMap { metadata.search(it) }
                     else -> metadata.search(title)
-                }.filter { it.type.equals("series", true) || it.type.equals("tv", true) || it.type.isBlank() }
+                }
+                    .filter { it.type.equals("series", true) || it.type.equals("tv", true) || it.type.isBlank() }
                     .distinctBy { it.id }
                     .take(60)
                     .onEach { ArtworkRegistry.register(it.name, it.posterUrl ?: it.backdropUrl) }
@@ -109,8 +114,9 @@ private fun TvListDetailScreen(
     ) {
         AstraWavePageHeader(title = title, subtitle = reason.ifBlank { "AstraWave TV collection" })
         Spacer(Modifier.height(10.dp))
-        AstraWaveSecondaryButton(label = "← Back to show details", onClick = onBack)
+        AstraWaveSecondaryButton(label = "← Back", onClick = onBack)
         Spacer(Modifier.height(18.dp))
+
         when {
             loading -> AstraWaveStatePanel("Loading $title…", "Finding matching shows.", loading = true)
             error != null -> AstraWaveStatePanel("List unavailable", error.orEmpty())
@@ -118,7 +124,10 @@ private fun TvListDetailScreen(
             else -> {
                 Text("${items.size} shows", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     items.forEach { item ->
                         AstraWaveFocusableCard(
                             Modifier.width(170.dp).clickable {
@@ -126,16 +135,23 @@ private fun TvListDetailScreen(
                                     Intent(context, TitleDetailsActivity::class.java)
                                         .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
                                         .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "SERIES")
-                                        .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, if (item.id.startsWith("tt", true)) "stremio:cinemeta:series:${item.id}" else "tmdb:${item.id}")
+                                        .putExtra(
+                                            TitleDetailsActivity.EXTRA_SOURCE_ID,
+                                            if (item.id.startsWith("tt", true)) "stremio:cinemeta:series:${item.id}" else "tmdb:${item.id}",
+                                        )
                                         .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
                                 )
                             },
                         ) {
                             Column {
-                                Box(Modifier.fillMaxWidth().height(240.dp)) { AstraWaveArtwork(item.name, Modifier.fillMaxSize()) }
+                                Box(Modifier.fillMaxWidth().height(240.dp)) {
+                                    AstraWaveArtwork(item.name, Modifier.fillMaxSize())
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                                item.releaseInfo?.let { Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium) }
+                                item.releaseInfo?.let {
+                                    Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+                                }
                             }
                         }
                     }
