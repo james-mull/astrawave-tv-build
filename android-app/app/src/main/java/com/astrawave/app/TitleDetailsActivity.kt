@@ -38,6 +38,7 @@ import com.astrawave.app.data.StremioSeriesEpisodeRepository
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.data.TmdbSeriesEpisodeRepository
 import com.astrawave.app.data.TmdbTitleDetails
+import com.astrawave.app.data.TvDetailContextRepository
 import com.astrawave.app.data.UnifiedVodSourceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -138,6 +139,7 @@ private fun TitleDetailsScreen(
     val stremioEpisodeRepository = remember { StremioSeriesEpisodeRepository() }
     val nativeEpisodeRepository = remember { TmdbSeriesEpisodeRepository() }
     val movieContextRepository = remember { MovieDetailContextRepository() }
+    val tvContextRepository = remember { TvDetailContextRepository() }
     val localLibrary = remember { LocalLibraryStore(context) }
     val tmdbToken = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val tmdbRepository = remember(tmdbToken) { TmdbCatalogRepository(tmdbToken) }
@@ -152,9 +154,11 @@ private fun TitleDetailsScreen(
     var episodeLoading by remember { mutableStateOf(false) }
     var detailsLoading by remember { mutableStateOf(tmdbId != null && tmdbRepository.isConfigured()) }
     var movieContextLoading by remember { mutableStateOf(!seriesMode && tmdbId != null) }
+    var tvContextLoading by remember { mutableStateOf(seriesMode && tmdbId != null) }
     var error by remember { mutableStateOf<String?>(null) }
     var details by remember { mutableStateOf<TmdbTitleDetails?>(null) }
     var movieContext by remember { mutableStateOf(MovieDetailContextRepository.Context()) }
+    var tvContext by remember { mutableStateOf(TvDetailContextRepository.Context()) }
     var sources by remember { mutableStateOf<List<ResolvedSource>>(emptyList()) }
     var episodes by remember { mutableStateOf<List<StremioEpisode>>(emptyList()) }
     var selectedEpisode by remember { mutableStateOf<StremioEpisode?>(null) }
@@ -182,6 +186,18 @@ private fun TitleDetailsScreen(
             runCatching { movieContextRepository.load(tmdbId) }.getOrDefault(MovieDetailContextRepository.Context())
         }
         movieContextLoading = false
+    }
+
+    LaunchedEffect(tmdbId, seriesMode) {
+        if (!seriesMode || tmdbId == null) {
+            tvContextLoading = false
+            return@LaunchedEffect
+        }
+        tvContextLoading = true
+        tvContext = withContext(Dispatchers.IO) {
+            runCatching { tvContextRepository.load(tmdbId) }.getOrDefault(TvDetailContextRepository.Context())
+        }
+        tvContextLoading = false
     }
 
     LaunchedEffect(hasEpisodeCatalog, stremioId, tmdbId, refreshToken) {
@@ -284,21 +300,21 @@ private fun TitleDetailsScreen(
                     movieContextLoading -> LoadingRow("Finding AstraWave lists, related movies and franchises…")
                     movieContext.lists.isNotEmpty() -> MovieListMembershipPanel(movieContext.lists, profileId)
                 }
-                movieContext.collection?.let { collection ->
-                    MovieCollectionPanel(collection, tmdbId?.toString(), profileId)
+                movieContext.collection?.let { MovieCollectionPanel(it, tmdbId?.toString(), profileId) }
+                movieContext.universe?.takeIf { it.parts.isNotEmpty() }?.let { MovieUniversePanel(it, tmdbId?.toString(), profileId) }
+                movieContext.related.similar.takeIf { it.isNotEmpty() }?.let { RelatedMoviePanel("Similar Movies", "Movies with related themes, audiences and metadata", it, profileId) }
+                movieContext.related.director?.takeIf { it.movies.isNotEmpty() }?.let { RelatedMoviePanel("More From ${it.name}", "Other movies directed by ${it.name}", it.movies, profileId) }
+                movieContext.related.actor?.takeIf { it.movies.isNotEmpty() }?.let { RelatedMoviePanel("More With ${it.name}", "Other movies featuring ${it.name}", it.movies, profileId) }
+            } else {
+                when {
+                    tvContextLoading -> LoadingRow("Finding AstraWave TV lists, related shows and universes…")
+                    tvContext.lists.isNotEmpty() -> TvListMembershipPanel(tvContext.lists, profileId)
                 }
-                movieContext.universe?.takeIf { it.parts.isNotEmpty() }?.let { universe ->
-                    MovieUniversePanel(universe, tmdbId?.toString(), profileId)
-                }
-                movieContext.related.similar.takeIf { it.isNotEmpty() }?.let {
-                    RelatedMoviePanel("Similar Movies", "Movies with related themes, audiences and metadata", it, profileId)
-                }
-                movieContext.related.director?.takeIf { it.movies.isNotEmpty() }?.let {
-                    RelatedMoviePanel("More From ${it.name}", "Other movies directed by ${it.name}", it.movies, profileId)
-                }
-                movieContext.related.actor?.takeIf { it.movies.isNotEmpty() }?.let {
-                    RelatedMoviePanel("More With ${it.name}", "Other movies featuring ${it.name}", it.movies, profileId)
-                }
+                if (tvContext.networks.isNotEmpty()) TvNetworksPanel(tvContext.networks, profileId)
+                tvContext.universe?.takeIf { it.parts.isNotEmpty() }?.let { TvUniversePanel(it, tmdbId?.toString(), profileId) }
+                tvContext.related.similar.takeIf { it.isNotEmpty() }?.let { RelatedShowPanel("Similar Shows", "Shows with related themes, audiences and metadata", it, profileId) }
+                tvContext.related.creator?.takeIf { it.shows.isNotEmpty() }?.let { RelatedShowPanel("More From ${it.name}", "Other series from creator ${it.name}", it.shows, profileId) }
+                tvContext.related.actor?.takeIf { it.shows.isNotEmpty() }?.let { RelatedShowPanel("More With ${it.name}", "Other series featuring ${it.name}", it.shows, profileId) }
             }
 
             details?.videos
@@ -397,10 +413,7 @@ private fun TitleDetailsScreen(
 @Composable
 private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.ListMembership>, profileId: String) {
     val context = LocalContext.current
-    Column(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("In These AstraWave Lists", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text("Tap any list to jump directly into that collection.", color = DetailsMuted, fontSize = 12.sp)
         lists.forEach { item ->
@@ -428,15 +441,38 @@ private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.Li
 }
 
 @Composable
-private fun MovieCollectionPanel(
-    collection: MovieDetailContextRepository.MovieCollection,
-    currentMovieId: String?,
-    profileId: String,
-) {
-    Column(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+private fun TvListMembershipPanel(lists: List<TvDetailContextRepository.ListMembership>, profileId: String) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("In These AstraWave TV Lists", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Genre, creator, network, era and universe lists are directly browsable.", color = DetailsMuted, fontSize = 12.sp)
+        lists.forEach { item ->
+            Row(
+                Modifier.fillMaxWidth().clickable {
+                    context.startActivity(
+                        Intent(context, TvListDetailActivity::class.java)
+                            .putExtra(TvListDetailActivity.EXTRA_TITLE, item.title)
+                            .putExtra(TvListDetailActivity.EXTRA_REASON, item.reason)
+                            .putExtra(TvListDetailActivity.EXTRA_QUERY, item.query)
+                            .putExtra(TvListDetailActivity.EXTRA_GENRE, item.genre)
+                            .putExtra(TvListDetailActivity.EXTRA_PROFILE_ID, profileId),
+                    )
+                }.padding(vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(item.title, color = DetailsAccent, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.42f))
+                Column(Modifier.weight(0.58f)) {
+                    Text("${item.category} • Open list →", color = DetailsPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (item.reason.isNotBlank()) Text(item.reason, color = DetailsMuted, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieCollectionPanel(collection: MovieDetailContextRepository.MovieCollection, currentMovieId: String?, profileId: String) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Movie Series / Collection", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(collection.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text("${collection.parts.size} movie${if (collection.parts.size == 1) "" else "s"} • official collection • release order", color = DetailsMuted, fontSize = 12.sp)
@@ -445,37 +481,18 @@ private fun MovieCollectionPanel(
 }
 
 @Composable
-private fun MovieUniversePanel(
-    universe: MovieDetailContextRepository.MovieUniverse,
-    currentMovieId: String?,
-    profileId: String,
-) {
-    Column(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+private fun MovieUniversePanel(universe: MovieDetailContextRepository.MovieUniverse, currentMovieId: String?, profileId: String) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Connected Universe", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(universe.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text(
-            if (universe.editorial) "AstraWave editorial universe grouping • broader than one official TMDB collection" else "Connected collection",
-            color = DetailsMuted,
-            fontSize = 12.sp,
-        )
+        Text(if (universe.editorial) "AstraWave editorial universe grouping • broader than one official TMDB collection" else "Connected collection", color = DetailsMuted, fontSize = 12.sp)
         MovieCards(universe.parts, currentMovieId, profileId)
     }
 }
 
 @Composable
-private fun RelatedMoviePanel(
-    title: String,
-    subtitle: String,
-    movies: List<MovieDetailContextRepository.CollectionMovie>,
-    profileId: String,
-) {
-    Column(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+private fun RelatedMoviePanel(title: String, subtitle: String, movies: List<MovieDetailContextRepository.CollectionMovie>, profileId: String) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(subtitle, color = DetailsMuted, fontSize = 12.sp)
         MovieCards(movies, null, profileId)
@@ -483,11 +500,7 @@ private fun RelatedMoviePanel(
 }
 
 @Composable
-private fun MovieCards(
-    movies: List<MovieDetailContextRepository.CollectionMovie>,
-    currentMovieId: String?,
-    profileId: String,
-) {
+private fun MovieCards(movies: List<MovieDetailContextRepository.CollectionMovie>, currentMovieId: String?, profileId: String) {
     val context = LocalContext.current
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         movies.forEachIndexed { index, movie ->
@@ -511,9 +524,88 @@ private fun MovieCards(
                 )
                 Text("${index + 1}. ${movie.title}", color = DetailsPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val year = movie.releaseDate?.take(4)
+                Text(listOfNotNull(year, if (movie.id == currentMovieId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" }, color = if (movie.id == currentMovieId) DetailsSuccess else DetailsMuted, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvNetworksPanel(networks: List<TvDetailContextRepository.Network>, profileId: String) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Networks & Studios", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Tap a network to browse more series associated with it.", color = DetailsMuted, fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            networks.forEach { network ->
+                Column(
+                    Modifier.width(150.dp).clickable {
+                        context.startActivity(
+                            Intent(context, TvListDetailActivity::class.java)
+                                .putExtra(TvListDetailActivity.EXTRA_TITLE, "${network.name} Shows")
+                                .putExtra(TvListDetailActivity.EXTRA_REASON, "Series associated with ${network.name}")
+                                .putExtra(TvListDetailActivity.EXTRA_QUERY, network.name)
+                                .putExtra(TvListDetailActivity.EXTRA_PROFILE_ID, profileId),
+                        )
+                    }.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (!network.logoUrl.isNullOrBlank()) {
+                        AsyncImage(model = network.logoUrl, contentDescription = network.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(62.dp))
+                    }
+                    Text(network.name, color = DetailsAccent, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvUniversePanel(universe: TvDetailContextRepository.Universe, currentShowId: String?, profileId: String) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Connected Universe / Spinoffs", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(universe.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text("AstraWave editorial relationship grouping for connected series and spinoffs.", color = DetailsMuted, fontSize = 12.sp)
+        ShowCards(universe.parts, currentShowId, profileId)
+    }
+}
+
+@Composable
+private fun RelatedShowPanel(title: String, subtitle: String, shows: List<TvDetailContextRepository.ShowItem>, profileId: String) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = DetailsMuted, fontSize = 12.sp)
+        ShowCards(shows, null, profileId)
+    }
+}
+
+@Composable
+private fun ShowCards(shows: List<TvDetailContextRepository.ShowItem>, currentShowId: String?, profileId: String) {
+    val context = LocalContext.current
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        shows.forEach { show ->
+            Column(
+                Modifier.width(150.dp).clickable {
+                    context.startActivity(
+                        Intent(context, TitleDetailsActivity::class.java)
+                            .putExtra(TitleDetailsActivity.EXTRA_TITLE, show.title)
+                            .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "SERIES")
+                            .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, "tmdb:${show.id}")
+                            .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+                    )
+                },
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AsyncImage(
+                    model = show.posterUrl ?: show.backdropUrl,
+                    contentDescription = show.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(210.dp).background(Color(0xFF202736), RoundedCornerShape(12.dp)),
+                )
+                Text(show.title, color = DetailsPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
-                    listOfNotNull(year, if (movie.id == currentMovieId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" },
-                    color = if (movie.id == currentMovieId) DetailsSuccess else DetailsMuted,
+                    listOfNotNull(show.firstAirDate?.take(4), if (show.id == currentShowId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" },
+                    color = if (show.id == currentShowId) DetailsSuccess else DetailsMuted,
                     fontSize = 11.sp,
                 )
             }
@@ -523,10 +615,7 @@ private fun MovieCards(
 
 @Composable
 private fun PremiumInfoPanel(details: TmdbTitleDetails, seriesMode: Boolean) {
-    Column(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(if (seriesMode) "SERIES" else "MOVIE", color = DetailsAccent, fontSize = 11.sp, fontWeight = FontWeight.Black)
         Text(details.title, color = DetailsPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         val metadata = buildList {
@@ -538,13 +627,7 @@ private fun PremiumInfoPanel(details: TmdbTitleDetails, seriesMode: Boolean) {
         Text(details.overview.ifBlank { "No synopsis is available yet." }, color = DetailsPrimary, fontSize = 14.sp, lineHeight = 21.sp)
         val creators = details.crew.take(4)
         if (creators.isNotEmpty()) {
-            Text(
-                creators.joinToString("  •  ") { person -> listOfNotNull(person.name, person.role).joinToString(" — ") },
-                color = DetailsMuted,
-                fontSize = 12.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Text(creators.joinToString("  •  ") { person -> listOfNotNull(person.name, person.role).joinToString(" — ") }, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (details.cast.isNotEmpty()) {
             Text("Top Cast", color = DetailsPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -555,10 +638,7 @@ private fun PremiumInfoPanel(details: TmdbTitleDetails, seriesMode: Boolean) {
 
 @Composable
 private fun InfoPanel(title: String, year: Int?, seriesMode: Boolean) {
-    Column(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(if (seriesMode) "SERIES" else "MOVIE", color = DetailsAccent, fontSize = 11.sp, fontWeight = FontWeight.Black)
         Text(title, color = DetailsPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         year?.let { Text(it.toString(), color = DetailsMuted, fontSize = 14.sp) }
@@ -607,12 +687,7 @@ private fun SeriesEpisodeBrowser(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (!episode.thumbnail.isNullOrBlank()) {
-                AsyncImage(
-                    model = episode.thumbnail,
-                    contentDescription = episode.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.width(150.dp).height(84.dp).background(Color(0xFF202736), RoundedCornerShape(10.dp)),
-                )
+                AsyncImage(model = episode.thumbnail, contentDescription = episode.title, contentScale = ContentScale.Crop, modifier = Modifier.width(150.dp).height(84.dp).background(Color(0xFF202736), RoundedCornerShape(10.dp)))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("S${episode.season} E${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
@@ -635,10 +710,7 @@ private fun SeriesEpisodeBrowser(
 
 @Composable
 private fun EmptyPanel(title: String, message: String) {
-    Column(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(18.dp)).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(18.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, color = DetailsPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(message, color = DetailsMuted, fontSize = 13.sp)
     }
@@ -651,10 +723,9 @@ private fun SourceCard(index: Int, source: ResolvedSource, onPlay: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Box(
-            Modifier.size(42.dp).background(if (index == 0) DetailsAccent else Color(0xFF202736), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White) }
+        Box(Modifier.size(42.dp).background(if (index == 0) DetailsAccent else Color(0xFF202736), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(source.link.sourceName, color = DetailsPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
