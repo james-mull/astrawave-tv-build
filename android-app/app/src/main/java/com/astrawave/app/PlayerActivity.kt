@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
+import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LocalLibraryStore
 
 class PlayerActivity : ComponentActivity() {
@@ -25,6 +26,7 @@ class PlayerActivity : ComponentActivity() {
     private var lastKnownPositionMs: Long = 0L
     private var historyRecorded = false
     private var libraryStore: LocalLibraryStore? = null
+    private var cloudStore: FirebaseCloudRepository? = null
     private var libraryItem: LibraryItemRef? = null
     private var profileId: String = DEFAULT_PROFILE_ID
 
@@ -40,6 +42,7 @@ class PlayerActivity : ComponentActivity() {
         libraryItem = intentLibraryItem()
         if (libraryItem != null) {
             libraryStore = LocalLibraryStore(this)
+            cloudStore = FirebaseCloudRepository(this)
             resumePositionMs = libraryStore
                 ?.progress(profileId)
                 ?.firstOrNull { it.item.id == libraryItem?.id }
@@ -78,11 +81,7 @@ class PlayerActivity : ComponentActivity() {
                     when {
                         retryCountForCurrentStream < MAX_RETRIES_PER_STREAM -> {
                             retryCountForCurrentStream += 1
-                            Toast.makeText(
-                                this@PlayerActivity,
-                                "Stream interrupted. Reconnecting…",
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            Toast.makeText(this@PlayerActivity, "Stream interrupted. Reconnecting…", Toast.LENGTH_SHORT).show()
                             playCurrent(exo, lastKnownPositionMs)
                         }
                         streamIndex + 1 < streamUrls.size -> {
@@ -97,11 +96,7 @@ class PlayerActivity : ComponentActivity() {
                         }
                         else -> {
                             persistProgress(exo)
-                            Toast.makeText(
-                                this@PlayerActivity,
-                                "All available streams for this channel failed.",
-                                Toast.LENGTH_LONG,
-                            ).show()
+                            Toast.makeText(this@PlayerActivity, "All available streams for this channel failed.", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -135,7 +130,16 @@ class PlayerActivity : ComponentActivity() {
         val duration = active.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: return
         val position = maxOf(lastKnownPositionMs, active.currentPosition.coerceAtLeast(0L))
         if (position <= 0L) return
-        libraryStore?.saveProgress(profileId, item, position.coerceAtMost(duration), duration)
+        val savedPosition = position.coerceAtMost(duration)
+        libraryStore?.saveProgress(profileId, item, savedPosition, duration)
+        cloudStore?.takeIf { it.signedIn }?.saveProgress(
+            mediaId = item.id,
+            kind = item.type.name,
+            title = item.title,
+            positionMs = savedPosition,
+            durationMs = duration,
+            profileId = profileId,
+        )
     }
 
     private fun intentLibraryItem(): LibraryItemRef? {
