@@ -58,20 +58,22 @@ class UnifiedSearchRepository(context: Context) {
         val metadataTask = async(Dispatchers.IO) { runCatching { searchMetadata(q) }.getOrDefault(emptyList()) }
         val libraryTask = async(Dispatchers.IO) { searchLibrary(q, profileId) }
         val listTask = async(Dispatchers.Default) { searchLists(q) }
-
-        val liveTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchLive(q, profileId) }.getOrDefault(emptyList()) }
-        val sportsTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchSports(q, profileId) }.getOrDefault(emptyList()) }
-        val audioTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchAudio(q) }.getOrDefault(emptyList()) }
-        val personalTask = if (restrictedToKids) null else async(Dispatchers.IO) { runCatching { searchPersonal(q, profileId) }.getOrDefault(emptyList()) }
+        val optionalTasks = if (restrictedToKids) {
+            emptyList()
+        } else {
+            listOf(
+                async(Dispatchers.IO) { runCatching { searchLive(q, profileId) }.getOrDefault(emptyList()) },
+                async(Dispatchers.IO) { runCatching { searchSports(q, profileId) }.getOrDefault(emptyList()) },
+                async(Dispatchers.IO) { runCatching { searchAudio(q) }.getOrDefault(emptyList()) },
+                async(Dispatchers.IO) { runCatching { searchPersonal(q, profileId) }.getOrDefault(emptyList()) },
+            )
+        }
 
         buildList {
             addAll(metadataTask.await())
             addAll(libraryTask.await())
             addAll(listTask.await())
-            liveTask?.let { addAll(it.await()) }
-            sportsTask?.let { addAll(it.await()) }
-            audioTask?.let { addAll(it.await()) }
-            personalTask?.let { addAll(it.await()) }
+            optionalTasks.forEach { addAll(it.await()) }
         }
             .distinctBy { "${it.kind}:${it.id}" }
             .sortedWith(compareByDescending<Result> { it.score }.thenBy { it.title.lowercase() })
