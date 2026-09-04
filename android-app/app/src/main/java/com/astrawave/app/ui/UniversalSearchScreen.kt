@@ -114,14 +114,21 @@ fun UniversalSearchScreen(profileId: String = "default") {
                                 val metadataResult = runCatching { metadataRepository.search(trimmed) }
                                 val rawItems = metadataResult.getOrDefault(emptyList())
                                 val safeItems = if (isKids) {
+                                    val movieItems = rawItems.filter { it.mediaType.equals("movie", true) }
+                                    val seriesItems = rawItems.filterNot { it.mediaType.equals("movie", true) }
+                                    val movieRatings = kidsRating.ratings(
+                                        DynamicCollectionRepository.Media.MOVIE,
+                                        movieItems.map { it.id.toString() },
+                                    )
+                                    val seriesRatings = kidsRating.ratings(
+                                        DynamicCollectionRepository.Media.SERIES,
+                                        seriesItems.map { it.id.toString() },
+                                    )
                                     rawItems.filter { item ->
-                                        val media = if (item.mediaType.equals("movie", true)) {
-                                            DynamicCollectionRepository.Media.MOVIE
-                                        } else {
-                                            DynamicCollectionRepository.Media.SERIES
-                                        }
-                                        val rating = kidsRating.rating(media, item.id.toString()).rating
-                                        kidsPolicyStore.ratingAllowed(profileId, rating, item.id.toString())
+                                        val movie = item.mediaType.equals("movie", true)
+                                        val id = item.id.toString()
+                                        val rating = if (movie) movieRatings[id]?.rating else seriesRatings[id]?.rating
+                                        kidsPolicyStore.ratingAllowed(profileId, rating, id)
                                     }
                                 } else rawItems
                                 val addonResult = if (isKids) Result.success(emptyList()) else runCatching { addonSearch.search(trimmed, profileId) }
