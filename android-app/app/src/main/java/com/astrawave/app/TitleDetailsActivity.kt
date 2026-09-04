@@ -21,14 +21,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.astrawave.app.core.ScrapeRequest
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.LocalLibraryStore
+import com.astrawave.app.data.MovieDetailContextRepository
 import com.astrawave.app.data.ResolvedSource
 import com.astrawave.app.data.StremioEpisode
 import com.astrawave.app.data.StremioSeriesEpisodeRepository
@@ -53,6 +56,7 @@ class TitleDetailsActivity : ComponentActivity() {
         val year = intent.getIntExtra(EXTRA_YEAR, 0).takeIf { it > 0 }
         val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE)
         val sourceId = intent.getStringExtra(EXTRA_SOURCE_ID)
+        val profileId = intent.getStringExtra(EXTRA_PROFILE_ID).orEmpty().ifBlank { "default" }
         val stremioIdentity = parseStremioIdentity(sourceId)
         val tmdbId = parseTmdbId(sourceId)
 
@@ -66,12 +70,11 @@ class TitleDetailsActivity : ComponentActivity() {
                         stremioType = stremioIdentity?.first,
                         stremioId = stremioIdentity?.second,
                         tmdbId = tmdbId,
+                        profileId = profileId,
                         onBack = { finish() },
                         onPlay = { urls, episode ->
                             if (urls.isEmpty()) return@TitleDetailsScreen
-                            val playbackTitle = episode?.let {
-                                "$title — S${it.season}E${it.episode} ${it.title}"
-                            } ?: title
+                            val playbackTitle = episode?.let { "$title — S${it.season}E${it.episode} ${it.title}" } ?: title
                             val baseId = sourceId?.takeIf { it.isNotBlank() }
                                 ?: "title:${title.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')}"
                             val playbackId = episode?.id?.takeIf { it.isNotBlank() } ?: baseId
@@ -82,7 +85,7 @@ class TitleDetailsActivity : ComponentActivity() {
                                     .putExtra(PlayerActivity.EXTRA_URL, urls.first())
                                     .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(urls))
                                     .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true)
-                                    .putExtra(PlayerActivity.EXTRA_PROFILE_ID, "default")
+                                    .putExtra(PlayerActivity.EXTRA_PROFILE_ID, profileId)
                                     .putExtra(PlayerActivity.EXTRA_LIBRARY_ID, playbackId)
                                     .putExtra(PlayerActivity.EXTRA_LIBRARY_TITLE, playbackTitle)
                                     .putExtra(PlayerActivity.EXTRA_LIBRARY_TYPE, playbackType)
@@ -100,6 +103,7 @@ class TitleDetailsActivity : ComponentActivity() {
         const val EXTRA_YEAR = "year"
         const val EXTRA_MEDIA_TYPE = "media_type"
         const val EXTRA_SOURCE_ID = "source_id"
+        const val EXTRA_PROFILE_ID = "profile_id"
 
         private fun parseStremioIdentity(sourceId: String?): Pair<String, String>? {
             if (sourceId?.startsWith("stremio:") != true) return null
@@ -125,6 +129,7 @@ private fun TitleDetailsScreen(
     stremioType: String?,
     stremioId: String?,
     tmdbId: Long?,
+    profileId: String,
     onBack: () -> Unit,
     onPlay: (List<String>, StremioEpisode?) -> Unit,
 ) {
@@ -132,10 +137,12 @@ private fun TitleDetailsScreen(
     val sourceRepository = remember { UnifiedVodSourceRepository(context) }
     val stremioEpisodeRepository = remember { StremioSeriesEpisodeRepository() }
     val nativeEpisodeRepository = remember { TmdbSeriesEpisodeRepository() }
+    val movieContextRepository = remember { MovieDetailContextRepository() }
     val localLibrary = remember { LocalLibraryStore(context) }
     val tmdbToken = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val tmdbRepository = remember(tmdbToken) { TmdbCatalogRepository(tmdbToken) }
-    val seriesMode = mediaType == "SERIES" || mediaType == "TV" || stremioType.equals("series", true) || stremioType.equals("tv", true)
+    val seriesMode = mediaType.equals("series", true) || mediaType.equals("tv", true) ||
+        stremioType.equals("series", true) || stremioType.equals("tv", true)
     val tmdbMediaType = if (seriesMode) "tv" else "movie"
     val hasEpisodeCatalog = seriesMode && (!stremioId.isNullOrBlank() || tmdbId != null)
 
@@ -144,8 +151,10 @@ private fun TitleDetailsScreen(
     var loading by remember { mutableStateOf(false) }
     var episodeLoading by remember { mutableStateOf(false) }
     var detailsLoading by remember { mutableStateOf(tmdbId != null && tmdbRepository.isConfigured()) }
+    var movieContextLoading by remember { mutableStateOf(!seriesMode && tmdbId != null) }
     var error by remember { mutableStateOf<String?>(null) }
     var details by remember { mutableStateOf<TmdbTitleDetails?>(null) }
+    var movieContext by remember { mutableStateOf(MovieDetailContextRepository.Context()) }
     var sources by remember { mutableStateOf<List<ResolvedSource>>(emptyList()) }
     var episodes by remember { mutableStateOf<List<StremioEpisode>>(emptyList()) }
     var selectedEpisode by remember { mutableStateOf<StremioEpisode?>(null) }
@@ -163,8 +172,20 @@ private fun TitleDetailsScreen(
         detailsLoading = false
     }
 
-    LaunchedEffect(sourcesMode, seriesMode, stremioId, tmdbId, refreshToken) {
-        if (!sourcesMode || !hasEpisodeCatalog) return@LaunchedEffect
+    LaunchedEffect(tmdbId, seriesMode) {
+        if (seriesMode || tmdbId == null) {
+            movieContextLoading = false
+            return@LaunchedEffect
+        }
+        movieContextLoading = true
+        movieContext = withContext(Dispatchers.IO) {
+            runCatching { movieContextRepository.load(tmdbId) }.getOrDefault(MovieDetailContextRepository.Context())
+        }
+        movieContextLoading = false
+    }
+
+    LaunchedEffect(hasEpisodeCatalog, stremioId, tmdbId, refreshToken) {
+        if (!hasEpisodeCatalog) return@LaunchedEffect
         episodeLoading = true
         val loaded = withContext(Dispatchers.IO) {
             when {
@@ -174,13 +195,11 @@ private fun TitleDetailsScreen(
             }
         }
         episodes = loaded
-        if (selectedSeason == 0 || loaded.none { it.season == selectedSeason }) {
-            selectedSeason = loaded.firstOrNull()?.season ?: 0
-        }
+        if (selectedSeason == 0 || loaded.none { it.season == selectedSeason }) selectedSeason = loaded.firstOrNull()?.season ?: 0
         episodeLoading = false
     }
 
-    LaunchedEffect(sourcesMode, title, year, stremioId, tmdbId, selectedEpisode, refreshToken) {
+    LaunchedEffect(sourcesMode, title, year, stremioId, selectedEpisode, refreshToken) {
         if (!sourcesMode || (hasEpisodeCatalog && selectedEpisode == null)) {
             loading = false
             sources = emptyList()
@@ -204,14 +223,20 @@ private fun TitleDetailsScreen(
                 mapOf("stremio_id" to exactId, "stremio_type" to exactType)
             } else emptyMap(),
         )
-        sources = runCatching { withContext(Dispatchers.IO) { sourceRepository.discover(request) } }
+        sources = runCatching { withContext(Dispatchers.IO) { sourceRepository.discover(request, profileId) } }
             .onFailure { error = it.message ?: "Source discovery failed" }
             .getOrDefault(emptyList())
         loading = false
     }
 
-    val progressByEpisode = remember(episodes, sourcesMode) {
-        localLibrary.progress("default").associateBy { it.item.id }
+    val progressByEpisode = remember(episodes, sourcesMode, profileId) {
+        localLibrary.progress(profileId).associateBy { it.item.id }
+    }
+    val firstUnwatched = remember(episodes, progressByEpisode) {
+        val ordered = episodes.filter { it.season > 0 && it.episode > 0 }
+            .sortedWith(compareBy<StremioEpisode> { it.season }.thenBy { it.episode })
+        ordered.firstOrNull { progressByEpisode[it.id]?.let { saved -> saved.positionMs > 0 && !saved.completed } == true }
+            ?: ordered.firstOrNull { progressByEpisode[it.id]?.completed != true }
     }
 
     Column(
@@ -226,9 +251,7 @@ private fun TitleDetailsScreen(
                     sources = emptyList()
                     error = null
                 } else onBack()
-            }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-            }
+            }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
             Column(Modifier.weight(1f)) {
                 Text(title, color = DetailsPrimary, fontSize = 28.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
@@ -246,9 +269,7 @@ private fun TitleDetailsScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (sourcesMode) {
-                IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh sources") }
-            }
+            if (sourcesMode) IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh sources") }
         }
 
         if (!sourcesMode) {
@@ -258,31 +279,53 @@ private fun TitleDetailsScreen(
                 else -> InfoPanel(title = title, year = year, seriesMode = seriesMode)
             }
 
+            if (!seriesMode) {
+                when {
+                    movieContextLoading -> LoadingRow("Finding AstraWave lists and movie series…")
+                    movieContext.lists.isNotEmpty() -> MovieListMembershipPanel(movieContext.lists)
+                }
+                movieContext.collection?.let { collection ->
+                    MovieCollectionPanel(
+                        collection = collection,
+                        currentMovieId = tmdbId?.toString(),
+                        profileId = profileId,
+                    )
+                }
+            }
+
             details?.videos
                 ?.firstOrNull { it.site.equals("YouTube", true) && (it.type.equals("Trailer", true) || it.official) }
                 ?.let { trailer ->
                     OutlinedButton(
-                        onClick = {
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}")))
-                            }
-                        },
+                        onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}"))) } },
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("▶ Watch Trailer")
-                    }
+                    ) { Text("▶ Watch Trailer") }
                 }
+
+            if (hasEpisodeCatalog && firstUnwatched != null) {
+                Button(
+                    onClick = {
+                        selectedSeason = firstUnwatched.season
+                        selectedEpisode = firstUnwatched
+                        sourcesMode = true
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    val saved = progressByEpisode[firstUnwatched.id]
+                    val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
+                    Text("$prefix Series • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}", fontWeight = FontWeight.Bold)
+                }
+            }
 
             Button(
                 onClick = { sourcesMode = true },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp),
-            ) {
-                Text(if (hasEpisodeCatalog) "Episodes & Sources" else "Find Watch Options", fontWeight = FontWeight.Bold)
-            }
+            ) { Text(if (hasEpisodeCatalog) "Browse All Episodes & Sources" else "Find Watch Options", fontWeight = FontWeight.Bold) }
             Text(
                 if (hasEpisodeCatalog) {
-                    "AstraWave loads native seasons and episodes, keeps resume state per episode, then ranks eligible sources when you choose an episode."
+                    "AstraWave picks the first unfinished episode, tracks each season separately, and uses watch state to choose a smarter Up Next episode."
                 } else {
                     "Playback discovery starts only when you ask for watch options. AstraWave ranks eligible healthy sources and automatically keeps backups ready."
                 },
@@ -294,7 +337,7 @@ private fun TitleDetailsScreen(
 
         Text(
             if (hasEpisodeCatalog) {
-                "Choose an episode, then AstraWave resolves that episode and ranks healthy eligible sources. Native TMDB shows use the same resume and Up Next pipeline as compatible Cinemeta series."
+                "Choose an episode, then AstraWave resolves that episode and ranks healthy eligible sources. Completed episodes are skipped when a later unwatched episode is available."
             } else {
                 "AstraWave checks approved sources and enabled addons, removes duplicates, verifies stream health, and ranks the best playable source first."
             },
@@ -316,9 +359,7 @@ private fun TitleDetailsScreen(
                 )
             }
         } else {
-            if (selectedEpisode != null) {
-                TextButton(onClick = { selectedEpisode = null; sources = emptyList(); error = null }) { Text("← Back to episodes") }
-            }
+            if (selectedEpisode != null) TextButton(onClick = { selectedEpisode = null; sources = emptyList(); error = null }) { Text("← Back to episodes") }
             when {
                 loading -> LoadingRow("Resolving playable sources…")
                 error != null -> Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
@@ -346,6 +387,73 @@ private fun TitleDetailsScreen(
 }
 
 @Composable
+private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.ListMembership>) {
+    Column(
+        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("In These AstraWave Lists", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Metadata-matched collections this movie belongs in across AstraWave.", color = DetailsMuted, fontSize = 12.sp)
+        lists.forEach { item ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(item.title, color = DetailsAccent, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.42f))
+                Column(Modifier.weight(0.58f)) {
+                    Text(item.category, color = DetailsPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (item.reason.isNotBlank()) Text(item.reason, color = DetailsMuted, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieCollectionPanel(
+    collection: MovieDetailContextRepository.MovieCollection,
+    currentMovieId: String?,
+    profileId: String,
+) {
+    val context = LocalContext.current
+    Column(
+        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Movie Series / Collection", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(collection.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text("${collection.parts.size} movie${if (collection.parts.size == 1) "" else "s"} • release order", color = DetailsMuted, fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            collection.parts.forEachIndexed { index, movie ->
+                Column(
+                    Modifier.width(150.dp).clickable {
+                        context.startActivity(
+                            Intent(context, TitleDetailsActivity::class.java)
+                                .putExtra(TitleDetailsActivity.EXTRA_TITLE, movie.title)
+                                .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "MOVIE")
+                                .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, "tmdb:${movie.id}")
+                                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+                        )
+                    },
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AsyncImage(
+                        model = movie.posterUrl ?: movie.backdropUrl,
+                        contentDescription = movie.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().height(210.dp).background(Color(0xFF202736), RoundedCornerShape(12.dp)),
+                    )
+                    Text("${index + 1}. ${movie.title}", color = DetailsPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    val year = movie.releaseDate?.take(4)
+                    Text(
+                        listOfNotNull(year, if (movie.id == currentMovieId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" },
+                        color = if (movie.id == currentMovieId) DetailsSuccess else DetailsMuted,
+                        fontSize = 11.sp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun PremiumInfoPanel(details: TmdbTitleDetails, seriesMode: Boolean) {
     Column(
         Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp),
@@ -358,15 +466,8 @@ private fun PremiumInfoPanel(details: TmdbTitleDetails, seriesMode: Boolean) {
             details.runtimeMinutes?.let { add("${it} min") }
             if (details.genres.isNotEmpty()) add(details.genres.take(3).joinToString(" • "))
         }
-        if (metadata.isNotEmpty()) {
-            Text(metadata.joinToString("  •  "), color = DetailsMuted, fontSize = 13.sp)
-        }
-        Text(
-            details.overview.ifBlank { "No synopsis is available yet." },
-            color = DetailsPrimary,
-            fontSize = 14.sp,
-            lineHeight = 21.sp,
-        )
+        if (metadata.isNotEmpty()) Text(metadata.joinToString("  •  "), color = DetailsMuted, fontSize = 13.sp)
+        Text(details.overview.ifBlank { "No synopsis is available yet." }, color = DetailsPrimary, fontSize = 14.sp, lineHeight = 21.sp)
         val creators = details.crew.take(4)
         if (creators.isNotEmpty()) {
             Text(
@@ -378,15 +479,8 @@ private fun PremiumInfoPanel(details: TmdbTitleDetails, seriesMode: Boolean) {
             )
         }
         if (details.cast.isNotEmpty()) {
-            Spacer(Modifier.height(3.dp))
             Text("Top Cast", color = DetailsPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(
-                details.cast.take(8).joinToString("  •  ") { it.name },
-                color = DetailsMuted,
-                fontSize = 12.sp,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Text(details.cast.take(8).joinToString("  •  ") { it.name }, color = DetailsMuted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -429,30 +523,44 @@ private fun SeriesEpisodeBrowser(
     val seasons = episodes.map { it.season }.filter { it > 0 }.distinct().sorted()
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         seasons.forEach { season ->
-            if (season == selectedSeason) Button(onClick = { onSeason(season) }) { Text("Season $season") }
-            else OutlinedButton(onClick = { onSeason(season) }) { Text("Season $season") }
+            val seasonEpisodes = episodes.filter { it.season == season }
+            val completed = seasonEpisodes.count { progress[it.id]?.completed == true }
+            val label = "Season $season • $completed/${seasonEpisodes.size}"
+            if (season == selectedSeason) Button(onClick = { onSeason(season) }) { Text(label) }
+            else OutlinedButton(onClick = { onSeason(season) }) { Text(label) }
         }
     }
     episodes.filter { it.season == selectedSeason }.forEach { episode ->
         val saved = progress[episode.id]
         val percent = saved?.takeIf { it.durationMs > 0L }?.let { ((it.positionMs * 100L) / it.durationMs).coerceIn(0L, 100L) }
-        Column(
-            Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(16.dp)).clickable { onEpisode(episode) }.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+        Row(
+            Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(16.dp)).clickable { onEpisode(episode) }.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("S${episode.season} E${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
-            episode.released?.takeIf { it.isNotBlank() }?.let { Text(it.take(10), color = DetailsMuted, fontSize = 11.sp) }
-            episode.overview?.let { Text(it, color = DetailsMuted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
-            Text(
-                when {
-                    saved?.completed == true -> "Watched • Play again"
-                    percent != null && percent > 0 -> "Resume • $percent% watched"
-                    else -> "Resolve episode sources"
-                },
-                color = if (percent != null && percent > 0) DetailsSuccess else DetailsAccent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            if (!episode.thumbnail.isNullOrBlank()) {
+                AsyncImage(
+                    model = episode.thumbnail,
+                    contentDescription = episode.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.width(150.dp).height(84.dp).background(Color(0xFF202736), RoundedCornerShape(10.dp)),
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("S${episode.season} E${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
+                episode.released?.takeIf { it.isNotBlank() }?.let { Text(it.take(10), color = DetailsMuted, fontSize = 11.sp) }
+                episode.overview?.let { Text(it, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                Text(
+                    when {
+                        saved?.completed == true -> "Watched • Play again"
+                        percent != null && percent > 0 -> "Resume • $percent% watched"
+                        else -> "Play episode"
+                    },
+                    color = if (percent != null && percent > 0) DetailsSuccess else DetailsAccent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }
