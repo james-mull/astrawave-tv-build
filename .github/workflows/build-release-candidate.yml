@@ -84,10 +84,24 @@ jobs:
         run: python3 astrawave-free-tv/check_free_tv.py
 
       - name: Debug lint
-        run: gradle --no-daemon --stacktrace :app:lintDebug
+        shell: bash
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace :app:lintDebug
+          status=$?
+          echo "===== FULL DEBUG LINT REPORTS ====="
+          find app/build/intermediates -name 'lint-results-*.txt' -type f -print -exec cat {} \; || true
+          exit "$status"
 
       - name: Release lint
-        run: gradle --no-daemon --stacktrace :app:lintRelease
+        shell: bash
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace :app:lintRelease
+          status=$?
+          echo "===== FULL RELEASE LINT REPORTS ====="
+          find app/build/intermediates -name 'lint-results-*.txt' -type f -print -exec cat {} \; || true
+          exit "$status"
 
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
