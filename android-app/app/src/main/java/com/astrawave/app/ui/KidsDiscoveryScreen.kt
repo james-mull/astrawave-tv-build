@@ -91,19 +91,24 @@ fun KidsDiscoveryScreen(
             states[genre] = KidsRowState.Loading
             states[genre] = try {
                 val items = withContext(Dispatchers.IO) {
-                    repository.genre(media, genre, pages = 2)
+                    val candidates = repository.genre(media, genre, pages = 2)
                         .distinctBy { it.id }
                         .take(30)
-                        .map { item ->
-                            val approved = policyStore.isApproved(profileId, item.id)
-                            val rating = if (approved) null else ratingRepository.rating(media, item.id).rating
-                            KidsRatedItem(
-                                item = item,
-                                rating = rating,
-                                approved = approved,
-                                allowed = policyStore.ratingAllowed(profileId, rating, item.id),
-                            )
-                        }
+                    val unapprovedIds = candidates
+                        .filterNot { policyStore.isApproved(profileId, it.id) }
+                        .map { it.id }
+                    val ratings = ratingRepository.ratings(media, unapprovedIds)
+
+                    candidates.map { item ->
+                        val approved = policyStore.isApproved(profileId, item.id)
+                        val rating = if (approved) null else ratings[item.id]?.rating
+                        KidsRatedItem(
+                            item = item,
+                            rating = rating,
+                            approved = approved,
+                            allowed = policyStore.ratingAllowed(profileId, rating, item.id),
+                        )
+                    }
                         .filter { checked -> policy.approvedOnly || checked.allowed }
                         .take(24)
                         .onEach { ArtworkRegistry.register(it.item.name, it.item.posterUrl ?: it.item.backdropUrl) }
@@ -128,7 +133,7 @@ fun KidsDiscoveryScreen(
             if (policy.approvedOnly) {
                 "Unapproved titles stay locked until a parent enters the household Parent PIN."
             } else {
-                "US movie/TV certifications are checked when available. Titles above this profile's age tier are removed; parent approvals override the rating rule."
+                "US movie/TV certifications are checked in batches when available. Titles above this profile's age tier are removed; parent approvals override the rating rule."
             },
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.bodyMedium,
