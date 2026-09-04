@@ -8,6 +8,8 @@ on:
     paths:
       - "android-app/**"
       - "astrawave-free-tv/**"
+      - "docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md"
+      - "docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md"
       - ".github/workflows/build-release-candidate.yml"
 
 permissions:
@@ -49,9 +51,9 @@ jobs:
           test -f android-app/settings.gradle.kts
           test -f android-app/app/build.gradle.kts
           test -f android-app/app/src/main/AndroidManifest.xml
-          test -f astrwave-free-tv-does-not-exist 2>/dev/null && exit 1 || true
           test -f astrawave-free-tv/check_free_tv.py
           test -f docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md
+          test -f docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md
           echo "Validated branch=${GITHUB_REF_NAME} sha=${GITHUB_SHA}"
 
       - name: Set up Java
