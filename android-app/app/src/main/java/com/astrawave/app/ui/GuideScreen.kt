@@ -1,6 +1,7 @@
 package com.astrawave.app.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,6 +91,11 @@ fun AstraWaveGuideScreen(
         }
     }
 
+    fun openProvider(url: String) {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .onFailure { Toast.makeText(context, "Unable to open this provider.", Toast.LENGTH_LONG).show() }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -101,14 +107,14 @@ fun AstraWaveGuideScreen(
         Spacer(Modifier.height(5.dp))
         AstraWavePageHeader(
             title = "Guide",
-            subtitle = "A fast merged view across authorized AstraWave Free TV and your own IPTV sources.",
+            subtitle = "Direct authorized channels, premium free provider handoffs, and your own IPTV in one guide.",
         )
         Spacer(Modifier.height(22.dp))
 
         when (val current = state) {
             GuideLoadState.Loading -> AstraWaveLoadingState(
                 title = "Building your guide",
-                message = "Loading channel groups, current programs and available source matches.",
+                message = "Loading direct channels, official provider handoffs, current programs and source matches.",
             )
 
             is GuideLoadState.Error -> AstraWaveErrorState(
@@ -126,22 +132,26 @@ fun AstraWaveGuideScreen(
                 if (snapshot.rows.isEmpty()) {
                     AstraWaveEmptyState(
                         title = "No channels yet",
-                        message = "Add your own M3U/Xtream source in My IPTV, or use available authorized AstraWave Free TV feeds. The guide will populate when channel data is available.",
+                        message = "Add your own M3U/Xtream source in My IPTV, or use available authorized AstraWave Free TV feeds and provider handoffs.",
                     )
                 } else {
                     AstraWaveSectionHeader(
                         title = "Now on TV",
-                        subtitle = "Focus a channel to scan what is on now and next. Play is only shown when a healthy eligible stream is available.",
+                        subtitle = "Direct streams play in AstraWave. Official-provider channels open the authorized provider experience.",
                     )
                     Spacer(Modifier.height(12.dp))
 
-                    snapshot.rows.take(150).forEach { row ->
-                        val playableModifier = row.playableUrl?.let { url -> Modifier.clickable { play(url) } } ?: Modifier
+                    snapshot.rows.take(250).forEach { row ->
+                        val actionModifier = when {
+                            row.playableUrl != null -> Modifier.clickable { play(row.playableUrl) }
+                            row.externalUrl != null -> Modifier.clickable { openProvider(row.externalUrl) }
+                            else -> Modifier
+                        }
                         AstraWaveFocusableCard(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 5.dp)
-                                .then(playableModifier),
+                                .then(actionModifier),
                         ) {
                             Row(
                                 Modifier.fillMaxWidth(),
@@ -161,7 +171,7 @@ fun AstraWaveGuideScreen(
 
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        row.now?.title ?: "No current program data",
+                                        row.now?.title ?: if (row.externalUrl != null) "Official provider channel" else "No current program data",
                                         color = AstraWaveColors.PrimaryText,
                                         style = MaterialTheme.typography.titleMedium,
                                         maxLines = 2,
@@ -185,14 +195,19 @@ fun AstraWaveGuideScreen(
                                 }
 
                                 Column(horizontalAlignment = Alignment.End) {
+                                    val available = row.playableUrl != null || row.externalUrl != null
                                     Text(
-                                        if (row.playableUrl != null) "READY" else "UNAVAILABLE",
-                                        color = if (row.playableUrl != null) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
+                                        if (row.externalUrl != null) "OFFICIAL" else if (row.playableUrl != null) "READY" else "UNAVAILABLE",
+                                        color = if (available) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
                                         style = MaterialTheme.typography.labelMedium,
                                     )
                                     Spacer(Modifier.height(4.dp))
                                     Text(
-                                        if (row.playableUrl != null) "Play channel" else "${row.playableCandidateCount} candidates",
+                                        when {
+                                            row.externalUrl != null -> "Open provider"
+                                            row.playableUrl != null -> "Play channel"
+                                            else -> "${row.playableCandidateCount} candidates"
+                                        },
                                         color = AstraWaveColors.SecondaryText,
                                         style = MaterialTheme.typography.labelSmall,
                                     )
@@ -214,9 +229,9 @@ private fun GuideSummaryRail(snapshot: GuideSnapshot) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         GuideStatPill("CHANNELS", snapshot.sourceGroups.toString())
-        GuideStatPill("ASTRAWAVE FREE", snapshot.freeChannelCount.toString())
+        GuideStatPill("DIRECT FREE", snapshot.freeChannelCount.toString())
+        GuideStatPill("PREMIUM FREE", snapshot.handoffCount.toString())
         GuideStatPill("MY IPTV", snapshot.userChannelCount.toString())
-        GuideStatPill("MERGED", (snapshot.freeChannelCount + snapshot.userChannelCount).toString())
     }
 }
 
