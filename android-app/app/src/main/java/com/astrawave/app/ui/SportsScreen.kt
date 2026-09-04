@@ -82,14 +82,23 @@ fun AstraWaveSportsScreen(
         }
     }
 
-    fun play(url: String) {
+    fun play(urls: List<String>) {
         scope.launch {
-            val healthy = withContext(Dispatchers.IO) { StreamHealthChecker.check(url).reachable }
-            if (!healthy) {
-                Toast.makeText(context, "This sports stream is not reachable right now.", Toast.LENGTH_LONG).show()
+            val healthyUrls = withContext(Dispatchers.IO) {
+                urls.distinct().filter { url ->
+                    runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
+                }
+            }
+            if (healthyUrls.isEmpty()) {
+                Toast.makeText(context, "No working sports stream is reachable right now.", Toast.LENGTH_LONG).show()
                 return@launch
             }
-            context.startActivity(Intent(context, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, url))
+            context.startActivity(
+                Intent(context, PlayerActivity::class.java)
+                    .putExtra(PlayerActivity.EXTRA_URL, healthyUrls.first())
+                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(healthyUrls))
+                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+            )
         }
     }
 
@@ -246,7 +255,7 @@ private fun LeagueChip(label: String, selected: Boolean, onClick: () -> Unit) {
 fun AstraWaveFeaturedSportsCard(
     item: SportsGuideItem,
     multiviewCount: Int,
-    onPlay: (String) -> Unit,
+    onPlay: (List<String>) -> Unit,
     onAddToMultiview: (MultiviewPane) -> Unit,
 ) {
     val candidate = item.watchCandidate
@@ -282,7 +291,7 @@ fun AstraWaveFeaturedSportsCard(
 fun AstraWaveSportsScheduleCard(
     item: SportsGuideItem,
     multiviewCount: Int,
-    onPlay: (String) -> Unit,
+    onPlay: (List<String>) -> Unit,
     onAddToMultiview: (MultiviewPane) -> Unit,
 ) {
     AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -318,9 +327,14 @@ private fun SportsSourceStatus(item: SportsGuideItem) {
     val candidate = item.watchCandidate
     when {
         candidate != null -> {
+            val alternateCount = (item.resolution?.candidates?.size ?: 1) - 1
             Text("Watch on ${candidate.channelName}", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(2.dp))
-            Text(candidate.source, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+            Text(
+                if (alternateCount > 0) "${candidate.source} • $alternateCount backup stream${if (alternateCount == 1) "" else "s"}" else candidate.source,
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
         item.broadcasterNames.isNotEmpty() -> {
             Text(
@@ -342,14 +356,15 @@ private fun SportsSourceStatus(item: SportsGuideItem) {
 private fun SportsActions(
     item: SportsGuideItem,
     multiviewCount: Int,
-    onPlay: (String) -> Unit,
+    onPlay: (List<String>) -> Unit,
     onAddToMultiview: (MultiviewPane) -> Unit,
 ) {
     val candidate = item.watchCandidate ?: return
+    val urls = item.resolution?.candidates?.map { it.streamUrl }?.distinct().orEmpty().ifEmpty { listOf(candidate.streamUrl) }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         AstraWavePrimaryButton(
             label = "▶ Watch",
-            onClick = { onPlay(candidate.streamUrl) },
+            onClick = { onPlay(urls) },
         )
         AstraWaveSecondaryButton(
             label = if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
