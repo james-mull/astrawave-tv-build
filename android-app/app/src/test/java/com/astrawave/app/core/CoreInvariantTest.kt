@@ -1,8 +1,8 @@
 package com.astrawave.app.core
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CoreInvariantTest {
@@ -42,6 +42,20 @@ class CoreInvariantTest {
 
         assertFalse(snapshot.has(AstraWaveEntitlement.MULTIVIEW, atEpochMs = 1_001L))
         assertTrue(snapshot.has(AstraWaveEntitlement.MULTIVIEW, atEpochMs = 999L))
+    }
+
+    @Test
+    fun premiumPlanCarriesCommercialReliabilityEntitlements() {
+        val snapshot = AstraWaveEntitlementPolicy.snapshot(
+            userId = "premium-user",
+            plan = AstraWavePlan.PREMIUM,
+        )
+
+        assertEquals(19.99, AstraWavePlan.PREMIUM.monthlyPriceUsd ?: 0.0, 0.001)
+        assertTrue(snapshot.has(AstraWaveEntitlement.MULTIVIEW))
+        assertTrue(snapshot.has(AstraWaveEntitlement.ADVANCED_RECOMMENDATIONS))
+        assertTrue(snapshot.has(AstraWaveEntitlement.PRIORITY_SOURCE_FAILOVER))
+        assertTrue(snapshot.has(AstraWaveEntitlement.PREMIUM_SPORTS_HUB))
     }
 
     @Test
