@@ -43,6 +43,12 @@ class SportsGuideRepository(
     ): SportsGuideSnapshot {
         val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val live = combinedLiveTv.load(sources)
+        val healthCache = mutableMapOf<String, Boolean>()
+
+        fun reachable(url: String): Boolean = healthCache.getOrPut(url) {
+            runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
+        }
+
         val events = sportsDb.eventsForDay(dateText, sport).map { event ->
             val broadcasters = (
                 broadcasterProvider.broadcastersFor(event) +
@@ -67,12 +73,7 @@ class SportsGuideRepository(
                     broadcasterNames = broadcasters,
                 )
                 val matched = resolver.resolve(guideEvent, live.groups)
-                matched.copy(
-                    candidates = matched.candidates.filter { candidate ->
-                        runCatching { StreamHealthChecker.check(candidate.streamUrl).reachable }
-                            .getOrDefault(false)
-                    },
-                )
+                matched.copy(candidates = matched.candidates.filter { reachable(it.streamUrl) })
             }
             SportsGuideItem(event, broadcasters, resolution)
         }
