@@ -80,14 +80,24 @@ fun AstraWaveGuideScreen(
         }
     }
 
-    fun play(url: String) {
+    fun play(urls: List<String>) {
         scope.launch {
-            val healthy = withContext(Dispatchers.IO) { StreamHealthChecker.check(url).reachable }
-            if (!healthy) {
-                Toast.makeText(context, "This channel is not reachable right now.", Toast.LENGTH_LONG).show()
+            val healthy = withContext(Dispatchers.IO) {
+                urls.distinct().filter { url ->
+                    runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
+                }
+            }
+            if (healthy.isEmpty()) {
+                Toast.makeText(context, "No working stream is available for this channel right now.", Toast.LENGTH_LONG).show()
                 return@launch
             }
-            context.startActivity(Intent(context, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, url))
+            val candidates = ArrayList(healthy)
+            context.startActivity(
+                Intent(context, PlayerActivity::class.java)
+                    .putExtra(PlayerActivity.EXTRA_URL, candidates.first())
+                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, candidates)
+                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+            )
         }
     }
 
@@ -107,14 +117,14 @@ fun AstraWaveGuideScreen(
         Spacer(Modifier.height(5.dp))
         AstraWavePageHeader(
             title = "Guide",
-            subtitle = "Direct authorized channels, premium free provider handoffs, and your own IPTV in one guide.",
+            subtitle = "AstraWave Free TV, IPTV.org Public, official provider channels, and your own IPTV in one guide.",
         )
         Spacer(Modifier.height(22.dp))
 
         when (val current = state) {
             GuideLoadState.Loading -> AstraWaveLoadingState(
                 title = "Building your guide",
-                message = "Loading direct channels, official provider handoffs, current programs and source matches.",
+                message = "Loading direct channels, official provider handoffs, IPTV.org candidates, current programs and source matches.",
             )
 
             is GuideLoadState.Error -> AstraWaveErrorState(
@@ -132,18 +142,18 @@ fun AstraWaveGuideScreen(
                 if (snapshot.rows.isEmpty()) {
                     AstraWaveEmptyState(
                         title = "No channels yet",
-                        message = "Add your own M3U/Xtream source in My IPTV, or use available authorized AstraWave Free TV feeds and provider handoffs.",
+                        message = "Add your own M3U/Xtream source in My IPTV, or use AstraWave Free TV and IPTV.org Public candidates.",
                     )
                 } else {
                     AstraWaveSectionHeader(
                         title = "Now on TV",
-                        subtitle = "Direct streams play in AstraWave. Official-provider channels open the authorized provider experience.",
+                        subtitle = "Direct channels are health-checked when selected and AstraWave automatically tries healthy alternates.",
                     )
                     Spacer(Modifier.height(12.dp))
 
-                    snapshot.rows.take(250).forEach { row ->
+                    snapshot.rows.take(500).forEach { row ->
                         val actionModifier = when {
-                            row.playableUrl != null -> Modifier.clickable { play(row.playableUrl) }
+                            row.playableUrls.isNotEmpty() -> Modifier.clickable { play(row.playableUrls) }
                             row.externalUrl != null -> Modifier.clickable { openProvider(row.externalUrl) }
                             else -> Modifier
                         }
@@ -195,9 +205,9 @@ fun AstraWaveGuideScreen(
                                 }
 
                                 Column(horizontalAlignment = Alignment.End) {
-                                    val available = row.playableUrl != null || row.externalUrl != null
+                                    val available = row.playableUrls.isNotEmpty() || row.externalUrl != null
                                     Text(
-                                        if (row.externalUrl != null) "OFFICIAL" else if (row.playableUrl != null) "READY" else "UNAVAILABLE",
+                                        if (row.externalUrl != null) "OFFICIAL" else if (row.playableUrls.isNotEmpty()) "CHECK" else "UNAVAILABLE",
                                         color = if (available) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
                                         style = MaterialTheme.typography.labelMedium,
                                     )
@@ -205,8 +215,8 @@ fun AstraWaveGuideScreen(
                                     Text(
                                         when {
                                             row.externalUrl != null -> "Open provider"
-                                            row.playableUrl != null -> "Play channel"
-                                            else -> "${row.playableCandidateCount} candidates"
+                                            row.playableUrls.isNotEmpty() -> "Check & play • ${row.playableCandidateCount} candidates"
+                                            else -> "No direct candidates"
                                         },
                                         color = AstraWaveColors.SecondaryText,
                                         style = MaterialTheme.typography.labelSmall,
@@ -229,7 +239,7 @@ private fun GuideSummaryRail(snapshot: GuideSnapshot) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         GuideStatPill("CHANNELS", snapshot.sourceGroups.toString())
-        GuideStatPill("DIRECT FREE", snapshot.freeChannelCount.toString())
+        GuideStatPill("FREE CANDIDATES", snapshot.freeChannelCount.toString())
         GuideStatPill("PREMIUM FREE", snapshot.handoffCount.toString())
         GuideStatPill("MY IPTV", snapshot.userChannelCount.toString())
     }
