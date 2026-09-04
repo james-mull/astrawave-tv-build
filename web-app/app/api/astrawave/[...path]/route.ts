@@ -221,6 +221,35 @@ async function contentRating(kind: 'movie' | 'series', id: string) {
   return { rating: us?.rating || null, source: 'tmdb', resolved: true, tmdbId };
 }
 
+async function tvEpisodes(seriesId: string) {
+  if (!/^\d+$/.test(seriesId)) return { seriesId, title: null, episodes: [] };
+  const show = await tmdb(`/tv/${encodeURIComponent(seriesId)}?language=en-US`);
+  if (!show) return { seriesId, title: null, episodes: [] };
+  const title = show.name || show.original_name || 'TV Series';
+  const seasonNumbers = (show.seasons || [])
+    .map((season: any) => Number(season.season_number))
+    .filter((season: number) => Number.isInteger(season) && season > 0)
+    .slice(0, 40);
+  const seasons = await Promise.all(seasonNumbers.map(async (season: number) => {
+    try {
+      return await tmdb(`/tv/${encodeURIComponent(seriesId)}/season/${season}?language=en-US`);
+    } catch {
+      return null;
+    }
+  }));
+  const episodes = seasons.flatMap((seasonData: any) => (seasonData?.episodes || []).map((episode: any) => ({
+    id: String(episode.id || `${seriesId}:${episode.season_number}:${episode.episode_number}`),
+    season: Number(episode.season_number || seasonData?.season_number || 0),
+    episode: Number(episode.episode_number || 0),
+    title: episode.name || `Episode ${episode.episode_number || ''}`.trim(),
+    overview: episode.overview || undefined,
+    released: episode.air_date || undefined,
+    thumbnail: tmdbImage(episode.still_path, 'w500'),
+    runtimeMinutes: Number(episode.runtime || 0) || undefined,
+  }))).filter((episode: any) => episode.season > 0 && episode.episode > 0);
+  return { seriesId, title, episodes };
+}
+
 async function homeRows() {
   const [moviesRaw, showsRaw, live, sports] = await Promise.all([tmdb('/trending/movie/day'), tmdb('/trending/tv/day'), liveChannels(), sportsToday()]);
   const movies = moviesRaw ? mapTmdb(moviesRaw.results || [], 'movie') : [];
@@ -250,6 +279,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
     }
     if (route === '/v1/live/channels' || route === '/v1/live/guide') return NextResponse.json(await liveChannels());
     if (route === '/v1/sports/today') return NextResponse.json(await sportsToday());
+    const tvEpisodesMatch = route.match(/^\/v1\/tv\/(\d+)\/episodes$/);
+    if (tvEpisodesMatch) return NextResponse.json(await tvEpisodes(tvEpisodesMatch[1]));
     const ratingMatch = route.match(/^\/v1\/rating\/(movie|series)\/([^/]+)$/);
     if (ratingMatch) return NextResponse.json(await contentRating(ratingMatch[1] as 'movie' | 'series', decodeURIComponent(ratingMatch[2])));
     const sourceMatch = route.match(/^\/v1\/sources\/([^/]+)\/([^/]+)$/);
