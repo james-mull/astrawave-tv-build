@@ -13,6 +13,7 @@ with SRC.open() as f:
 results = []
 for ch in data.get("channels", []):
     rights = ch.get("rightsStatus")
+    playback_mode = ch.get("playbackMode", "direct")
     enabled = rights in ALLOWED and bool(ch.get("rightsEvidenceUrl"))
     ok = False
     code = None
@@ -32,6 +33,7 @@ for ch in data.get("channels", []):
     results.append({
         "id": ch.get("id"),
         "name": ch.get("name"),
+        "playbackMode": playback_mode,
         "rightsStatus": rights,
         "rightsVerified": enabled,
         "healthy": ok,
@@ -41,10 +43,24 @@ for ch in data.get("channels", []):
         "checkedAt": int(time.time())
     })
 
-healthy_ids = {r["id"] for r in results if r["rightsVerified"] and r["healthy"]}
-playlist = [ch for ch in data.get("channels", []) if ch.get("id") in healthy_ids]
+healthy_direct_ids = {
+    r["id"] for r in results
+    if r["rightsVerified"] and r["healthy"] and r["playbackMode"] == "direct"
+}
+playlist = [ch for ch in data.get("channels", []) if ch.get("id") in healthy_direct_ids]
+handoffs = [
+    ch for ch in data.get("channels", [])
+    if ch.get("playbackMode") == "external"
+    and ch.get("rightsStatus") in ALLOWED
+    and ch.get("rightsEvidenceUrl")
+]
 
-OUT.write_text(json.dumps({"checkedAt": int(time.time()), "results": results, "healthyChannelCount": len(playlist)}, indent=2) + "\n")
+OUT.write_text(json.dumps({
+    "checkedAt": int(time.time()),
+    "results": results,
+    "healthyDirectChannelCount": len(playlist),
+    "approvedExternalHandoffCount": len(handoffs)
+}, indent=2) + "\n")
 
 m3u = ["#EXTM3U"]
 for ch in playlist:
@@ -55,4 +71,5 @@ for ch in playlist:
     m3u.append(ch["streamUrl"])
 (ROOT / "astrawave-free-tv.m3u").write_text("\n".join(m3u) + "\n")
 
-print(f"Healthy authorized channels: {len(playlist)}/{len(data.get('channels', []))}")
+print(f"Healthy authorized direct channels: {len(playlist)}")
+print(f"Approved official handoffs: {len(handoffs)}")
