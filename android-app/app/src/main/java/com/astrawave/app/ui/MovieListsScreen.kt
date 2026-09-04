@@ -35,12 +35,14 @@ import com.astrawave.app.TitleDetailsActivity
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.data.AstraWaveCatalog
+import com.astrawave.app.data.AstraWaveMetadataGateway
+import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.LocalLibraryStore
-import com.astrawave.app.data.TmdbCatalogPage
 import com.astrawave.app.data.TmdbItem
 import com.astrawave.app.data.ZeroConfigCatalogRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 private data class MovieListSpec(
     val id: String,
@@ -48,6 +50,7 @@ private data class MovieListSpec(
     val subtitle: String,
     val catalog: AstraWaveCatalog? = null,
     val localKind: LocalKind? = null,
+    val queries: List<String> = emptyList(),
 )
 
 private enum class LocalKind { WATCHLIST, FAVORITES }
@@ -72,6 +75,28 @@ private val latestLists = listOf(
     MovieListSpec("trending-more", "Trending Now", "More current movie picks", AstraWaveCatalog.TRENDING_MOVIES),
 )
 
+private val franchiseLists = listOf(
+    MovieListSpec("wizarding-world", "Wizarding World", "Harry Potter & Fantastic Beasts in one collection", queries = listOf("Harry Potter", "Fantastic Beasts")),
+    MovieListSpec("star-wars", "Star Wars Galaxy", "The Skywalker saga and connected stories", queries = listOf("Star Wars")),
+    MovieListSpec("mission-impossible", "Mission: Impossible", "Ethan Hunt missions in one place", queries = listOf("Mission Impossible")),
+    MovieListSpec("fast-saga", "Fast Saga", "High-speed franchise viewing", queries = listOf("Fast Furious")),
+    MovieListSpec("conjuring-universe", "Conjuring Universe", "The Conjuring, Annabelle and The Nun", queries = listOf("Conjuring", "Annabelle", "The Nun")),
+    MovieListSpec("insidious", "Insidious in Order", "Follow the Insidious films together", queries = listOf("Insidious")),
+    MovieListSpec("john-wick", "John Wick", "The Baba Yaga collection", queries = listOf("John Wick")),
+    MovieListSpec("james-bond", "James Bond", "007 across generations", queries = listOf("James Bond")),
+)
+
+private val themedLists = listOf(
+    MovieListSpec("action-icons", "Action Movies", "Modern action favorites and high-energy franchises", queries = listOf("John Wick", "Mission Impossible", "Mad Max", "Die Hard")),
+    MovieListSpec("superhero-worlds", "Superhero Worlds", "Marvel, DC and comic-book favorites", queries = listOf("Avengers", "Batman", "Spider-Man", "X-Men")),
+    MovieListSpec("sci-fi-worlds", "Sci-Fi Worlds", "Big science-fiction universes", queries = listOf("Star Wars", "Alien", "Predator", "Terminator", "Matrix")),
+    MovieListSpec("family-night", "Family Night", "Easy picks for a family movie night", queries = listOf("Toy Story", "Shrek", "Frozen", "Paddington")),
+    MovieListSpec("animation-hits", "Animation Hits", "Animated favorites across generations", queries = listOf("Toy Story", "Despicable Me", "How to Train Your Dragon", "Kung Fu Panda")),
+    MovieListSpec("horror-night", "Horror Night", "Popular modern horror series", queries = listOf("Conjuring", "Scream", "Insidious", "Halloween")),
+    MovieListSpec("mind-bending", "Mind-Bending Movies", "Twisty science-fiction and psychological favorites", queries = listOf("Inception", "Interstellar", "Memento", "Shutter Island", "Arrival")),
+    MovieListSpec("crime-night", "Crime & Heists", "Heists, mob stories and crime thrillers", queries = listOf("Ocean's Eleven", "Heat", "The Departed", "Goodfellas")),
+)
+
 private val topLists = listOf(
     MovieListSpec("top-100", "Top Movies", "AstraWave top movie picks", AstraWaveCatalog.TOP_RATED_MOVIES),
     MovieListSpec("must-watch", "Must Watch", "High-interest movies for your queue", AstraWaveCatalog.POPULAR_MOVIES),
@@ -82,11 +107,13 @@ private val topLists = listOf(
 fun MovieListsScreen(profileId: String = "default") {
     val context = LocalContext.current
     val repository = remember { ZeroConfigCatalogRepository() }
+    val metadata = remember { AstraWaveMetadataGateway() }
     val library = remember { LocalLibraryStore(context) }
-    val allSpecs = remember { weeklyLists + latestLists + topLists }
+    val allSpecs = remember { weeklyLists + latestLists + franchiseLists + themedLists + topLists }
     val states = remember { mutableStateMapOf<String, MovieListState>() }
     var selected by remember { mutableStateOf<MovieListSpec?>(null) }
     var mode by remember { mutableStateOf("Lists") }
+    var showAllCollections by remember { mutableStateOf(false) }
 
     fun localItems(spec: MovieListSpec): List<TmdbItem> {
         val refs: List<LibraryItemRef> = when (spec.localKind) {
@@ -94,9 +121,9 @@ fun MovieListsScreen(profileId: String = "default") {
             LocalKind.FAVORITES -> library.favorites(profileId).map { it.item }
             null -> emptyList()
         }
-        return refs.filter { it.type == LibraryMediaType.MOVIE }.mapIndexed { index, item ->
+        return refs.filter { it.type == LibraryMediaType.MOVIE }.map { item ->
             TmdbItem(
-                id = item.id.hashCode().toLong().let { if (it < 0) -it else it },
+                id = abs(item.id.hashCode().toLong()),
                 title = item.title,
                 overview = spec.subtitle,
                 mediaType = "movie",
@@ -104,18 +131,44 @@ fun MovieListsScreen(profileId: String = "default") {
         }
     }
 
+    fun metadataToMovie(item: AstraWaveMetadataGateway.Item): TmdbItem {
+        ArtworkRegistry.register(item.name, item.posterUrl ?: item.backdropUrl)
+        return TmdbItem(
+            id = item.id.toLongOrNull() ?: abs(item.id.hashCode().toLong()),
+            title = item.name,
+            overview = item.description.orEmpty(),
+            mediaType = "movie",
+        )
+    }
+
     LaunchedEffect(Unit) {
         allSpecs.forEach { spec ->
             if (states.containsKey(spec.id)) return@forEach
-            if (spec.localKind != null) {
-                states[spec.id] = MovieListState.Ready(localItems(spec))
-            } else {
-                states[spec.id] = MovieListState.Loading
-                states[spec.id] = try {
-                    val page = withContext(Dispatchers.IO) { repository.load(requireNotNull(spec.catalog)) }
-                    MovieListState.Ready(page.items.filter { it.mediaType != "tv" }.take(30))
-                } catch (error: Exception) {
-                    MovieListState.Error(error.message ?: "Unable to load list")
+            when {
+                spec.localKind != null -> states[spec.id] = MovieListState.Ready(localItems(spec))
+                spec.queries.isNotEmpty() -> {
+                    states[spec.id] = MovieListState.Loading
+                    states[spec.id] = try {
+                        val items = withContext(Dispatchers.IO) {
+                            spec.queries.flatMap { query -> metadata.search(query) }
+                                .filter { it.type.equals("movie", true) }
+                                .distinctBy { it.id }
+                                .take(40)
+                                .map(::metadataToMovie)
+                        }
+                        MovieListState.Ready(items)
+                    } catch (error: Exception) {
+                        MovieListState.Error(error.message ?: "Unable to load collection")
+                    }
+                }
+                spec.catalog != null -> {
+                    states[spec.id] = MovieListState.Loading
+                    states[spec.id] = try {
+                        val page = withContext(Dispatchers.IO) { repository.load(spec.catalog) }
+                        MovieListState.Ready(page.items.filter { it.mediaType != "tv" }.take(30))
+                    } catch (error: Exception) {
+                        MovieListState.Error(error.message ?: "Unable to load list")
+                    }
                 }
             }
         }
@@ -146,7 +199,7 @@ fun MovieListsScreen(profileId: String = "default") {
     ) {
         AstraWavePageHeader(
             title = "Movies",
-            subtitle = "Browse movies normally or jump through visual collections built like a premium streaming library.",
+            subtitle = "Visual collections, franchises, themed picks and traditional movie browsing in one TV-first library.",
         )
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -159,13 +212,14 @@ fun MovieListsScreen(profileId: String = "default") {
             Text("Browse", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Use the Lists tab for the MovieBoxPro-style collection view. Browse keeps the familiar AstraWave catalog rows available from Home and Discover.",
+                "Quick access to AstraWave's standard movie discovery rows.",
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(18.dp))
             MovieListRow("Trending Movies", weeklyLists.take(1), states) { selected = it }
-            MovieListRow("Popular & New", listOf(latestLists[2], topLists[2]), states) { selected = it }
+            Spacer(Modifier.height(22.dp))
+            MovieListRow("Popular & New", listOf(latestLists[2], topLists[2], weeklyLists[2]), states) { selected = it }
             return@Column
         }
 
@@ -173,7 +227,15 @@ fun MovieListsScreen(profileId: String = "default") {
         Spacer(Modifier.height(22.dp))
         MovieListRow("Latest List", latestLists, states) { selected = it }
         Spacer(Modifier.height(22.dp))
-        MovieListRow("Top List", topLists, states, showMore = true) { selected = it }
+        MovieListRow("Franchises & In Order", franchiseLists, states) { selected = it }
+        Spacer(Modifier.height(22.dp))
+        MovieListRow("Collections", themedLists.take(if (showAllCollections) themedLists.size else 5), states, showMore = !showAllCollections, onMore = { showAllCollections = true }) { selected = it }
+        Spacer(Modifier.height(22.dp))
+        if (showAllCollections) {
+            MovieListRow("More Collections", themedLists.drop(5), states) { selected = it }
+            Spacer(Modifier.height(22.dp))
+        }
+        MovieListRow("Top List", topLists, states) { selected = it }
         Spacer(Modifier.height(28.dp))
     }
 }
@@ -184,6 +246,7 @@ private fun MovieListRow(
     specs: List<MovieListSpec>,
     states: Map<String, MovieListState>,
     showMore: Boolean = false,
+    onMore: () -> Unit = {},
     onSelect: (MovieListSpec) -> Unit,
 ) {
     Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
@@ -223,7 +286,7 @@ private fun MovieListRow(
             }
         }
         if (showMore) {
-            AstraWaveFocusableCard(Modifier.width(150.dp)) {
+            AstraWaveFocusableCard(Modifier.width(150.dp).clickable(onClick = onMore)) {
                 Column(
                     Modifier.fillMaxWidth().padding(vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -232,7 +295,7 @@ private fun MovieListRow(
                     Spacer(Modifier.height(6.dp))
                     Text("MORE", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(4.dp))
-                    Text("More curated lists are added as AstraWave discovery expands.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text("Open the full curated collection library.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
