@@ -7,17 +7,32 @@ import com.astrawave.app.core.AudioSubscription
 import com.astrawave.app.core.RadioStation
 import java.io.ByteArrayInputStream
 
-/** Loads podcast feeds and radio stations into one AstraWave audio library projection. */
-class AudioLibraryRepository {
+/** Loads AstraWave-discovered and user-added podcasts/radio into one audio library. */
+class AudioLibraryRepository(
+    private val discovery: AstraWaveAudioDiscoveryRepository = AstraWaveAudioDiscoveryRepository(),
+) {
     fun load(
         subscriptions: List<AudioSubscription>,
         radioStations: List<RadioStation>,
+        includeBuiltInDiscovery: Boolean = true,
     ): AudioLibrarySnapshot {
+        val discoveredSubscriptions = if (includeBuiltInDiscovery) {
+            runCatching { discovery.discoverPodcasts() }.getOrDefault(emptyList())
+        } else emptyList()
+        val discoveredRadio = if (includeBuiltInDiscovery) {
+            runCatching { discovery.discoverRadio() }.getOrDefault(emptyList())
+        } else emptyList()
+
+        val mergedSubscriptions = (subscriptions + discoveredSubscriptions)
+            .distinctBy { it.feedUrl.lowercase() }
+        val mergedRadio = (radioStations + discoveredRadio)
+            .distinctBy { it.streamUrl.lowercase() }
+
         val feedErrors = linkedMapOf<String, String>()
-        val recentEpisodes = subscriptions.flatMap { subscription ->
+        val recentEpisodes = mergedSubscriptions.take(30).flatMap { subscription ->
             runCatching {
                 val xml = SimpleHttp.getText(subscription.feedUrl)
-                PodcastRssParser.parse(ByteArrayInputStream(xml.toByteArray())).mapIndexed { index, episode ->
+                PodcastRssParser.parse(ByteArrayInputStream(xml.toByteArray())).take(10).mapIndexed { index, episode ->
                     AudioItem(
                         id = "${subscription.id}-$index-${episode.title.hashCode()}",
                         type = if (subscription.videoCapable) AudioItemType.VIDEO_PODCAST else AudioItemType.PODCAST_EPISODE,
@@ -35,9 +50,9 @@ class AudioLibraryRepository {
             .sortedByDescending { it.publishedAt.orEmpty() }
 
         return AudioLibrarySnapshot(
-            subscriptions = subscriptions,
+            subscriptions = mergedSubscriptions,
             recentEpisodes = recentEpisodes,
-            radioStations = radioStations,
+            radioStations = mergedRadio,
             feedErrors = feedErrors,
         )
     }
