@@ -63,6 +63,7 @@ import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.core.MultiviewSession
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
+import com.astrawave.app.data.HouseholdProfileStore
 import com.astrawave.app.data.IptvSourceStore
 import com.astrawave.app.data.StremioCatalogAggregator
 import com.astrawave.app.data.StremioCatalogRow
@@ -76,6 +77,7 @@ import com.astrawave.app.ui.AstraWaveNavigationContract
 import com.astrawave.app.ui.AstraWaveSportsScreen
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
+import com.astrawave.app.ui.HouseholdProfilesScreen
 import com.astrawave.app.ui.LibraryActionRow
 import com.astrawave.app.ui.LiveTvHubScreen
 import com.astrawave.app.ui.MovieListsScreen
@@ -118,6 +120,7 @@ private enum class RebuildDestination(val route: String, val label: String, val 
     Discover("discover", "Discover", Icons.Default.Explore),
     Search("search", "Search", Icons.Default.Search),
     My("my", "My AstraWave", Icons.Default.AccountCircle),
+    Profiles("profiles", "Profiles", Icons.Default.AccountCircle),
 }
 
 private sealed interface CatalogLoadState {
@@ -135,12 +138,40 @@ private sealed interface AddonCatalogLoadState {
 private fun RebuildRoot() {
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
+    val profileStore = remember { HouseholdProfileStore(context) }
+    var activeProfileId by remember { mutableStateOf(profileStore.activeProfileId()) }
+    var activeProfile by remember(activeProfileId) { mutableStateOf(profileStore.profiles().firstOrNull { it.id == activeProfileId } ?: profileStore.activeProfile()) }
+    var showProfileGate by remember { mutableStateOf(profileStore.shouldPromptAtLaunch()) }
+
+    if (showProfileGate) {
+        HouseholdProfilesScreen(
+            activeProfileId = activeProfileId,
+            launchMode = true,
+            onBack = { showProfileGate = false },
+            onProfileChanged = { profile ->
+                activeProfileId = profile.id
+                activeProfile = profile
+                showProfileGate = false
+            },
+        )
+        return
+    }
+
     val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
     val useRail = isTv || configuration.screenWidthDp >= 840
-    val activeProfileId = "default"
-    val primaryDestinations = remember(isTv) {
+    val primaryDestinations = remember(isTv, activeProfile.kidsMode) {
         val contract = if (isTv) AstraWaveNavigationContract.tv else AstraWaveNavigationContract.mobileTablet
         contract.mapNotNull { nav -> RebuildDestination.entries.firstOrNull { it.route == nav.route } }
+            .filter { destination ->
+                !activeProfile.kidsMode || destination in setOf(
+                    RebuildDestination.Home,
+                    RebuildDestination.Movies,
+                    RebuildDestination.Shows,
+                    RebuildDestination.Audio,
+                    RebuildDestination.Search,
+                    RebuildDestination.My,
+                )
+            }
     }
     val tvRailFocusScope = rememberCoroutineScope()
     var tvRailExpanded by remember(isTv) { mutableStateOf(!isTv) }
@@ -149,6 +180,16 @@ private fun RebuildRoot() {
     var current by remember { mutableStateOf(RebuildDestination.Home) }
     var multiviewPanes by remember { mutableStateOf<List<MultiviewPane>>(emptyList()) }
     var multiviewAudioPaneId by remember { mutableStateOf<String?>(null) }
+
+    fun selectProfile(profile: HouseholdProfileStore.Profile) {
+        profileStore.setActive(profile.id)
+        activeProfileId = profile.id
+        activeProfile = profile
+        iptvSources = IptvSourceStore(context).load(profile.id)
+        multiviewPanes = emptyList()
+        multiviewAudioPaneId = null
+        current = RebuildDestination.Home
+    }
 
     fun handleTvRailFocus(hasFocus: Boolean) {
         if (!isTv) return
@@ -163,6 +204,10 @@ private fun RebuildRoot() {
     }
 
     fun addToMultiview(pane: MultiviewPane) {
+        if (activeProfile.kidsMode) {
+            Toast.makeText(context, "Multiview is unavailable in Kids mode.", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (multiviewPanes.any { it.streamUrl == pane.streamUrl }) {
             Toast.makeText(context, "Already in Multiview.", Toast.LENGTH_SHORT).show()
             return
@@ -188,7 +233,7 @@ private fun RebuildRoot() {
             }
             NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(railWidth)) {
                 Spacer(Modifier.height(14.dp))
-                Text(if (isTv && !tvRailExpanded) "AW" else "ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.headlineMedium, maxLines = 1)
+                Text(if (isTv && !tvRailExpanded) activeProfile.avatar else "ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.headlineMedium, maxLines = 1)
                 Spacer(Modifier.height(10.dp))
                 primaryDestinations.forEach { item ->
                     val showRailLabel = !isTv || tvRailExpanded
@@ -209,7 +254,7 @@ private fun RebuildRoot() {
             when (current) {
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
-                RebuildDestination.Shows -> TvListsScreen()
+                RebuildDestination.Shows -> TvListsScreen(profileId = activeProfileId)
                 RebuildDestination.Live -> LiveTvHubScreen(
                     sources = iptvSources,
                     onSourcesChanged = { iptvSources = it },
@@ -254,30 +299,38 @@ private fun RebuildRoot() {
                 RebuildDestination.Addons -> StremioAddonScreen(profileId = activeProfileId)
                 RebuildDestination.Discover -> CombinedDiscoverScreen(profileId = activeProfileId)
                 RebuildDestination.Search -> UniversalSearchScreen(profileId = activeProfileId)
+                RebuildDestination.Profiles -> HouseholdProfilesScreen(
+                    activeProfileId = activeProfileId,
+                    onProfileChanged = ::selectProfile,
+                    onBack = { current = RebuildDestination.My },
+                )
                 RebuildDestination.My -> MyAstraWaveHub(
                     account = AccountOverview(
                         userId = "local",
-                        displayName = "AstraWave User",
+                        displayName = "${activeProfile.avatar} ${activeProfile.name}",
                         activeProfileId = activeProfileId,
-                        planName = "AstraWave Free",
+                        planName = if (activeProfile.kidsMode) "Kids Profile" else "AstraWave Free",
                         cloudSyncEnabled = false,
                     ),
                     lists = emptyList(),
                     onOpenAccountSection = { section ->
                         current = when (section) {
-                            AccountSection.IPTV -> RebuildDestination.Live
-                            AccountSection.PERSONAL_MEDIA -> RebuildDestination.PersonalMedia
-                            AccountSection.ADDONS -> RebuildDestination.Addons
-                            AccountSection.SPORTS -> RebuildDestination.Sports
+                            AccountSection.PROFILES -> RebuildDestination.Profiles
+                            AccountSection.IPTV -> if (activeProfile.kidsMode) current else RebuildDestination.Live
+                            AccountSection.PERSONAL_MEDIA -> if (activeProfile.kidsMode) current else RebuildDestination.PersonalMedia
+                            AccountSection.ADDONS -> if (activeProfile.kidsMode) current else RebuildDestination.Addons
+                            AccountSection.SPORTS -> if (activeProfile.kidsMode) current else RebuildDestination.Sports
                             else -> current
                         }
                     },
                 )
             }
 
-            if (!useRail) {
+            if (!useRail && current != RebuildDestination.Profiles) {
                 NavigationBar(containerColor = AstraWaveColors.BackgroundRaised) {
-                    listOf(RebuildDestination.Home, RebuildDestination.Movies, RebuildDestination.Live, RebuildDestination.Sports, RebuildDestination.My).forEach { item ->
+                    val mobileItems = listOf(RebuildDestination.Home, RebuildDestination.Movies, RebuildDestination.Live, RebuildDestination.Sports, RebuildDestination.My)
+                        .filter { !activeProfile.kidsMode || it !in setOf(RebuildDestination.Live, RebuildDestination.Sports) }
+                    mobileItems.forEach { item ->
                         NavigationBarItem(selected = current == item, onClick = { current = item }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label, maxLines = 1) })
                     }
                 }
