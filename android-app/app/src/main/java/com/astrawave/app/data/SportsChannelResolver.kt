@@ -34,13 +34,14 @@ data class SportsResolution(
  * Resolves expected sports broadcasters against the normalized combined channel inventory.
  * Playback still goes through the normal stream health/eligibility path before launch.
  *
- * Matching is deliberately conservative: a generic shared brand token is not enough to
- * claim that a different FAST channel carries an event. For example, Paramount+ must not
- * resolve to Paramount Movie Channel and CBS must not silently resolve to CBS Sports HQ.
+ * Matching is intentionally strict. Team-branded .TV labels and paid/authorized-only
+ * network labels stay as search/broadcaster metadata and are never treated as proof that
+ * a similarly named public stream carries the event.
  */
 class SportsChannelResolver {
     fun resolve(event: SportsGuideEvent, channelGroups: List<LiveChannelGroup>): SportsResolution {
         val broadcasters = event.broadcasterNames
+            .filterNot(::unsafeFallbackBroadcaster)
             .flatMap(::aliasesFor)
             .map(::normalize)
             .filter { it.isNotBlank() }
@@ -79,39 +80,38 @@ class SportsChannelResolver {
 
     private fun matchScore(expected: String, channel: String): Int {
         if (expected == channel) return 100
-
         val expectedTokens = expected.split(' ').filter { it.length > 1 }.toSet()
         val channelTokens = channel.split(' ').filter { it.length > 1 }.toSet()
         if (expectedTokens.isEmpty() || channelTokens.isEmpty()) return 0
-
-        // One-token network names are only safe as exact matches. This prevents brand-family
-        // false positives such as CBS -> CBS Sports HQ or FOX -> FOX Weather.
         if (expectedTokens.size == 1) return 0
-
-        if (channel.contains(expected) || expected.contains(channel)) return 90
 
         val overlap = expectedTokens.intersect(channelTokens).size
         return when {
-            overlap == 0 -> 0
-            overlap == expectedTokens.size -> 85
-            overlap >= 2 && overlap * 2 >= expectedTokens.size -> 70
+            overlap == expectedTokens.size && expectedTokens.size >= 2 -> 88
+            overlap >= 3 && overlap == channelTokens.size -> 84
             else -> 0
         }
+    }
+
+    private fun unsafeFallbackBroadcaster(value: String): Boolean {
+        if (Regex("\\.tv$", RegexOption.IGNORE_CASE).containsMatchIn(value.trim())) return true
+        val normalized = normalize(value)
+        return normalized in setOf(
+            "mlb tv", "nba tv", "nfl network", "nhl network",
+            "espn", "espn2", "espnu", "espn plus",
+            "fs1", "fs2", "tnt", "tbs", "trutv",
+            "cbs sports network", "cbssn", "sec network", "acc network", "big ten network",
+            "peacock", "paramount plus", "prime video", "apple tv", "max", "netflix",
+        )
     }
 
     private fun aliasesFor(value: String): List<String> {
         val normalized = normalize(value)
         return when (normalized) {
-            "fs1", "fox sports 1" -> listOf("fs1", "fox sports 1")
-            "fs2", "fox sports 2" -> listOf("fs2", "fox sports 2")
-            "cbs sports network", "cbssn" -> listOf("cbs sports network", "cbssn")
+            "fox sports 1" -> listOf("fox sports 1")
+            "fox sports 2" -> listOf("fox sports 2")
             "nbc sports network", "nbcsn" -> listOf("nbc sports network", "nbcsn")
-            "nfl network" -> listOf("nfl network")
-            "nba tv", "nbatv" -> listOf("nba tv", "nbatv")
             "mlb network" -> listOf("mlb network")
-            "nhl network" -> listOf("nhl network")
-            "espn plus" -> listOf("espn plus")
-            "paramount plus" -> listOf("paramount plus")
             else -> listOf(normalized)
         }
     }
@@ -125,6 +125,6 @@ class SportsChannelResolver {
         .replace(Regex("\\s+"), " ")
 
     companion object {
-        private const val MIN_ACCEPTED_SCORE = 70
+        private const val MIN_ACCEPTED_SCORE = 84
     }
 }
