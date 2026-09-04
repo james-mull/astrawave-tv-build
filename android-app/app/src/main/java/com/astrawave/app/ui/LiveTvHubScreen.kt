@@ -34,6 +34,7 @@ import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.core.ProfileSafetyPolicy
 import com.astrawave.app.data.CombinedLiveTvRepository
 import com.astrawave.app.data.CombinedLiveTvSnapshot
+import com.astrawave.app.data.LiveChannelGroup
 import com.astrawave.app.data.ProfileSafetyStore
 import com.astrawave.app.data.StreamHealthChecker
 import kotlinx.coroutines.Dispatchers
@@ -85,14 +86,24 @@ fun LiveTvHubScreen(
         }
     }
 
-    fun play(url: String) {
+    fun play(group: LiveChannelGroup) {
         scope.launch {
-            val healthy = withContext(Dispatchers.IO) { StreamHealthChecker.check(url).reachable }
-            if (!healthy) {
-                Toast.makeText(context, "This channel is not reachable right now.", Toast.LENGTH_LONG).show()
+            val healthyCandidates = withContext(Dispatchers.IO) {
+                group.candidates.filter { candidate ->
+                    runCatching { StreamHealthChecker.check(candidate.url).reachable }.getOrDefault(false)
+                }
+            }
+            if (healthyCandidates.isEmpty()) {
+                Toast.makeText(context, "No working stream is available for this channel right now.", Toast.LENGTH_LONG).show()
                 return@launch
             }
-            context.startActivity(Intent(context, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, url))
+            val urls = ArrayList(healthyCandidates.map { it.url }.distinct())
+            context.startActivity(
+                Intent(context, PlayerActivity::class.java)
+                    .putExtra(PlayerActivity.EXTRA_URL, urls.first())
+                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, urls)
+                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+            )
         }
     }
 
@@ -100,7 +111,7 @@ fun LiveTvHubScreen(
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp)) {
             AstraWavePageHeader(
                 title = "Live TV",
-                subtitle = "Free official channels are ready automatically. Add your own IPTV only if you want more.",
+                subtitle = "AstraWave Free TV, IPTV.org Public, and your own IPTV are merged with health-checked stream failover.",
             )
             Spacer(Modifier.height(16.dp))
             Row(
@@ -126,7 +137,7 @@ fun LiveTvHubScreen(
                 when (val current = state) {
                     LiveTvLoadState.Loading -> AstraWaveStatePanel(
                         "Getting Live TV ready…",
-                        "Checking AstraWave Free TV and your enabled sources.",
+                        "Loading AstraWave Free TV, IPTV.org Public, and your enabled sources.",
                         loading = true,
                     )
                     is LiveTvLoadState.Error -> AstraWaveStatePanel("Live TV unavailable", current.message)
@@ -134,11 +145,11 @@ fun LiveTvHubScreen(
                         val snapshot = current.snapshot
                         val totalChannels = snapshot.freeChannelCount + snapshot.userChannelCount
                         AstraWaveStatePanel(
-                            "$totalChannels channels ready",
+                            "$totalChannels channel candidates loaded",
                             when {
-                                snapshot.userChannelCount > 0 -> "${snapshot.freeChannelCount} included free • ${snapshot.userChannelCount} from your sources"
-                                snapshot.freeChannelCount > 0 -> "${snapshot.freeChannelCount} included free channels • Add your own IPTV anytime from My Sources"
-                                else -> "No healthy free channels are available right now. You can still add your own IPTV source."
+                                snapshot.userChannelCount > 0 -> "${snapshot.freeChannelCount} included free • ${snapshot.userChannelCount} from your sources • verified when selected"
+                                snapshot.freeChannelCount > 0 -> "${snapshot.freeChannelCount} included free candidates • AstraWave tests all alternates before playback"
+                                else -> "No free channel candidates are available right now. You can still add your own IPTV source."
                             },
                         )
                         Spacer(Modifier.height(18.dp))
@@ -149,7 +160,7 @@ fun LiveTvHubScreen(
                                 "Try again later, or open My Sources to add an M3U or Xtream service.",
                             )
                         } else {
-                            snapshot.groups.take(300).forEach { group ->
+                            snapshot.groups.take(500).forEach { group ->
                                 val candidate = group.bestCandidate
                                 AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                                     Column {
@@ -166,7 +177,7 @@ fun LiveTvHubScreen(
                                                 )
                                                 Spacer(Modifier.height(3.dp))
                                                 Text(
-                                                    if (candidate?.source == "AstraWave Free TV") "Included with AstraWave" else candidate?.source ?: "Source unavailable",
+                                                    candidate?.source ?: "Source unavailable",
                                                     color = AstraWaveColors.Accent,
                                                     style = MaterialTheme.typography.labelMedium,
                                                 )
@@ -175,9 +186,9 @@ fun LiveTvHubScreen(
                                                 val multiviewEligible = PlayerActivity.isDirectMediaUrl(candidate.url)
                                                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                                     Text(
-                                                        if (multiviewEligible) "Watch" else "Open Live",
+                                                        "Check & Watch",
                                                         color = AstraWaveColors.Success,
-                                                        modifier = Modifier.clickable { play(candidate.url) },
+                                                        modifier = Modifier.clickable { play(group) },
                                                         style = MaterialTheme.typography.labelLarge,
                                                     )
                                                     if (multiviewEligible) {
@@ -203,6 +214,11 @@ fun LiveTvHubScreen(
                                                 Text("Unavailable", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
                                             }
                                         }
+                                        Text(
+                                            "${group.candidates.size} stream candidate${if (group.candidates.size == 1) "" else "s"}",
+                                            color = AstraWaveColors.TertiaryText,
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
                                         group.currentProgram?.title?.let { now ->
                                             Spacer(Modifier.height(8.dp))
                                             Text("Now • $now", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
