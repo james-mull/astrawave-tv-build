@@ -2,6 +2,13 @@ name: Build AstraWave Release Candidate
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - "android-app/**"
+      - "astrawave-free-tv/**"
+      - ".github/workflows/build-release-candidate.yml"
 
 permissions:
   contents: read
@@ -13,7 +20,7 @@ concurrency:
 jobs:
   release-candidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: android-app
@@ -30,8 +37,22 @@ jobs:
       ASTRAWAVE_GIT_SHA: ${{ github.sha }}
 
     steps:
-      - name: Checkout
+      - name: Checkout exact commit
         uses: actions/checkout@v4
+
+      - name: Repository validation
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "feature/nuvio-core-rebuild"
+          test -f android-app/settings.gradle.kts
+          test -f android-app/app/build.gradle.kts
+          test -f android-app/app/src/main/AndroidManifest.xml
+          test -f astrwave-free-tv-does-not-exist 2>/dev/null && exit 1 || true
+          test -f astrawave-free-tv/check_free_tv.py
+          test -f docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md
+          echo "Validated branch=${GITHUB_REF_NAME} sha=${GITHUB_SHA}"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -43,15 +64,31 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android components
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
-      - name: Run release core invariant tests
+      - name: Compiler preflight
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin :app:compileReleaseKotlin
+
+      - name: Unit tests
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
+
+      - name: Free TV registry integrity
+        working-directory: .
+        run: python3 astrawave-free-tv/check_free_tv.py
+
+      - name: Debug lint
+        run: gradle --no-daemon --stacktrace :app:lintDebug
+
+      - name: Release lint
+        run: gradle --no-daemon --stacktrace :app:lintRelease
+
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
 
       - name: Prepare optional release signing
         shell: bash
@@ -62,14 +99,29 @@ jobs:
             printf '%s' "$ASTRAWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
             echo "ASTRAWAVE_RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
             echo "ASTRAWAVE_RELEASE_SIGNED=true" >> "$GITHUB_ENV"
-            echo "Release signing credentials detected; signed release artifacts will be produced."
+            echo "Release signing credentials detected."
           else
             echo "ASTRAWAVE_RELEASE_SIGNED=false" >> "$GITHUB_ENV"
-            echo "Release signing secrets are incomplete; producing unsigned release-candidate artifacts only."
+            echo "Signing secrets incomplete; artifacts are CI release candidates only and MUST NOT be promoted."
           fi
 
       - name: Build release APK and AAB
         run: gradle --no-daemon --stacktrace :app:assembleRelease :app:bundleRelease
+
+      - name: Validate release signatures when configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${ASTRAWAVE_RELEASE_SIGNED:-false}" == "true" ]]; then
+            APK="app/build/outputs/apk/release/app-release.apk"
+            AAB="app/build/outputs/bundle/release/app-release.aab"
+            test -s "$APK"
+            test -s "$AAB"
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+            jarsigner -verify -strict "$AAB"
+          else
+            echo "Signature verification skipped because release signing is not configured."
+          fi
 
       - name: Generate release provenance and SHA-256 checksums
         shell: bash
@@ -82,6 +134,7 @@ jobs:
             echo "git_ref=${GITHUB_REF}"
             echo "workflow_run_id=${GITHUB_RUN_ID}"
             echo "signed=${ASTRAWAVE_RELEASE_SIGNED:-false}"
+            echo "promotion_eligible=${ASTRAWAVE_RELEASE_SIGNED:-false}"
             echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } > RELEASE_METADATA.txt
           cat SHA256SUMS.txt
@@ -98,3 +151,5 @@ jobs:
             android-app/app/build/outputs/**/*.aab
             android-app/app/build/outputs/SHA256SUMS.txt
             android-app/app/build/outputs/RELEASE_METADATA.txt
+            android-app/app/build/reports/lint-results-*.html
+            android-app/app/build/reports/lint-results-*.xml
