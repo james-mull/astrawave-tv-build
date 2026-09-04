@@ -57,7 +57,7 @@ data class AccountOverview(
 
 enum class AccountSection(val title: String) {
     PROFILES("Profiles & Household"),
-    SUBSCRIPTION("AstraWave+"),
+    SUBSCRIPTION("Subscription & Premium"),
     IPTV("Live TV Sources"),
     PERSONAL_MEDIA("Personal Media"),
     CLOUD_DEBRID("Cloud & Debrid"),
