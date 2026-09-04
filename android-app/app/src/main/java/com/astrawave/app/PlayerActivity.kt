@@ -271,8 +271,8 @@ class PlayerActivity : ComponentActivity() {
     private fun updateSeriesControls(exo: ExoPlayer?) {
         val active = exo ?: return
         val position = active.currentPosition.coerceAtLeast(0L)
-        skipRecapButton?.visibility = if (recapEndMs > position && position <= recapEndMs) View.VISIBLE else View.GONE
-        skipIntroButton?.visibility = if (introEndMs > position && position <= introEndMs) View.VISIBLE else View.GONE
+        skipRecapButton?.visibility = if (recapEndMs > position) View.VISIBLE else View.GONE
+        skipIntroButton?.visibility = if (introEndMs > position) View.VISIBLE else View.GONE
 
         val plan = nextPlan ?: return
         val duration = active.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: return
@@ -282,9 +282,7 @@ class PlayerActivity : ComponentActivity() {
             val seconds = ((remaining + 999L) / 1000L).coerceIn(1L, UP_NEXT_WINDOW_MS / 1000L)
             upNextText?.text = "Up Next • S${plan.episode.season}E${plan.episode.episode} ${plan.episode.title}\nPlaying automatically in ${seconds}s"
             upNextOverlay?.visibility = View.VISIBLE
-        } else {
-            upNextOverlay?.visibility = View.GONE
-        }
+        } else upNextOverlay?.visibility = View.GONE
     }
 
     private fun playNextEpisode() {
@@ -412,7 +410,14 @@ class PlayerActivity : ComponentActivity() {
         val savedPosition = position.coerceAtMost(duration); lastKnownPositionMs = savedPosition; val now = System.currentTimeMillis()
         if (now - lastLocalSyncAtMs >= MIN_LOCAL_PROGRESS_WRITE_MS || savedPosition >= duration) { libraryStore?.saveProgress(profileId, item, savedPosition, duration); lastLocalSyncAtMs = now }
         if (allowCloud) {
-            cloudStore?.takeIf { it.signedIn }?.saveProgress(item.id, item.type.name, item.title, savedPosition, duration, profileId)
+            cloudStore?.takeIf { it.signedIn }?.saveProgress(
+                mediaId = item.id,
+                kind = item.type.name,
+                title = item.title,
+                positionMs = savedPosition,
+                durationMs = duration,
+                profileId = profileId,
+            )
             lastCloudSyncAtMs = now
         }
     }
@@ -450,8 +455,16 @@ class PlayerActivity : ComponentActivity() {
     private fun intentLibraryItem(): LibraryItemRef? {
         val id = intent.getStringExtra(EXTRA_LIBRARY_ID)?.takeIf { it.isNotBlank() } ?: return null
         val title = intent.getStringExtra(EXTRA_LIBRARY_TITLE)?.takeIf { it.isNotBlank() } ?: return null
-        val type = intent.getStringExtra(EXTRA_LIBRARY_TYPE)?.let { runCatching { raw -> LibraryMediaType.valueOf(raw) }.getOrNull() } ?: LibraryMediaType.MOVIE
-        return LibraryItemRef(id, type, title, intent.getStringExtra(EXTRA_LIBRARY_POSTER)?.takeIf { it.isNotBlank() }, intent.getStringExtra(EXTRA_LIBRARY_SOURCE_ID)?.takeIf { it.isNotBlank() })
+        val type = intent.getStringExtra(EXTRA_LIBRARY_TYPE)
+            ?.let { raw -> runCatching { LibraryMediaType.valueOf(raw) }.getOrNull() }
+            ?: LibraryMediaType.MOVIE
+        return LibraryItemRef(
+            id = id,
+            type = type,
+            title = title,
+            posterUrl = intent.getStringExtra(EXTRA_LIBRARY_POSTER)?.takeIf { it.isNotBlank() },
+            sourceId = intent.getStringExtra(EXTRA_LIBRARY_SOURCE_ID)?.takeIf { it.isNotBlank() },
+        )
     }
 
     override fun onPause() { persistProgress(player, allowCloud = shouldCloudSync()); super.onPause() }
