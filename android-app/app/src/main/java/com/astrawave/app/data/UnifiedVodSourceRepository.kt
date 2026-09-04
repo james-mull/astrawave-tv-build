@@ -16,6 +16,7 @@ class UnifiedVodSourceRepository(context: Context) {
         addon.manifestUrl.contains("publicdomainmovies", ignoreCase = true) && direct.startsWith("https://")
     }
     private val catalogAggregator = StremioCatalogAggregator(appContext, gateway)
+    private val healthCache = linkedMapOf<String, CachedHealth>()
 
     suspend fun discover(request: ScrapeRequest, profileId: String = "default"): List<ResolvedSource> {
         val publicResults = publicSources.discover(request)
@@ -28,7 +29,10 @@ class UnifiedVodSourceRepository(context: Context) {
         }
         return (publicResults + stremioResults)
             .distinctBy { it.link.url }
-            .sortedByDescending { it.score }
+            .sortedWith(
+                compareByDescending<ResolvedSource> { it.score }
+                    .thenBy { it.latencyMs ?: Long.MAX_VALUE },
+            )
     }
 
     private fun discoverApprovedStremio(request: ScrapeRequest, profileId: String): List<ResolvedSource> {
@@ -50,7 +54,7 @@ class UnifiedVodSourceRepository(context: Context) {
                 .let(StremioEligibility::playableStreams)
                 .mapNotNull { stream ->
                     val url = stream.url?.takeIf { it.startsWith("https://") } ?: return@mapNotNull null
-                    val health = runCatching { StreamHealthChecker.check(url) }.getOrNull()
+                    val health = healthFor(url)
                     if (health?.reachable != true) return@mapNotNull null
                     val label = listOfNotNull(stream.title, stream.name).joinToString(" ")
                     val quality = when {
@@ -67,6 +71,12 @@ class UnifiedVodSourceRepository(context: Context) {
                         "480p" -> 180
                         else -> 100
                     }
+                    val latencyBonus = when {
+                        health.latencyMs < 700 -> 70
+                        health.latencyMs < 1_200 -> 45
+                        health.latencyMs < 2_000 -> 20
+                        else -> 0
+                    }
                     val link = ScrapedLink(
                         url = url,
                         sourceName = stream.name.ifBlank { addon.manifest.name },
@@ -81,9 +91,34 @@ class UnifiedVodSourceRepository(context: Context) {
                         reachable = true,
                         latencyMs = health.latencyMs,
                         contentType = health.contentType,
-                        score = 300 + qualityScore + if (health.latencyMs != null && health.latencyMs < 1_000) 40 else 0,
+                        score = 300 + qualityScore + latencyBonus,
                     )
                 }
         }
+    }
+
+    private fun healthFor(url: String): StreamHealth? {
+        val now = System.currentTimeMillis()
+        synchronized(healthCache) {
+            healthCache[url]?.takeIf { now - it.checkedAtMs <= HEALTH_CACHE_TTL_MS }?.let { return it.health }
+        }
+        val health = runCatching { StreamHealthChecker.check(url) }.getOrNull() ?: return null
+        synchronized(healthCache) {
+            healthCache[url] = CachedHealth(now, health)
+            while (healthCache.size > MAX_HEALTH_CACHE_ENTRIES) {
+                healthCache.entries.firstOrNull()?.key?.let(healthCache::remove) ?: break
+            }
+        }
+        return health
+    }
+
+    private data class CachedHealth(
+        val checkedAtMs: Long,
+        val health: StreamHealth,
+    )
+
+    companion object {
+        private const val HEALTH_CACHE_TTL_MS = 120_000L
+        private const val MAX_HEALTH_CACHE_ENTRIES = 160
     }
 }
