@@ -13,7 +13,25 @@ data class SportsEvent(
     val sport: String?,
     val date: String?,
     val time: String?,
-)
+    val homeTeam: String? = null,
+    val awayTeam: String? = null,
+    val homeScore: Int? = null,
+    val awayScore: Int? = null,
+    val status: String? = null,
+    val venue: String? = null,
+    val network: String? = null,
+) {
+    val isFinal: Boolean
+        get() = status.orEmpty().lowercase().let { value ->
+            value.contains("final") || value.contains("finished") || value == "ft"
+        }
+
+    val isLive: Boolean
+        get() = !isFinal && homeScore != null && awayScore != null &&
+            status.orEmpty().lowercase().let { value ->
+                value.isNotBlank() && !value.contains("scheduled") && !value.contains("not started")
+            }
+}
 
 class TheSportsDbClient(private val apiKey: String = "123") {
     fun eventsForDay(date: String, sport: String? = null): List<SportsEvent> {
@@ -23,6 +41,11 @@ class TheSportsDbClient(private val apiKey: String = "123") {
         return buildList {
             for (i in 0 until events.length()) {
                 val item = events.optJSONObject(i) ?: continue
+                fun nullableScore(key: String): Int? {
+                    if (!item.has(key) || item.isNull(key)) return null
+                    val raw = item.optString(key).trim()
+                    return raw.toIntOrNull()
+                }
                 add(
                     SportsEvent(
                         id = item.optString("idEvent"),
@@ -31,6 +54,13 @@ class TheSportsDbClient(private val apiKey: String = "123") {
                         sport = item.optString("strSport").takeIf { it.isNotBlank() },
                         date = item.optString("dateEvent").takeIf { it.isNotBlank() },
                         time = item.optString("strTime").takeIf { it.isNotBlank() },
+                        homeTeam = item.optString("strHomeTeam").takeIf { it.isNotBlank() },
+                        awayTeam = item.optString("strAwayTeam").takeIf { it.isNotBlank() },
+                        homeScore = nullableScore("intHomeScore"),
+                        awayScore = nullableScore("intAwayScore"),
+                        status = item.optString("strStatus").ifBlank { item.optString("strProgress") }.takeIf { it.isNotBlank() },
+                        venue = item.optString("strVenue").takeIf { it.isNotBlank() },
+                        network = item.optString("strTVStation").takeIf { it.isNotBlank() },
                     )
                 )
             }
