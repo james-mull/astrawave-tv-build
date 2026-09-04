@@ -30,10 +30,15 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.TitleDetailsActivity
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
+import com.astrawave.app.core.RecommendationCandidate
+import com.astrawave.app.core.RecommendationEngine
+import com.astrawave.app.core.RecommendationProfile
+import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.AstraWaveMetadataGateway
 import com.astrawave.app.data.LocalLibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 private sealed interface HomeDiscoveryState {
     data object Loading : HomeDiscoveryState
@@ -49,19 +54,27 @@ fun PremiumHomeScreen(profileId: String = "default") {
     val context = LocalContext.current
     val library = remember { LocalLibraryStore(context) }
     val metadata = remember { AstraWaveMetadataGateway() }
+    val recommender = remember { RecommendationEngine() }
     var libraryRefresh by remember { mutableStateOf(0) }
     var discovery by remember { mutableStateOf<HomeDiscoveryState>(HomeDiscoveryState.Loading) }
 
     val continueWatching = remember(profileId, libraryRefresh) { library.continueWatching(profileId).take(20) }
     val watchlist = remember(profileId, libraryRefresh) { library.watchlist(profileId).take(24) }
-    val recent = remember(profileId, libraryRefresh) { library.history(profileId).take(24) }
+    val favorites = remember(profileId, libraryRefresh) { library.favorites(profileId).take(50) }
+    val recent = remember(profileId, libraryRefresh) { library.history(profileId).take(50) }
+    val completed = remember(profileId, libraryRefresh) {
+        library.progress(profileId).filter { it.completed }.map { it.item.id }.toSet()
+    }
 
     LaunchedEffect(Unit) {
         discovery = HomeDiscoveryState.Loading
         discovery = try {
             val pair = withContext(Dispatchers.IO) {
-                metadata.load(AstraWaveMetadataGateway.Catalog.TRENDING_MOVIES).take(18) to
-                    metadata.load(AstraWaveMetadataGateway.Catalog.TRENDING_SERIES).take(18)
+                metadata.load(AstraWaveMetadataGateway.Catalog.TRENDING_MOVIES).take(24) to
+                    metadata.load(AstraWaveMetadataGateway.Catalog.TRENDING_SERIES).take(24)
+            }
+            (pair.first + pair.second).forEach { item ->
+                ArtworkRegistry.register(item.name, item.posterUrl ?: item.backdropUrl)
             }
             HomeDiscoveryState.Ready(pair.first, pair.second)
         } catch (error: Exception) {
@@ -78,12 +91,20 @@ fun PremiumHomeScreen(profileId: String = "default") {
         )
     }
 
-    fun openMetadata(item: AstraWaveMetadataGateway.Item) {
-        val mediaType = if (item.type.equals("series", true) || item.type.equals("tv", true)) {
-            LibraryMediaType.SERIES
-        } else {
-            LibraryMediaType.MOVIE
+    fun metadataType(item: AstraWaveMetadataGateway.Item): LibraryMediaType =
+        if (item.type.equals("series", true) || item.type.equals("tv", true)) LibraryMediaType.SERIES else LibraryMediaType.MOVIE
+
+    fun metadataLibraryId(item: AstraWaveMetadataGateway.Item): String {
+        val type = metadataType(item)
+        return when {
+            item.id.startsWith("tt", true) -> "stremio:cinemeta:${if (type == LibraryMediaType.SERIES) "series" else "movie"}:${item.id}"
+            item.id.toLongOrNull() != null -> "tmdb:${if (type == LibraryMediaType.SERIES) "tv" else "movie"}:${item.id}"
+            else -> "metadata:${item.type}:${item.id}"
         }
+    }
+
+    fun openMetadata(item: AstraWaveMetadataGateway.Item) {
+        val mediaType = metadataType(item)
         val sourceId = when {
             item.id.startsWith("tt", true) -> "stremio:cinemeta:${if (mediaType == LibraryMediaType.SERIES) "series" else "movie"}:${item.id}"
             item.id.toLongOrNull() != null -> "tmdb:${item.id}"
@@ -147,16 +168,10 @@ fun PremiumHomeScreen(profileId: String = "default") {
             Spacer(Modifier.height(24.dp))
         }
 
-        if (recent.isNotEmpty()) {
-            HomeSectionTitle("Recently Watched", "Your latest playback history")
-            LibraryHomeRow(recent.map { it.item }, ::openItem)
-            Spacer(Modifier.height(24.dp))
-        }
-
         when (val current = discovery) {
             HomeDiscoveryState.Loading -> AstraWaveStatePanel(
                 "Building your home…",
-                "Loading zero-config movie and TV discovery.",
+                "Loading zero-config discovery and personalizing it from your library.",
                 loading = true,
             )
             is HomeDiscoveryState.Error -> AstraWaveStatePanel(
@@ -164,12 +179,55 @@ fun PremiumHomeScreen(profileId: String = "default") {
                 current.message,
             )
             is HomeDiscoveryState.Ready -> {
+                val candidateItems = current.movies + current.series
+                val byId = candidateItems.associateBy(::metadataLibraryId)
+                val currentYear = LocalDate.now().year
+                val profile = RecommendationProfile(
+                    profileId = profileId,
+                    favoriteItemIds = favorites.map { it.item.id }.toSet(),
+                    watchlistItemIds = watchlist.map { it.item.id }.toSet(),
+                    completedItemIds = completed,
+                    recentItemIds = recent.map { it.item.id },
+                )
+                val candidates = candidateItems.mapIndexed { index, item ->
+                    val releaseYear = item.releaseInfo?.take(4)?.toIntOrNull()
+                    val freshness = when (releaseYear) {
+                        currentYear -> 10.0
+                        currentYear - 1 -> 7.0
+                        currentYear - 2 -> 4.0
+                        else -> 1.0
+                    }
+                    RecommendationCandidate(
+                        id = metadataLibraryId(item),
+                        title = item.name,
+                        mediaType = metadataType(item),
+                        popularityScore = (candidateItems.size - index).coerceAtLeast(1) * 3.0,
+                        freshnessScore = freshness,
+                        posterUrl = item.posterUrl,
+                        metadataSource = "AstraWave",
+                    )
+                }
+                val ranked = recommender.rank(profile, candidates, limit = 18)
+                    .mapNotNull { rankedItem -> byId[rankedItem.candidate.id] }
+
+                if (ranked.isNotEmpty()) {
+                    HomeSectionTitle("For You", "Ranked from your watchlist, favorites, history, freshness and what’s trending")
+                    MetadataHomeRow(ranked, ::openMetadata)
+                    Spacer(Modifier.height(24.dp))
+                }
+
                 HomeSectionTitle("Trending Movies", "Fresh discovery from AstraWave metadata")
                 MetadataHomeRow(current.movies, ::openMetadata)
                 Spacer(Modifier.height(24.dp))
                 HomeSectionTitle("Trending TV", "Series people are watching now")
                 MetadataHomeRow(current.series, ::openMetadata)
             }
+        }
+
+        if (recent.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            HomeSectionTitle("Recently Watched", "Your latest playback history")
+            LibraryHomeRow(recent.take(24).map { it.item }, ::openItem)
         }
 
         Spacer(Modifier.height(28.dp))
@@ -224,7 +282,7 @@ private fun MetadataHomeRow(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items.forEach { item ->
+        items.distinctBy { "${it.type}:${it.id}" }.forEach { item ->
             AstraWaveFocusableCard(Modifier.width(190.dp).clickable { onOpen(item) }) {
                 Column {
                     AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth())
