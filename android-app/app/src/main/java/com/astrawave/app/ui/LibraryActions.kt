@@ -69,7 +69,9 @@ fun LibraryActionRow(
             Modifier.clickable {
                 context.startActivity(
                     Intent(context, TitleDetailsActivity::class.java)
-                        .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.title),
+                        .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.title)
+                        .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, item.type.name)
+                        .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, item.sourceId),
                 )
             },
         ) {
