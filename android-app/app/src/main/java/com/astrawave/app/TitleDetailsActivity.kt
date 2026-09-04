@@ -65,13 +65,26 @@ class TitleDetailsActivity : ComponentActivity() {
                         stremioId = stremioIdentity?.second,
                         tmdbId = tmdbId,
                         onBack = { finish() },
-                        onPlay = { urls ->
+                        onPlay = { urls, episode ->
                             if (urls.isEmpty()) return@TitleDetailsScreen
+                            val playbackTitle = episode?.let {
+                                "$title — S${it.season}E${it.episode} ${it.title}"
+                            } ?: title
+                            val baseId = sourceId?.takeIf { it.isNotBlank() }
+                                ?: "title:${title.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')}"
+                            val playbackId = episode?.let { "$baseId:s${it.season}e${it.episode}" } ?: baseId
+                            val playbackType = if (episode != null) "EPISODE" else mediaType?.takeIf { it.isNotBlank() } ?: "MOVIE"
+                            val playbackSourceId = episode?.id?.takeIf { it.isNotBlank() } ?: sourceId
                             startActivity(
                                 Intent(this, PlayerActivity::class.java)
                                     .putExtra(PlayerActivity.EXTRA_URL, urls.first())
                                     .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(urls))
-                                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+                                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true)
+                                    .putExtra(PlayerActivity.EXTRA_PROFILE_ID, "default")
+                                    .putExtra(PlayerActivity.EXTRA_LIBRARY_ID, playbackId)
+                                    .putExtra(PlayerActivity.EXTRA_LIBRARY_TITLE, playbackTitle)
+                                    .putExtra(PlayerActivity.EXTRA_LIBRARY_TYPE, playbackType)
+                                    .putExtra(PlayerActivity.EXTRA_LIBRARY_SOURCE_ID, playbackSourceId),
                             )
                         },
                     )
@@ -111,7 +124,7 @@ private fun TitleDetailsScreen(
     stremioId: String?,
     tmdbId: Long?,
     onBack: () -> Unit,
-    onPlay: (List<String>) -> Unit,
+    onPlay: (List<String>, StremioEpisode?) -> Unit,
 ) {
     val context = LocalContext.current
     val sourceRepository = remember { UnifiedVodSourceRepository(context) }
@@ -299,7 +312,7 @@ private fun TitleDetailsScreen(
                     )
                     sources.forEachIndexed { index, source ->
                         val orderedUrls = listOf(source.link.url) + allUrls.filterNot { it == source.link.url }
-                        SourceCard(index, source) { onPlay(orderedUrls.distinct()) }
+                        SourceCard(index, source) { onPlay(orderedUrls.distinct(), selectedEpisode) }
                     }
                 }
             }
