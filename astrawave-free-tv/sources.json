@@ -1,42 +1,28 @@
 {
-  "version": 2,
+  "version": 3,
   "policy": {
-    "description": "AstraWave Free TV registry. Only streams with documented authorization/public distribution status belong here. Discovery sources are never auto-approved.",
+    "description": "AstraWave Free TV registry. Only direct streams with documented authorization/public distribution status are written to the M3U. Official provider pages use playbackMode=external and appear as handoffs in Live/Guide.",
     "requiredRightsStatuses": ["official", "public-domain", "creative-commons", "authorized-redistribution"]
   },
   "channels": [
-    {
-      "id": "one-albuquerque-media",
-      "name": "One Albuquerque Media",
-      "group": "Local Government",
-      "tvgId": "OneAlbuquerqueMedia.us",
-      "streamUrl": "https://www.cabq.gov/artsculture/govtv",
-      "playbackMode": "external",
-      "rightsStatus": "official",
-      "rightsEvidenceUrl": "https://www.cabq.gov/artsculture/govtv",
-      "notes": "Official City of Albuquerque government-access television live stream."
-    },
-    {
-      "id": "scottsdale-video-network",
-      "name": "Scottsdale Video Network",
-      "group": "Local Government",
-      "tvgId": "ScottsdaleVideoNetwork.us",
-      "streamUrl": "https://www.scottsdaleaz.gov/scottsdale-video-network/live-stream",
-      "playbackMode": "external",
-      "rightsStatus": "official",
-      "rightsEvidenceUrl": "https://www.scottsdaleaz.gov/scottsdale-video-network",
-      "notes": "Official City of Scottsdale government-access television live stream."
-    },
-    {
-      "id": "nasa-live",
-      "name": "NASA Live / NASA+",
-      "group": "Science & Public",
-      "tvgId": "NASALive.us",
-      "streamUrl": "https://www.nasa.gov/live/",
-      "playbackMode": "external",
-      "rightsStatus": "official",
-      "rightsEvidenceUrl": "https://www.nasa.gov/ways-to-watch/",
-      "notes": "Official NASA live programming and NASA+ access."
-    }
+    {"id":"one-albuquerque-media","name":"One Albuquerque Media","group":"Local Government","tvgId":"OneAlbuquerqueMedia.us","streamUrl":"https://www.cabq.gov/artsculture/govtv","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://www.cabq.gov/artsculture/govtv","provider":"City of Albuquerque","notes":"Official City of Albuquerque government-access television live stream."},
+    {"id":"scottsdale-video-network","name":"Scottsdale Video Network","group":"Local Government","tvgId":"ScottsdaleVideoNetwork.us","streamUrl":"https://www.scottsdaleaz.gov/scottsdale-video-network/live-stream","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://www.scottsdaleaz.gov/scottsdale-video-network","provider":"City of Scottsdale","notes":"Official City of Scottsdale government-access television live stream."},
+    {"id":"nasa-live","name":"NASA Live / NASA+","group":"Science & Public","tvgId":"NASALive.us","streamUrl":"https://www.nasa.gov/live/","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://www.nasa.gov/ways-to-watch/","provider":"NASA","notes":"Official NASA live programming and NASA+ access."},
+    {"id":"nfl-channel","name":"NFL Channel","group":"Premium Free Sports","tvgId":"NFLChannel.us","streamUrl":"https://www.nfl.com/watch/nfl-channel-live","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://www.nfl.com/watch/nfl-channel-live","provider":"NFL","notes":"Official NFL FAST channel; game availability is controlled by the NFL."},
+    {"id":"fox-sports-tubi","name":"FOX Sports on Tubi","group":"Premium Free Sports","tvgId":"FoxSportsTubi.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"Official Tubi sports destination; event availability varies."},
+    {"id":"cbs-sports-hq","name":"CBS Sports HQ","group":"Premium Free Sports","tvgId":"CBSSportsHQ.us","streamUrl":"https://pluto.tv/us/live-tv/5a6b92f6e22a617379789618","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://www.cbssports.com/live/","provider":"CBS / Pluto TV","notes":"Official free CBS Sports HQ access."},
+    {"id":"cbs-news-247","name":"CBS News 24/7","group":"Premium Free News","tvgId":"CBSNews247.us","streamUrl":"https://www.cbsnews.com/live/","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://www.cbsnews.com/live/","provider":"CBS News","notes":"Official CBS News live stream."},
+    {"id":"mlb-tubi","name":"MLB","group":"Premium Free Sports","tvgId":"MLBFree.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"MLB-branded free sports programming where available on Tubi."},
+    {"id":"nhl-tubi","name":"NHL","group":"Premium Free Sports","tvgId":"NHLFree.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"NHL-branded free programming where available on Tubi."},
+    {"id":"pga-tour-tubi","name":"PGA TOUR","group":"Premium Free Sports","tvgId":"PGATourFree.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"PGA TOUR free programming where available on Tubi."},
+    {"id":"nascar-tubi","name":"NASCAR","group":"Premium Free Sports","tvgId":"NASCARFree.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"NASCAR free programming where available on Tubi."},
+    {"id":"bein-sports-xtra-tubi","name":"beIN Sports XTRA","group":"Premium Free Sports","tvgId":"beINSportsXTRA.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi / beIN","notes":"Official free beIN Sports XTRA availability via Tubi where supported."},
+    {"id":"fubo-sports-network-tubi","name":"Fubo Sports Network","group":"Premium Free Sports","tvgId":"FuboSportsNetwork.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi / Fubo","notes":"Official free Fubo Sports Network availability via Tubi where supported."},
+    {"id":"stadium-tubi","name":"Stadium","group":"Premium Free Sports","tvgId":"Stadium.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"Official free Stadium availability via Tubi where supported."},
+    {"id":"accdn-tubi","name":"ACCDN","group":"Premium Free Sports","tvgId":"ACCDN.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"Official ACC Digital Network programming via Tubi where supported."},
+    {"id":"pac12-insider-tubi","name":"Pac-12 Insider","group":"Premium Free Sports","tvgId":"Pac12Insider.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"Official Pac-12 Insider programming via Tubi where supported."},
+    {"id":"dazn-ringside-tubi","name":"DAZN Ringside","group":"Premium Free Sports","tvgId":"DAZNRingside.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi / DAZN","notes":"Official DAZN Ringside availability via Tubi where supported."},
+    {"id":"womens-sports-network-tubi","name":"Women’s Sports Network","group":"Premium Free Sports","tvgId":"WomensSportsNetwork.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi","notes":"Official Women’s Sports Network availability via Tubi where supported."},
+    {"id":"motortrend-fast-tubi","name":"MotorTrend FAST TV","group":"Premium Free Sports","tvgId":"MotorTrendFAST.us","streamUrl":"https://tubitv.com/category/sports_on_tubi","playbackMode":"external","rightsStatus":"official","rightsEvidenceUrl":"https://tubitv.com/category/sports_on_tubi","provider":"Tubi / MotorTrend","notes":"Official MotorTrend FAST availability via Tubi where supported."}
   ]
 }
