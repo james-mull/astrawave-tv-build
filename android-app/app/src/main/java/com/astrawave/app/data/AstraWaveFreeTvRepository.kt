@@ -5,18 +5,22 @@ import com.astrawave.app.core.IptvSource
 /**
  * AstraWave Free TV client.
  *
- * Sources are split deliberately:
- * - AstraWave's reviewed registry playlist (highest priority)
- * - FreeCastHub's public-broadcaster playlist
- * - IPTV.org public playlists for US-first and category discovery
+ * Sources are intentionally layered so AstraWave can merge duplicates and
+ * health-check the best candidate at playback time:
+ * - AstraWave reviewed registry playlist (highest priority)
+ * - FreeCastHub public-broadcaster playlist
+ * - Free-TV/IPTV quality-focused officially-free playlist
+ * - IPTV.org US-first and category playlists
+ * - World IPTV frequently rechecked public playlist
  *
- * Every direct candidate is still health-checked before playback. A playlist
- * entry is never treated as proof that the stream is currently usable.
+ * A playlist entry is discovery metadata, never proof that a stream is usable.
  */
 class AstraWaveFreeTvRepository(
     private val playlistUrl: String = DEFAULT_PLAYLIST_URL,
     private val publicBroadcasterPlaylistUrl: String = DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL,
+    private val freeTvPlaylistUrl: String = DEFAULT_FREE_TV_PLAYLIST_URL,
     private val iptvOrgPlaylistUrls: List<String> = DEFAULT_IPTV_ORG_PLAYLIST_URLS,
+    private val worldIptvPlaylistUrl: String = DEFAULT_WORLD_IPTV_PLAYLIST_URL,
 ) {
     fun loadChannels(): List<LiveChannel> {
         val liveTv = LiveTvRepository()
@@ -34,6 +38,13 @@ class AstraWaveFreeTvRepository(
                 priority = 8,
             )
         }.getOrDefault(emptyList())
+        val freeTvPublic = runCatching {
+            liveTv.loadM3u(
+                url = freeTvPlaylistUrl,
+                source = "Free-TV Public",
+                priority = 9,
+            )
+        }.getOrDefault(emptyList())
         val iptvOrg = iptvOrgPlaylistUrls.flatMap { url ->
             runCatching {
                 liveTv.loadM3u(
@@ -43,7 +54,14 @@ class AstraWaveFreeTvRepository(
                 )
             }.getOrDefault(emptyList())
         }
-        return (reviewed + publicBroadcasters + iptvOrg)
+        val worldIptv = runCatching {
+            liveTv.loadM3u(
+                url = worldIptvPlaylistUrl,
+                source = "World IPTV Verified",
+                priority = 12,
+            )
+        }.getOrDefault(emptyList())
+        return (reviewed + publicBroadcasters + freeTvPublic + iptvOrg + worldIptv)
             .distinctBy { "${it.source}:${it.id}:${it.url}" }
     }
 
@@ -54,6 +72,9 @@ class AstraWaveFreeTvRepository(
         const val DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL =
             "https://raw.githubusercontent.com/freecasthub/public-iptv/main/playlist.m3u"
 
+        const val DEFAULT_FREE_TV_PLAYLIST_URL =
+            "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8"
+
         val DEFAULT_IPTV_ORG_PLAYLIST_URLS = listOf(
             "https://iptv-org.github.io/iptv/countries/us.m3u",
             "https://iptv-org.github.io/iptv/categories/sports.m3u",
@@ -61,6 +82,9 @@ class AstraWaveFreeTvRepository(
             "https://iptv-org.github.io/iptv/categories/entertainment.m3u",
             "https://iptv-org.github.io/iptv/categories/movies.m3u",
         )
+
+        const val DEFAULT_WORLD_IPTV_PLAYLIST_URL =
+            "https://romaxa55.github.io/world_ip_tv/output/index.m3u"
     }
 }
 
