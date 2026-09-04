@@ -48,6 +48,7 @@ class UnifiedSearchRepository(context: Context) {
     private val plexGateway = PlexPersonalMediaGateway(appContext)
     private val embyFamilyGateway = EmbyFamilyPersonalMediaGateway(appContext)
     private val webDavGateway = WebDavPersonalMediaGateway(appContext)
+    private val personalPlayback = PersonalMediaPlaybackRepository(appContext)
     private val collections = AstraWaveCollectionSearchIndex.entries
 
     suspend fun search(query: String, profileId: String, restrictedToKids: Boolean = false): List<Result> = coroutineScope {
@@ -255,7 +256,7 @@ class UnifiedSearchRepository(context: Context) {
                         description = "$connectionLabel personal library",
                         artworkUrl = item.posterUrl ?: item.backdropUrl,
                         sourceId = item.externalId,
-                        streamUrls = listOfNotNull(item.streamUrl),
+                        streamUrls = listOf(personalPlayback.locator(connection, item)),
                         score = 78 + score,
                     )
                 }
