@@ -5,18 +5,14 @@ import com.astrawave.app.core.IptvSource
 /**
  * AstraWave Free TV client.
  *
- * Sources are intentionally layered so AstraWave can merge duplicates and
- * health-check the best candidate at playback time:
- * - AstraWave reviewed registry playlist (highest priority)
- * - FreeCastHub public-broadcaster playlist
- * - Free-TV/IPTV quality-focused officially-free playlist
- * - IPTV.org US-first and category playlists
- * - World IPTV frequently rechecked public playlist
- *
- * A playlist entry is discovery metadata, never proof that a stream is usable.
+ * Sources are layered so AstraWave can merge duplicates and health-check the
+ * best candidate at playback time. The Nexus US lineup is loaded first because
+ * its tvg-id values are generated to match the public Nexus XMLTV guide.
+ * Other free playlists remain alternate stream candidates.
  */
 class AstraWaveFreeTvRepository(
     private val playlistUrl: String = DEFAULT_PLAYLIST_URL,
+    private val nexusUsPlaylistUrl: String = DEFAULT_NEXUS_US_PLAYLIST_URL,
     private val publicBroadcasterPlaylistUrl: String = DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL,
     private val freeTvPlaylistUrl: String = DEFAULT_FREE_TV_PLAYLIST_URL,
     private val iptvOrgPlaylistUrls: List<String> = DEFAULT_IPTV_ORG_PLAYLIST_URLS,
@@ -24,6 +20,13 @@ class AstraWaveFreeTvRepository(
 ) {
     fun loadChannels(): List<LiveChannel> {
         val liveTv = LiveTvRepository()
+        val nexus = runCatching {
+            liveTv.loadM3u(
+                url = nexusUsPlaylistUrl,
+                source = "AstraWave Nexus US",
+                priority = 4,
+            )
+        }.getOrDefault(emptyList())
         val reviewed = runCatching {
             liveTv.loadM3u(
                 url = playlistUrl,
@@ -61,13 +64,30 @@ class AstraWaveFreeTvRepository(
                 priority = 12,
             )
         }.getOrDefault(emptyList())
-        return (reviewed + publicBroadcasters + freeTvPublic + iptvOrg + worldIptv)
-            .distinctBy { "${it.source}:${it.id}:${it.url}" }
+
+        val nexusByName = nexus.associateBy { it.normalizedName }
+        fun canonicalize(channel: LiveChannel): LiveChannel {
+            val canonical = nexusByName[channel.normalizedName] ?: return channel
+            val canonicalTvgId = canonical.tvgId?.takeIf(String::isNotBlank) ?: return channel
+            return channel.copy(
+                id = canonicalTvgId,
+                tvgId = canonicalTvgId,
+            )
+        }
+
+        val alternates = (reviewed + publicBroadcasters + freeTvPublic + iptvOrg + worldIptv)
+            .map(::canonicalize)
+
+        return (nexus + alternates)
+            .distinctBy { "${it.normalizedName}:${it.url}" }
     }
 
     companion object {
         const val DEFAULT_PLAYLIST_URL =
             "https://raw.githubusercontent.com/james-mull/astrawave-tv-build/feature/nuvio-core-rebuild/astrawave-free-tv/astrawave-free-tv.m3u"
+
+        const val DEFAULT_NEXUS_US_PLAYLIST_URL =
+            "https://dearbulut.github.io/iptv/playlists/country/us.m3u"
 
         const val DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL =
             "https://raw.githubusercontent.com/freecasthub/public-iptv/main/playlist.m3u"
