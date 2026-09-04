@@ -18,6 +18,10 @@
             android:supportsPictureInPicture="true"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode" />
         <activity
+            android:name=".MovieListDetailActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified" />
+        <activity
             android:name=".TitleDetailsActivity"
             android:exported="false"
             android:screenOrientation="unspecified" />
