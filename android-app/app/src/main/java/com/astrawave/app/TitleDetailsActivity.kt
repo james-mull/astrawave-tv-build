@@ -58,9 +58,7 @@ class TitleDetailsActivity : ComponentActivity() {
                         stremioType = stremioIdentity?.first,
                         stremioId = stremioIdentity?.second,
                         onBack = { finish() },
-                        onPlay = { url ->
-                            startActivity(Intent(this, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, url))
-                        },
+                        onPlay = { url -> startActivity(Intent(this, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, url)) },
                     )
                 }
             }
@@ -99,17 +97,18 @@ private fun TitleDetailsScreen(
     val episodeRepository = remember { StremioSeriesEpisodeRepository() }
     val seriesMode = mediaType == "SERIES" && !stremioId.isNullOrBlank()
 
+    var sourcesMode by remember { mutableStateOf(false) }
     var refreshToken by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
-    var episodeLoading by remember { mutableStateOf(seriesMode) }
+    var episodeLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var sources by remember { mutableStateOf<List<ResolvedSource>>(emptyList()) }
     var episodes by remember { mutableStateOf<List<StremioEpisode>>(emptyList()) }
     var selectedEpisode by remember { mutableStateOf<StremioEpisode?>(null) }
     var selectedSeason by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(seriesMode, stremioId, refreshToken) {
-        if (!seriesMode || stremioId.isNullOrBlank()) return@LaunchedEffect
+    LaunchedEffect(sourcesMode, seriesMode, stremioId, refreshToken) {
+        if (!sourcesMode || !seriesMode || stremioId.isNullOrBlank()) return@LaunchedEffect
         episodeLoading = true
         val loaded = withContext(Dispatchers.IO) {
             runCatching { episodeRepository.load(stremioId) }.getOrDefault(emptyList())
@@ -119,8 +118,8 @@ private fun TitleDetailsScreen(
         episodeLoading = false
     }
 
-    LaunchedEffect(title, year, stremioId, selectedEpisode, refreshToken) {
-        if (seriesMode && selectedEpisode == null) {
+    LaunchedEffect(sourcesMode, title, year, stremioId, selectedEpisode, refreshToken) {
+        if (!sourcesMode || (seriesMode && selectedEpisode == null)) {
             loading = false
             sources = emptyList()
             return@LaunchedEffect
@@ -134,17 +133,11 @@ private fun TitleDetailsScreen(
             year = year,
             season = selectedEpisode?.season,
             episode = selectedEpisode?.episode,
-            externalIds = if (!exactId.isNullOrBlank() && !exactType.isNullOrBlank()) {
-                mapOf("stremio_id" to exactId, "stremio_type" to exactType)
-            } else {
-                emptyMap()
-            },
+            externalIds = if (!exactId.isNullOrBlank() && !exactType.isNullOrBlank()) mapOf("stremio_id" to exactId, "stremio_type" to exactType) else emptyMap(),
         )
-        sources = runCatching {
-            withContext(Dispatchers.IO) { repository.discover(request) }
-        }.onFailure {
-            error = it.message ?: "Source discovery failed"
-        }.getOrDefault(emptyList())
+        sources = runCatching { withContext(Dispatchers.IO) { repository.discover(request) } }
+            .onFailure { error = it.message ?: "Source discovery failed" }
+            .getOrDefault(emptyList())
         loading = false
     }
 
@@ -153,28 +146,50 @@ private fun TitleDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            IconButton(onClick = { if (sourcesMode) { sourcesMode = false; selectedEpisode = null; sources = emptyList(); error = null } else onBack() }) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+            }
             Column(Modifier.weight(1f)) {
                 Text(title, color = DetailsPrimary, fontSize = 28.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
-                    selectedEpisode?.let { "Season ${it.season} • Episode ${it.episode} • ${it.title}" }
-                        ?: year?.toString()
-                        ?: if (seriesMode) "Choose an episode" else "Source discovery",
+                    when {
+                        selectedEpisode != null -> "Season ${selectedEpisode!!.season} • Episode ${selectedEpisode!!.episode} • ${selectedEpisode!!.title}"
+                        sourcesMode && seriesMode -> "Episodes & Sources"
+                        sourcesMode -> "Sources"
+                        year != null -> year.toString()
+                        else -> if (seriesMode) "Series details" else "Title details"
+                    },
                     color = DetailsMuted,
                     fontSize = 13.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh") }
+            if (sourcesMode) {
+                IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh sources") }
+            }
+        }
+
+        if (!sourcesMode) {
+            InfoPanel(title = title, year = year, seriesMode = seriesMode)
+            Button(
+                onClick = { sourcesMode = true },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Text(if (seriesMode) "Episodes & Sources" else "View Sources", fontWeight = FontWeight.Bold)
+            }
+            Text(
+                "AstraWave keeps title information separate from playback discovery. Source checks begin only after you open Sources.",
+                color = DetailsMuted,
+                fontSize = 12.sp,
+            )
+            return@Column
         }
 
         Text(
-            if (seriesMode) {
-                "Choose a season and episode. AstraWave resolves the exact Stremio episode id, tests eligible streams, removes duplicates, and ranks the best playable source first."
-            } else {
-                "AstraWave checks approved public sources and enabled Stremio catalogs, resolves eligible stream providers, removes duplicates, tests stream health, and ranks the best playable source first."
-            },
+            if (seriesMode) "Choose an episode, then AstraWave resolves that exact episode and ranks healthy eligible sources."
+            else "AstraWave checks approved sources and enabled addons, removes duplicates, verifies stream health, and ranks the best playable source first.",
             color = DetailsMuted,
             fontSize = 14.sp,
             lineHeight = 20.sp,
@@ -182,10 +197,7 @@ private fun TitleDetailsScreen(
 
         if (seriesMode && selectedEpisode == null) {
             when {
-                episodeLoading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                    Text("Loading seasons and episodes…", color = DetailsPrimary)
-                }
+                episodeLoading -> LoadingRow("Loading seasons and episodes…")
                 episodes.isEmpty() -> EmptyPanel("No episode metadata found", "This series did not return a Cinemeta/Stremio episode list yet.")
                 else -> SeriesEpisodeBrowser(
                     episodes = episodes,
@@ -196,15 +208,10 @@ private fun TitleDetailsScreen(
             }
         } else {
             if (selectedEpisode != null) {
-                TextButton(onClick = { selectedEpisode = null; sources = emptyList() }) {
-                    Text("← Back to episodes")
-                }
+                TextButton(onClick = { selectedEpisode = null; sources = emptyList(); error = null }) { Text("← Back to episodes") }
             }
             when {
-                loading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                    Text("Resolving playable sources…", color = DetailsPrimary)
-                }
+                loading -> LoadingRow("Resolving playable sources…")
                 error != null -> Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
                 sources.isEmpty() -> EmptyPanel(
                     "No verified source found",
@@ -212,10 +219,37 @@ private fun TitleDetailsScreen(
                 )
                 else -> {
                     Text("Available Sources", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    sources.forEachIndexed { index, source -> SourceCard(index = index, source = source, onPlay = onPlay) }
+                    sources.forEachIndexed { index, source -> SourceCard(index, source, onPlay) }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun InfoPanel(title: String, year: Int?, seriesMode: Boolean) {
+    Column(
+        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(if (seriesMode) "SERIES" else "MOVIE", color = DetailsAccent, fontSize = 11.sp, fontWeight = FontWeight.Black)
+        Text(title, color = DetailsPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        year?.let { Text(it.toString(), color = DetailsMuted, fontSize = 14.sp) }
+        Text(
+            if (seriesMode) "Browse the title first, then open Episodes & Sources when you are ready to choose an episode and playback source."
+            else "Review the title first, then open Sources to let AstraWave find and rank available playback options.",
+            color = DetailsMuted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+    }
+}
+
+@Composable
+private fun LoadingRow(label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+        Text(label, color = DetailsPrimary)
     }
 }
 
@@ -227,30 +261,19 @@ private fun SeriesEpisodeBrowser(
     onEpisode: (StremioEpisode) -> Unit,
 ) {
     val seasons = episodes.map { it.season }.filter { it > 0 }.distinct().sorted()
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         seasons.forEach { season ->
-            if (season == selectedSeason) {
-                Button(onClick = { onSeason(season) }) { Text("Season $season") }
-            } else {
-                OutlinedButton(onClick = { onSeason(season) }) { Text("Season $season") }
-            }
+            if (season == selectedSeason) Button(onClick = { onSeason(season) }) { Text("Season $season") }
+            else OutlinedButton(onClick = { onSeason(season) }) { Text("Season $season") }
         }
     }
     episodes.filter { it.season == selectedSeason }.forEach { episode ->
         Column(
-            Modifier.fillMaxWidth()
-                .background(DetailsPanel, RoundedCornerShape(16.dp))
-                .clickable { onEpisode(episode) }
-                .padding(16.dp),
+            Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(16.dp)).clickable { onEpisode(episode) }.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Text("S${episode.season} E${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
-            episode.overview?.let {
-                Text(it, color = DetailsMuted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            }
+            episode.overview?.let { Text(it, color = DetailsMuted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
             Text("Resolve episode sources", color = DetailsAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
@@ -270,39 +293,20 @@ private fun EmptyPanel(title: String, message: String) {
 @Composable
 private fun SourceCard(index: Int, source: ResolvedSource, onPlay: (String) -> Unit) {
     Row(
-        Modifier.fillMaxWidth()
-            .background(DetailsPanel, RoundedCornerShape(18.dp))
-            .clickable { onPlay(source.link.url) }
-            .padding(17.dp),
+        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(18.dp)).clickable { onPlay(source.link.url) }.padding(17.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(
             Modifier.size(42.dp).background(if (index == 0) DetailsAccent else Color(0xFF202736), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
-        }
+        ) { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White) }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(source.link.sourceName, color = DetailsPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (index == 0) {
-                    Text(
-                        "BEST",
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.background(DetailsAccent, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp),
-                    )
-                }
+                if (index == 0) Text("BEST", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(DetailsAccent, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
             }
-            val details = listOfNotNull(
-                source.link.quality,
-                source.contentType,
-                source.latencyMs?.let { "${it}ms" },
-                source.link.licenseLabel,
-                "score ${source.score}",
-            ).joinToString(" • ")
+            val details = listOfNotNull(source.link.quality, source.contentType, source.latencyMs?.let { "${it}ms" }, source.link.licenseLabel, "score ${source.score}").joinToString(" • ")
             Text(details, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("Health verified", color = DetailsSuccess, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
