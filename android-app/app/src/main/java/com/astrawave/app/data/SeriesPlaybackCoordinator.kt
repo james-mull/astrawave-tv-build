@@ -3,7 +3,7 @@ package com.astrawave.app.data
 import android.content.Context
 import com.astrawave.app.core.ScrapeRequest
 
-/** Resolves and prepares the next episode for Cinemeta/Stremio and native TMDB series identities. */
+/** Resolves and prepares the next unwatched episode for Cinemeta/Stremio and native TMDB series identities. */
 class SeriesPlaybackCoordinator(context: Context) {
     data class NextEpisodePlan(
         val seriesId: String,
@@ -11,9 +11,11 @@ class SeriesPlaybackCoordinator(context: Context) {
         val urls: List<String>,
     )
 
+    private val appContext = context.applicationContext
     private val stremioEpisodes = StremioSeriesEpisodeRepository()
     private val tmdbEpisodes = TmdbSeriesEpisodeRepository()
-    private val sources = UnifiedVodSourceRepository(context)
+    private val sources = UnifiedVodSourceRepository(appContext)
+    private val library = LocalLibraryStore(appContext)
 
     suspend fun prepareNext(currentEpisodeId: String?, profileId: String = "default"): NextEpisodePlan? {
         val current = currentEpisodeId?.takeIf { it.isNotBlank() } ?: return null
@@ -36,7 +38,10 @@ class SeriesPlaybackCoordinator(context: Context) {
             .sortedWith(compareBy<StremioEpisode> { it.season }.thenBy { it.episode })
         val index = ordered.indexOfFirst { it.id == current }
         if (index < 0 || index + 1 >= ordered.size) return null
-        val next = ordered[index + 1]
+
+        val progress = library.progress(profileId).associateBy { it.item.id }
+        val remaining = ordered.drop(index + 1)
+        val next = remaining.firstOrNull { progress[it.id]?.completed != true } ?: remaining.firstOrNull() ?: return null
         val requestTitle = catalog.seriesTitle?.takeIf { it.isNotBlank() } ?: next.title
         val externalIds = if (catalog.exactStremioIds) {
             mapOf("stremio_id" to next.id, "stremio_type" to "series")
@@ -79,7 +84,6 @@ class SeriesPlaybackCoordinator(context: Context) {
             return SeriesIdentity.Tmdb(seriesId)
         }
 
-        // Cinemeta episode IDs are normally imdbId:season:episode.
         val parts = id.split(':')
         if (parts.size < 3) return null
         val root = parts.firstOrNull()?.takeIf { it.matches(Regex("tt\\d+", RegexOption.IGNORE_CASE)) } ?: return null
