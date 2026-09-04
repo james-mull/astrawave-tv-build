@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.data.HouseholdProfileStore
+import com.astrawave.app.data.KidsModePolicyStore
 import com.astrawave.app.data.StremioCatalogAggregator
 import com.astrawave.app.data.StremioSearchHit
 import com.astrawave.app.data.TmdbItem
@@ -48,6 +50,13 @@ fun UniversalSearchScreen(profileId: String = "default") {
     val context = LocalContext.current
     val metadataRepository = remember { ZeroConfigCatalogRepository() }
     val addonSearch = remember { StremioCatalogAggregator(context) }
+    val household = remember { HouseholdProfileStore(context) }
+    val kidsPolicyStore = remember { KidsModePolicyStore(context) }
+    val profile = remember(profileId) { household.profiles().firstOrNull { it.id == profileId } }
+    val isKids = profile?.kidsMode == true
+    val kidsPolicy = remember(profileId) { kidsPolicyStore.load(profileId) }
+    val bedtime = isKids && kidsPolicyStore.bedtimeActive(profileId)
+    val searchAllowed = !isKids || (!bedtime && kidsPolicy.allowSearch && !kidsPolicy.approvedOnly)
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var state by remember { mutableStateOf<SearchState>(SearchState.Idle) }
@@ -60,17 +69,33 @@ fun UniversalSearchScreen(profileId: String = "default") {
             .padding(24.dp),
     ) {
         AstraWavePageHeader(
-            title = "Search",
-            subtitle = "Search AstraWave metadata and your enabled compatible addons in one place — no API key setup required.",
+            title = if (isKids) "Kids Search" else "Search",
+            subtitle = if (isKids) {
+                "Kids Mode searches AstraWave's built-in metadata only. External addon search is disabled for kids profiles."
+            } else {
+                "Search AstraWave metadata and your enabled compatible addons in one place — no API key setup required."
+            },
         )
         Spacer(Modifier.height(18.dp))
+
+        if (isKids && !searchAllowed) {
+            AstraWaveStatePanel(
+                title = if (bedtime) "Search paused for bedtime" else "Search disabled in Approved Only mode",
+                message = if (bedtime) {
+                    "Kids viewing and search are paused during the parent-set bedtime window."
+                } else {
+                    "Browse the approved Kids Movies and Kids TV collections instead. A parent can change this in Kids Mode settings."
+                },
+            )
+            return@Column
+        }
 
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Movies, shows and addon catalogs") },
+            label = { Text(if (isKids) "Kids movies and shows" else "Movies, shows and addon catalogs") },
         )
         Spacer(Modifier.height(10.dp))
         AstraWavePrimaryButton(
@@ -79,13 +104,19 @@ fun UniversalSearchScreen(profileId: String = "default") {
                 val trimmed = query.trim()
                 if (trimmed.isEmpty()) {
                     state = SearchState.Idle
+                } else if (isKids && !kidsPolicyStore.isSearchTermAllowed(profileId, trimmed)) {
+                    state = SearchState.Error("That search is not available in Kids Mode.")
                 } else {
                     state = SearchState.Loading
                     scope.launch {
                         state = try {
                             withContext(Dispatchers.IO) {
                                 val metadataResult = runCatching { metadataRepository.search(trimmed) }
-                                val addonResult = runCatching { addonSearch.search(trimmed, profileId) }
+                                val addonResult = if (isKids) {
+                                    Result.success(emptyList())
+                                } else {
+                                    runCatching { addonSearch.search(trimmed, profileId) }
+                                }
                                 SearchState.Ready(
                                     astrWaveItems = metadataResult.getOrDefault(emptyList()),
                                     addonItems = addonResult.getOrDefault(emptyList()),
@@ -104,21 +135,21 @@ fun UniversalSearchScreen(profileId: String = "default") {
         Spacer(Modifier.height(20.dp))
 
         when (val current = state) {
-            SearchState.Idle -> SearchMessage("Start searching", "Enter a title or keyword to search AstraWave discovery.")
+            SearchState.Idle -> SearchMessage("Start searching", if (isKids) "Search family-friendly AstraWave metadata." else "Enter a title or keyword to search AstraWave discovery.")
             SearchState.Loading -> Row(Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) {
                 CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
                 Spacer(Modifier.padding(6.dp))
-                Text("Searching all connected discovery sources…", color = AstraWaveColors.SecondaryText)
+                Text(if (isKids) "Searching Kids Mode metadata…" else "Searching all connected discovery sources…", color = AstraWaveColors.SecondaryText)
             }
             is SearchState.Error -> SearchMessage("Search unavailable", current.message)
             is SearchState.Ready -> {
                 if (current.astrWaveItems.isEmpty() && current.addonItems.isEmpty()) {
-                    SearchMessage("No matches", "No connected movie, TV or addon metadata matched this search.")
+                    SearchMessage("No matches", if (isKids) "No Kids Mode metadata matched this search." else "No connected movie, TV or addon metadata matched this search.")
                 } else {
                     if (current.astrWaveItems.isNotEmpty()) {
                         AstraWaveSectionHeader(
                             title = "AstraWave",
-                            subtitle = "Built-in metadata from the AstraWave backend with Cinemeta fallback.",
+                            subtitle = if (isKids) "Built-in metadata only while Kids Mode is active." else "Built-in metadata from the AstraWave backend with Cinemeta fallback.",
                         )
                         Spacer(Modifier.height(8.dp))
                         current.astrWaveItems.take(40).forEach { item ->
@@ -140,7 +171,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
                         Spacer(Modifier.height(18.dp))
                     }
 
-                    if (current.addonItems.isNotEmpty()) {
+                    if (!isKids && current.addonItems.isNotEmpty()) {
                         AstraWaveSectionHeader(
                             title = "From Your Addons",
                             subtitle = "Provider-attributed metadata from enabled compatible addons.",
@@ -160,12 +191,6 @@ fun UniversalSearchScreen(profileId: String = "default") {
                                         Spacer(Modifier.height(4.dp))
                                         Text(description, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
                                     }
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        "Metadata result • playback requires an authorized eligible source",
-                                        color = AstraWaveColors.TertiaryText,
-                                        style = MaterialTheme.typography.labelMedium,
-                                    )
                                     Spacer(Modifier.height(10.dp))
                                     LibraryActionRow(
                                         item = hit.item.toLibraryItemRef(hit.addonId),
@@ -180,7 +205,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
                         Spacer(Modifier.height(12.dp))
                         SearchMessage("Metadata partial failure", it)
                     }
-                    current.addonError?.let {
+                    if (!isKids) current.addonError?.let {
                         Spacer(Modifier.height(12.dp))
                         SearchMessage("Addon search partial failure", it)
                     }
