@@ -22,6 +22,10 @@
             android:exported="false"
             android:screenOrientation="unspecified" />
         <activity
+            android:name=".TvListDetailActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified" />
+        <activity
             android:name=".TitleDetailsActivity"
             android:exported="false"
             android:screenOrientation="unspecified" />
