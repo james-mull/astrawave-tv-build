@@ -58,6 +58,8 @@ class LiveTvRepository {
         val byTvg = programmes.groupBy { it.channelId }
         val nowMs = System.currentTimeMillis()
         return channelLists.flatten()
+            .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
+            .distinctBy { "${it.source}:${it.normalizedName}:${it.url}" }
             .groupBy(::channelIdentityKey)
             .map { (identityKey, candidates) ->
                 val ordered = candidates.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.source })
@@ -79,7 +81,7 @@ class LiveTvRepository {
                 }
                 LiveChannelGroup(
                     canonicalName = identityKey,
-                    displayName = ordered.map { it.name }.maxByOrNull { it.length } ?: first.name,
+                    displayName = preferredDisplayName(ordered),
                     candidates = ordered,
                     currentProgram = current,
                     nextProgram = next,
@@ -116,19 +118,38 @@ class LiveTvRepository {
             return null
         }
 
+        /**
+         * Channel names are the cross-provider identity because public playlists frequently use
+         * incompatible tvg-id schemes for the same station. Keeping tvg-id on each candidate still
+         * lets the merged group consume guide data from every known identifier.
+         */
         fun channelIdentityKey(channel: LiveChannel): String =
-            channel.tvgId
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?.lowercase(Locale.US)
-                ?.let { "tvg:$it" }
-                ?: "name:${channel.normalizedName}"
+            channel.normalizedName
+                .takeIf { it.isNotBlank() }
+                ?.let { "name:$it" }
+                ?: channel.tvgId
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.lowercase(Locale.US)
+                    ?.let { "tvg:$it" }
+                ?: "url:${channel.url}"
 
         fun normalizeChannelName(raw: String): String = raw.lowercase(Locale.US)
+            .replace("+", " plus ")
+            .replace("&", " and ")
             .replace(Regex("\\b(uhd|4k|fhd|hd|sd|hevc|h265|h264|60fps|50fps)\\b"), " ")
-            .replace(Regex("\\b(us|usa|east|west|central|backup|alt|alternative)\\b"), " ")
+            .replace(Regex("\\b(us|usa|east|west|central|backup|alt|alternative|feed)\\b"), " ")
+            .replace(Regex("\\[[^]]*]"), " ")
+            .replace(Regex("\\([^)]*(?:hd|sd|uhd|4k|feed|backup)[^)]*\\)"), " ")
             .replace(Regex("[^a-z0-9]+"), " ")
             .trim()
             .replace(Regex("\\s+"), " ")
+
+        private fun preferredDisplayName(channels: List<LiveChannel>): String =
+            channels
+                .sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.name.length })
+                .firstOrNull()
+                ?.name
+                ?: channels.first().name
     }
 }
