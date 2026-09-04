@@ -68,6 +68,7 @@ fun MyAstraWaveHub(
     var createList by remember { mutableStateOf(false) }
     var showSetup by remember { mutableStateOf(false) }
     var showSafety by remember { mutableStateOf(false) }
+    var showSubscription by remember { mutableStateOf(false) }
 
     fun refresh() { snapshot = store.snapshot(profileId) }
 
@@ -79,6 +80,14 @@ fun MyAstraWaveHub(
 
     if (showSafety) {
         SafetySettingsScreen(profileId = profileId, onBack = { showSafety = false })
+        return
+    }
+
+    if (showSubscription) {
+        SubscriptionOverviewScreen(
+            currentPlanName = account.planName,
+            onBack = { showSubscription = false },
+        )
         return
     }
 
@@ -169,6 +178,7 @@ fun MyAstraWaveHub(
         AccountSection.entries.forEach { section ->
             AccountRow(section) {
                 when (section) {
+                    AccountSection.SUBSCRIPTION -> showSubscription = true
                     AccountSection.PARENTAL_CONTROLS, AccountSection.PRIVACY -> showSafety = true
                     else -> onOpenAccountSection(section)
                 }
