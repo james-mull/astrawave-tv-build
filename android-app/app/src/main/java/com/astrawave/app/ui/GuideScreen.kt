@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,6 +73,9 @@ fun AstraWaveGuideScreen(
     val scope = rememberCoroutineScope()
     var state by remember(sources) { mutableStateOf<GuideLoadState>(GuideLoadState.Loading) }
     var refreshKey by remember { mutableStateOf(0) }
+    var query by remember { mutableStateOf("") }
+    var selectedGroup by remember { mutableStateOf<String?>(null) }
+    var nowOnly by remember { mutableStateOf(false) }
 
     LaunchedEffect(sources, refreshKey) {
         state = GuideLoadState.Loading
@@ -117,14 +123,14 @@ fun AstraWaveGuideScreen(
         Spacer(Modifier.height(5.dp))
         AstraWavePageHeader(
             title = "Guide",
-            subtitle = "AstraWave Free TV, IPTV.org Public, official provider channels, and your own IPTV in one guide.",
+            subtitle = "Search and filter your merged free TV, official provider channels, and personal IPTV lineup.",
         )
         Spacer(Modifier.height(22.dp))
 
         when (val current = state) {
             GuideLoadState.Loading -> AstraWaveLoadingState(
                 title = "Building your guide",
-                message = "Loading direct channels, official provider handoffs, IPTV.org candidates, current programs and source matches.",
+                message = "Loading channels, official provider options, EPG data and alternate source matches.",
             )
 
             is GuideLoadState.Error -> AstraWaveErrorState(
@@ -137,21 +143,59 @@ fun AstraWaveGuideScreen(
             is GuideLoadState.Ready -> {
                 val snapshot = current.snapshot
                 GuideSummaryRail(snapshot)
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(18.dp))
 
-                if (snapshot.rows.isEmpty()) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Search channels or programs") },
+                )
+                Spacer(Modifier.height(10.dp))
+
+                val groups = snapshot.rows.map { it.group ?: "Uncategorized" }.distinct().sorted().take(20)
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    GuideFilterButton("All", selectedGroup == null) { selectedGroup = null }
+                    GuideFilterButton("On now", nowOnly) { nowOnly = !nowOnly }
+                    groups.forEach { group ->
+                        GuideFilterButton(group, selectedGroup == group) {
+                            selectedGroup = if (selectedGroup == group) null else group
+                        }
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+
+                val normalizedQuery = query.trim().lowercase()
+                val visibleRows = snapshot.rows.filter { row ->
+                    val group = row.group ?: "Uncategorized"
+                    val matchesGroup = selectedGroup == null || selectedGroup == group
+                    val matchesNow = !nowOnly || row.now != null
+                    val matchesQuery = normalizedQuery.isBlank() ||
+                        row.name.lowercase().contains(normalizedQuery) ||
+                        row.now?.title.orEmpty().lowercase().contains(normalizedQuery) ||
+                        row.next?.title.orEmpty().lowercase().contains(normalizedQuery) ||
+                        group.lowercase().contains(normalizedQuery) ||
+                        row.preferredSource.orEmpty().lowercase().contains(normalizedQuery)
+                    matchesGroup && matchesNow && matchesQuery
+                }
+
+                AstraWaveSectionHeader(
+                    title = "Now on TV",
+                    subtitle = "${visibleRows.size} channels shown • direct channels are checked before playback and use automatic backup streams.",
+                )
+                Spacer(Modifier.height(12.dp))
+
+                if (visibleRows.isEmpty()) {
                     AstraWaveEmptyState(
-                        title = "No channels yet",
-                        message = "Add your own M3U/Xtream source in My IPTV, or use AstraWave Free TV and IPTV.org Public candidates.",
+                        title = "No guide matches",
+                        message = "Try a different search or channel group, or turn off the On now filter.",
                     )
                 } else {
-                    AstraWaveSectionHeader(
-                        title = "Now on TV",
-                        subtitle = "Direct channels are health-checked when selected and AstraWave automatically tries healthy alternates.",
-                    )
-                    Spacer(Modifier.height(12.dp))
-
-                    snapshot.rows.take(500).forEach { row ->
+                    visibleRows.take(500).forEach { row ->
                         val actionModifier = when {
                             row.playableUrls.isNotEmpty() -> Modifier.clickable { play(row.playableUrls) }
                             row.externalUrl != null -> Modifier.clickable { openProvider(row.externalUrl) }
@@ -207,7 +251,7 @@ fun AstraWaveGuideScreen(
                                 Column(horizontalAlignment = Alignment.End) {
                                     val available = row.playableUrls.isNotEmpty() || row.externalUrl != null
                                     Text(
-                                        if (row.externalUrl != null) "OFFICIAL" else if (row.playableUrls.isNotEmpty()) "CHECK" else "UNAVAILABLE",
+                                        if (row.externalUrl != null) "OFFICIAL" else if (row.playableUrls.isNotEmpty()) "READY" else "UNAVAILABLE",
                                         color = if (available) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
                                         style = MaterialTheme.typography.labelMedium,
                                     )
@@ -215,7 +259,8 @@ fun AstraWaveGuideScreen(
                                     Text(
                                         when {
                                             row.externalUrl != null -> "Open provider"
-                                            row.playableUrls.isNotEmpty() -> "Check & play • ${row.playableCandidateCount} candidates"
+                                            row.playableUrls.size > 1 -> "Watch • ${row.playableUrls.size} backups"
+                                            row.playableUrls.isNotEmpty() -> "Watch"
                                             else -> "No direct candidates"
                                         },
                                         color = AstraWaveColors.SecondaryText,
@@ -269,4 +314,18 @@ private fun GuideSourceBadge(label: String) {
             .padding(horizontal = 9.dp, vertical = 5.dp),
         maxLines = 1,
     )
+}
+
+@Composable
+private fun GuideFilterButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) AstraWaveColors.Accent else AstraWaveColors.SurfaceRaised,
+            contentColor = AstraWaveColors.PrimaryText,
+        ),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Text(label, maxLines = 1)
+    }
 }
