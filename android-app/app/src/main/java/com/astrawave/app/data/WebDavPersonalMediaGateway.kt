@@ -16,6 +16,7 @@ import java.net.URI
 import java.net.URL
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.util.ArrayDeque
 import org.xmlpull.v1.XmlPullParser
 
 /**
@@ -35,7 +36,7 @@ class WebDavPersonalMediaGateway(context: Context) : PersonalMediaGateway {
         }
 
         return runCatching {
-            val entries = list(connection)
+            val entries = listAt(connection, connection.serverUrl)
             connection.copy(
                 status = PersonalMediaConnectionStatus.READY,
                 libraryCount = 1,
@@ -53,7 +54,7 @@ class WebDavPersonalMediaGateway(context: Context) : PersonalMediaGateway {
     }
 
     override fun libraries(connection: PersonalMediaConnection): List<PersonalMediaLibrary> {
-        val entries = list(connection)
+        val entries = listAt(connection, connection.serverUrl)
         return listOf(
             PersonalMediaLibrary(
                 id = "root",
@@ -68,24 +69,48 @@ class WebDavPersonalMediaGateway(context: Context) : PersonalMediaGateway {
     }
 
     override fun recent(connection: PersonalMediaConnection, limit: Int): List<PersonalMediaItem> =
-        list(connection)
+        listAt(connection, connection.serverUrl)
             .filterNot { it.collection }
             .mapNotNull { it.toMediaItem(connection) }
             .take(limit.coerceIn(1, 100))
 
+    /**
+     * Searches nested folders with bounded breadth-first traversal. This makes normal personal
+     * libraries such as /Movies, /TV/Show/Season and /Music visible without allowing one search
+     * to crawl an unbounded NAS tree.
+     */
     override fun search(connection: PersonalMediaConnection, query: String, limit: Int): List<PersonalMediaItem> {
-        if (query.isBlank()) return emptyList()
-        return list(connection)
-            .asSequence()
-            .filterNot { it.collection }
-            .filter { it.name.contains(query.trim(), ignoreCase = true) }
-            .mapNotNull { it.toMediaItem(connection) }
-            .take(limit.coerceIn(1, 100))
-            .toList()
+        val needle = query.trim()
+        if (needle.isBlank()) return emptyList()
+        val capped = limit.coerceIn(1, 100)
+        val queue = ArrayDeque<SearchDirectory>()
+        val visited = mutableSetOf<String>()
+        val results = mutableListOf<PersonalMediaItem>()
+        queue.add(SearchDirectory(connection.serverUrl.ensureTrailingSlash(), depth = 0))
+
+        while (queue.isNotEmpty() && visited.size < MAX_SEARCH_DIRECTORIES && results.size < capped) {
+            val current = queue.removeFirst()
+            val normalizedDirectory = normalizeUrl(current.url)
+            if (!visited.add(normalizedDirectory)) continue
+
+            val entries = runCatching { listAt(connection, current.url) }.getOrDefault(emptyList())
+            entries.forEach { entry ->
+                if (results.size >= capped) return@forEach
+                if (entry.collection) {
+                    if (current.depth < MAX_SEARCH_DEPTH && normalizeUrl(entry.href) !in visited) {
+                        queue.add(SearchDirectory(entry.href.ensureTrailingSlash(), current.depth + 1))
+                    }
+                } else if (entry.name.contains(needle, ignoreCase = true)) {
+                    entry.toMediaItem(connection)?.let(results::add)
+                }
+            }
+        }
+
+        return results.distinctBy { it.id }.take(capped)
     }
 
-    private fun list(connection: PersonalMediaConnection): List<WebDavEntry> {
-        val request = URL(connection.serverUrl).openConnection() as HttpURLConnection
+    private fun listAt(connection: PersonalMediaConnection, directoryUrl: String): List<WebDavEntry> {
+        val request = URL(directoryUrl).openConnection() as HttpURLConnection
         request.instanceFollowRedirects = true
         request.connectTimeout = 10_000
         request.readTimeout = 15_000
@@ -107,16 +132,21 @@ class WebDavPersonalMediaGateway(context: Context) : PersonalMediaGateway {
         val stream = if (code in 200..299) request.inputStream else request.errorStream
         val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) error("WebDAV endpoint returned HTTP $code")
-        return parseMultiStatus(body, connection.serverUrl)
-            .filterNot { normalizeUrl(it.href) == normalizeUrl(connection.serverUrl) }
+        return parseMultiStatus(body, directoryUrl)
+            .filterNot { normalizeUrl(it.href) == normalizeUrl(directoryUrl) }
     }
 
     private fun applyBasicAuth(connection: HttpURLConnection, connectionId: String) {
         val username = credentials.loadUsername(connectionId)
         val password = credentials.loadPassword(connectionId)
         if (username.isNullOrBlank() && password.isNullOrBlank()) return
-        require(!username.isNullOrBlank() && password != null) { "Both username and password are required for WebDAV authentication" }
-        val value = Base64.encodeToString("$username:$password".toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+        require(!username.isNullOrBlank() && password != null) {
+            "Both username and password are required for WebDAV authentication"
+        }
+        val value = Base64.encodeToString(
+            "$username:$password".toByteArray(StandardCharsets.UTF_8),
+            Base64.NO_WRAP,
+        )
         connection.setRequestProperty("Authorization", "Basic $value")
     }
 
@@ -145,11 +175,13 @@ class WebDavPersonalMediaGateway(context: Context) : PersonalMediaGateway {
                     "displayname" -> if (insideResponse) displayName = parser.nextText()
                     "collection" -> if (insideResponse) collection = true
                 }
-                XmlPullParser.END_TAG -> if (parser.name.substringAfter(':').equals("response", ignoreCase = true) && insideResponse) {
+                XmlPullParser.END_TAG -> if (
+                    parser.name.substringAfter(':').equals("response", ignoreCase = true) && insideResponse
+                ) {
                     val rawHref = href.orEmpty()
                     if (rawHref.isNotBlank()) {
                         val resolved = resolveHref(serverUrl, rawHref)
-                        val fallback = resolved.substringAfterLast('/').ifBlank { "Media" }
+                        val fallback = resolved.trimEnd('/').substringAfterLast('/').ifBlank { "Media" }
                         result += WebDavEntry(
                             href = resolved,
                             name = displayName?.takeIf { it.isNotBlank() } ?: decode(fallback),
@@ -194,9 +226,16 @@ class WebDavPersonalMediaGateway(context: Context) : PersonalMediaGateway {
     private fun normalizeUrl(value: String): String = value.trimEnd('/')
     private fun String.ensureTrailingSlash(): String = if (endsWith('/')) this else "$this/"
 
+    private data class SearchDirectory(val url: String, val depth: Int)
+
     private data class WebDavEntry(
         val href: String,
         val name: String,
         val collection: Boolean,
     )
+
+    private companion object {
+        const val MAX_SEARCH_DEPTH = 5
+        const val MAX_SEARCH_DIRECTORIES = 60
+    }
 }
