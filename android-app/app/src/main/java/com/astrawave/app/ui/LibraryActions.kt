@@ -1,5 +1,6 @@
 package com.astrawave.app.ui
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.TitleDetailsActivity
 import com.astrawave.app.core.FavoriteEntry
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
@@ -63,6 +65,21 @@ fun LibraryActionRow(
     }
 
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AstraWaveFocusableCard(
+            Modifier.clickable {
+                context.startActivity(
+                    Intent(context, TitleDetailsActivity::class.java)
+                        .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.title),
+                )
+            },
+        ) {
+            Text(
+                "Open",
+                color = AstraWaveColors.Accent,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            )
+        }
         AstraWaveFocusableCard(
             Modifier.clickable {
                 inWatchlist = !inWatchlist
