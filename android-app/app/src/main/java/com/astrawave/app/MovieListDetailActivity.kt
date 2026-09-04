@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.AstraWaveMetadataGateway
 import com.astrawave.app.data.DynamicCollectionRepository
 import com.astrawave.app.ui.AstraWaveArtwork
@@ -96,6 +97,7 @@ private fun MovieListDetailScreen(
                 }.filter { it.type.equals("movie", true) || it.type.isBlank() }
                     .distinctBy { it.id }
                     .take(60)
+                    .onEach { ArtworkRegistry.register(it.name, it.posterUrl ?: it.backdropUrl) }
             }
         }.onFailure { error = it.message ?: "Unable to load this list" }.getOrDefault(emptyList())
         loading = false
