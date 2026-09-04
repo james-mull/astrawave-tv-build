@@ -130,7 +130,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
                     }
                 }
 
-                val addonResult = if (isKids) Result.success(emptyList()) else runCatching { addonSearch.search(trimmed, profileId) }
+                val addonResult = if (isKids) Result.success<List<StremioSearchHit>>(emptyList()) else runCatching { addonSearch.search(trimmed, profileId) }
                 unified.rememberSearch(profileId, trimmed)
                 SearchState.Ready(
                     results = results,
@@ -352,7 +352,7 @@ private fun UnifiedResultCard(result: UnifiedSearchRepository.Result, profileId:
 @Composable
 private fun AddonSearchCard(hit: StremioSearchHit, profileId: String) {
     val context = LocalContext.current
-    hit.item.poster?.let { ArtworkRegistry.register(hit.item.name, it) }
+    hit.item.posterUrl?.let { ArtworkRegistry.register(hit.item.name, it) }
     val libraryItem = hit.item.toLibraryItemRef(hit.addonId)
     AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
         context.startActivity(
