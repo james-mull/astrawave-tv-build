@@ -32,9 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
+import com.astrawave.app.core.AudioItem
 import com.astrawave.app.core.AudioLibrarySnapshot
 import com.astrawave.app.core.AudioSubscription
 import com.astrawave.app.core.RadioStation
+import com.astrawave.app.data.AstraWaveAudioDiscoveryRepository
 import com.astrawave.app.data.AudioLibraryRepository
 import com.astrawave.app.data.AudioSourceStore
 import com.astrawave.app.data.StreamHealthChecker
@@ -53,6 +55,7 @@ private sealed interface AudioLoadState {
 fun AudioLibraryScreen(
     profileId: String = "default",
     repository: AudioLibraryRepository = remember { AudioLibraryRepository() },
+    discovery: AstraWaveAudioDiscoveryRepository = remember { AstraWaveAudioDiscoveryRepository() },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -61,6 +64,11 @@ fun AudioLibraryScreen(
     var state by remember(sources) { mutableStateOf<AudioLoadState>(AudioLoadState.Loading) }
     var addPodcast by remember { mutableStateOf(false) }
     var addRadio by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var discoveryLoading by remember { mutableStateOf(false) }
+    var discoveredMusic by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
+    var discoveredPodcasts by remember { mutableStateOf<List<AudioSubscription>>(emptyList()) }
+    var discoveredRadio by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
 
     LaunchedEffect(sources) {
         state = AudioLoadState.Loading
@@ -80,11 +88,22 @@ fun AudioLibraryScreen(
             val healthy = withContext(Dispatchers.IO) {
                 runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
             }
-            if (!healthy) {
-                Toast.makeText(context, unavailableMessage, Toast.LENGTH_LONG).show()
-            } else {
-                play(url)
+            if (!healthy) Toast.makeText(context, unavailableMessage, Toast.LENGTH_LONG).show() else play(url)
+        }
+    }
+
+    fun runDiscovery(mode: String) {
+        discoveryLoading = true
+        scope.launch {
+            val q = query.trim()
+            withContext(Dispatchers.IO) {
+                when (mode) {
+                    "music" -> discoveredMusic = if (q.isBlank()) discovery.discoverMusic() else discovery.searchMusic(q)
+                    "podcasts" -> discoveredPodcasts = if (q.isBlank()) discovery.discoverPodcasts() else discovery.searchPodcasts(q)
+                    "radio" -> discoveredRadio = if (q.isBlank()) discovery.discoverRadio() else discovery.searchRadio(q)
+                }
             }
+            discoveryLoading = false
         }
     }
 
@@ -92,27 +111,104 @@ fun AudioLibraryScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .background(AstraWaveColors.Background).padding(24.dp),
     ) {
-        Text("Music & Podcasts", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Podcasts, video podcasts and internet radio in one persistent library.",
-            color = AstraWaveColors.SecondaryText,
-            style = MaterialTheme.typography.bodyLarge,
+        AstraWavePageHeader(
+            "Radio, Music & Podcasts",
+            "Discover music previews, podcasts and worldwide radio, then keep your own subscriptions and stations in one persistent library.",
         )
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Spacer(Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("Search songs, artists, podcasts or radio") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { runDiscovery("music") }) { Text("Music") }
+            Button(onClick = { runDiscovery("podcasts") }) { Text("Podcasts") }
+            Button(onClick = { runDiscovery("radio") }) { Text("Radio") }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { addPodcast = true }) { Text("Add Podcast") }
             Button(onClick = { addRadio = true }) { Text("Add Radio") }
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
 
-        when (val current = state) {
-            AudioLoadState.Loading -> {
-                Row(Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) {
-                    CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
-                    Spacer(Modifier.padding(6.dp))
-                    Text("Loading audio library…", color = AstraWaveColors.SecondaryText)
+        if (discoveryLoading) {
+            AstraWaveStatePanel("Discovering audio…", "Searching AstraWave's public music, podcast and radio catalogs.", loading = true)
+            Spacer(Modifier.height(18.dp))
+        }
+
+        if (discoveredMusic.isNotEmpty()) {
+            Text("Music", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            Text("Official preview audio", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
+            discoveredMusic.take(40).forEach { track ->
+                AstraWaveFocusableCard(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                        track.mediaUrl?.let(::play)
+                    },
+                ) {
+                    Column {
+                        Text(track.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                        Text(track.subtitle ?: "Music", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                        Text("Play preview", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+                    }
                 }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+
+        if (discoveredPodcasts.isNotEmpty()) {
+            Text("Podcast Discovery", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            Text("Tap a show to add its publisher RSS feed to My Audio.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
+            discoveredPodcasts.take(40).forEach { show ->
+                AstraWaveFocusableCard(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                        store.saveSubscription(profileId, show)
+                        sources = store.load(profileId)
+                        Toast.makeText(context, "Added ${show.title}", Toast.LENGTH_SHORT).show()
+                    },
+                ) {
+                    Column {
+                        Text(show.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                        Text("Podcast • Add to My Audio", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+
+        if (discoveredRadio.isNotEmpty()) {
+            Text("Radio Discovery", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(8.dp))
+            discoveredRadio.take(50).forEach { station ->
+                AstraWaveFocusableCard(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                        playChecked(station.streamUrl, "This radio stream is not reachable right now.")
+                    },
+                ) {
+                    Column {
+                        Text(station.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                        Text(listOfNotNull(station.genre, station.country).joinToString(" • ").ifBlank { "Internet radio" }, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                        Text("Check & Play", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+
+        Text("My Audio", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(10.dp))
+        when (val current = state) {
+            AudioLoadState.Loading -> Row(Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) {
+                CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
+                Spacer(Modifier.padding(6.dp))
+                Text("Loading audio library…", color = AstraWaveColors.SecondaryText)
             }
             is AudioLoadState.Error -> AudioMessage("Audio unavailable", current.message)
             is AudioLoadState.Ready -> {
@@ -144,7 +240,7 @@ fun AudioLibraryScreen(
                 }
 
                 if (snapshot.radioStations.isNotEmpty()) {
-                    Text("Radio", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                    Text("Saved Radio", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
                     snapshot.radioStations.forEach { station ->
                         AstraWaveFocusableCard(
@@ -162,7 +258,7 @@ fun AudioLibraryScreen(
                 }
 
                 if (snapshot.recentEpisodes.isEmpty() && snapshot.radioStations.isEmpty()) {
-                    AudioMessage("Your audio library is empty", "Add a podcast RSS feed or internet radio stream. Sources are stored locally and remain after restart.")
+                    AudioMessage("Your audio library is empty", "Discover a podcast or radio station above, or add your own source.")
                 }
             }
         }
