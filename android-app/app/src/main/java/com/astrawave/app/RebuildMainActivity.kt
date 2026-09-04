@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -80,6 +81,7 @@ import com.astrawave.app.ui.LiveTvHubScreen
 import com.astrawave.app.ui.MultiviewScreen
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.PersonalMediaScreen
+import com.astrawave.app.ui.PremiumHomeScreen
 import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.UniversalSearchScreen
 import com.astrawave.app.ui.toLibraryItemRef
@@ -210,7 +212,7 @@ private fun RebuildRoot() {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             if (!useRail) SectionStrip(current, primaryDestinations) { current = it }
             when (current) {
-                RebuildDestination.Home -> CatalogLanding("Home", movieCatalogs.take(3) + tvCatalogs.take(3), showIntro = true)
+                RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
                 RebuildDestination.Live -> LiveTvHubScreen(
@@ -454,14 +456,15 @@ private fun CombinedDiscoverScreen(profileId: String) {
                     Text("From Your Addons", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(12.dp))
                 }
-                state.rows.forEach { row -> AddonDiscoverRow(row) }
+                state.rows.forEach { row -> AddonDiscoverRow(row, profileId) }
             }
         }
     }
 }
 
 @Composable
-private fun AddonDiscoverRow(row: StremioCatalogRow) {
+private fun AddonDiscoverRow(row: StremioCatalogRow, profileId: String) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
         Text(row.catalog.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
         Text("${row.addonName} • ${row.catalog.type}", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
@@ -476,7 +479,17 @@ private fun AddonDiscoverRow(row: StremioCatalogRow) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 row.items.forEach { item ->
-                    AstraWaveFocusableCard(Modifier.width(184.dp)) {
+                    val libraryItem = item.toLibraryItemRef(row.addonId)
+                    AstraWaveFocusableCard(
+                        Modifier.width(184.dp).clickable {
+                            context.startActivity(
+                                Intent(context, TitleDetailsActivity::class.java)
+                                    .putExtra(TitleDetailsActivity.EXTRA_TITLE, libraryItem.title)
+                                    .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, libraryItem.type.name)
+                                    .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, libraryItem.sourceId),
+                            )
+                        },
+                    ) {
                         Column {
                             AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth())
                             Spacer(Modifier.height(10.dp))
@@ -492,6 +505,8 @@ private fun AddonDiscoverRow(row: StremioCatalogRow) {
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 3,
                             )
+                            Spacer(Modifier.height(10.dp))
+                            LibraryActionRow(item = libraryItem, profileId = profileId)
                         }
                     }
                 }
