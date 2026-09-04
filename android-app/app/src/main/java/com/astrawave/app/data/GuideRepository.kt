@@ -12,6 +12,7 @@ data class GuideChannelRow(
     val playableCandidateCount: Int,
     val preferredSource: String?,
     val playableUrl: String?,
+    val playableUrls: List<String> = emptyList(),
     val externalUrl: String? = null,
 )
 
@@ -41,6 +42,7 @@ class GuideRepository(
                 playableCandidateCount = group.candidates.size,
                 preferredSource = preferred?.source,
                 playableUrl = preferred?.url,
+                playableUrls = group.candidates.map { it.url }.distinct(),
             )
         }
         val handoffRows = live.handoffs.map { handoff ->
@@ -54,6 +56,7 @@ class GuideRepository(
                 playableCandidateCount = 0,
                 preferredSource = handoff.provider ?: "Official provider",
                 playableUrl = null,
+                playableUrls = emptyList(),
                 externalUrl = handoff.actionUrl,
             )
         }
