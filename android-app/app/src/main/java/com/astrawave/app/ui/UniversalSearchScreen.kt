@@ -23,11 +23,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.StremioCatalogAggregator
 import com.astrawave.app.data.StremioSearchHit
-import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.data.TmdbItem
+import com.astrawave.app.data.ZeroConfigCatalogRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,9 +35,9 @@ private sealed interface SearchState {
     data object Idle : SearchState
     data object Loading : SearchState
     data class Ready(
-        val tmdbItems: List<TmdbItem>,
+        val astrWaveItems: List<TmdbItem>,
         val addonItems: List<StremioSearchHit>,
-        val tmdbError: String? = null,
+        val metadataError: String? = null,
         val addonError: String? = null,
     ) : SearchState
     data class Error(val message: String) : SearchState
@@ -47,8 +46,7 @@ private sealed interface SearchState {
 @Composable
 fun UniversalSearchScreen(profileId: String = "default") {
     val context = LocalContext.current
-    val token = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
-    val tmdbRepository = remember(token) { TmdbCatalogRepository(token) }
+    val metadataRepository = remember { ZeroConfigCatalogRepository() }
     val addonSearch = remember { StremioCatalogAggregator(context) }
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
@@ -63,17 +61,9 @@ fun UniversalSearchScreen(profileId: String = "default") {
     ) {
         AstraWavePageHeader(
             title = "Search",
-            subtitle = "Search built-in TMDB discovery and metadata from your enabled addons in one place.",
+            subtitle = "Search AstraWave metadata and your enabled compatible addons in one place — no API key setup required.",
         )
         Spacer(Modifier.height(18.dp))
-
-        if (!tmdbRepository.isConfigured()) {
-            SearchMessage(
-                "TMDB not configured",
-                "Addon search still works. Connect TMDB in My AstraWave to add built-in movie and TV results.",
-            )
-            Spacer(Modifier.height(12.dp))
-        }
 
         OutlinedTextField(
             value = query,
@@ -94,16 +84,12 @@ fun UniversalSearchScreen(profileId: String = "default") {
                     scope.launch {
                         state = try {
                             withContext(Dispatchers.IO) {
-                                val tmdbResult = if (tmdbRepository.isConfigured()) {
-                                    runCatching { tmdbRepository.search(trimmed) }
-                                } else {
-                                    Result.success(emptyList())
-                                }
+                                val metadataResult = runCatching { metadataRepository.search(trimmed) }
                                 val addonResult = runCatching { addonSearch.search(trimmed, profileId) }
                                 SearchState.Ready(
-                                    tmdbItems = tmdbResult.getOrDefault(emptyList()),
+                                    astrWaveItems = metadataResult.getOrDefault(emptyList()),
                                     addonItems = addonResult.getOrDefault(emptyList()),
-                                    tmdbError = tmdbResult.exceptionOrNull()?.message,
+                                    metadataError = metadataResult.exceptionOrNull()?.message,
                                     addonError = addonResult.exceptionOrNull()?.message,
                                 )
                             }
@@ -126,16 +112,16 @@ fun UniversalSearchScreen(profileId: String = "default") {
             }
             is SearchState.Error -> SearchMessage("Search unavailable", current.message)
             is SearchState.Ready -> {
-                if (current.tmdbItems.isEmpty() && current.addonItems.isEmpty()) {
+                if (current.astrWaveItems.isEmpty() && current.addonItems.isEmpty()) {
                     SearchMessage("No matches", "No connected movie, TV or addon metadata matched this search.")
                 } else {
-                    if (current.tmdbItems.isNotEmpty()) {
+                    if (current.astrWaveItems.isNotEmpty()) {
                         AstraWaveSectionHeader(
-                            title = "AstraWave / TMDB",
-                            subtitle = "Built-in metadata and catalog results.",
+                            title = "AstraWave",
+                            subtitle = "Built-in metadata from the AstraWave backend with Cinemeta fallback.",
                         )
                         Spacer(Modifier.height(8.dp))
-                        current.tmdbItems.take(40).forEach { item ->
+                        current.astrWaveItems.take(40).forEach { item ->
                             AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                                 Column {
                                     Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
@@ -190,9 +176,9 @@ fun UniversalSearchScreen(profileId: String = "default") {
                         }
                     }
 
-                    current.tmdbError?.let {
+                    current.metadataError?.let {
                         Spacer(Modifier.height(12.dp))
-                        SearchMessage("TMDB partial failure", it)
+                        SearchMessage("Metadata partial failure", it)
                     }
                     current.addonError?.let {
                         Spacer(Modifier.height(12.dp))
