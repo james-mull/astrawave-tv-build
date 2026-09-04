@@ -35,6 +35,7 @@ import com.astrawave.app.core.RecommendationEngine
 import com.astrawave.app.core.RecommendationProfile
 import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.AstraWaveMetadataGateway
+import com.astrawave.app.data.LibraryCloudSync
 import com.astrawave.app.data.LocalLibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -53,10 +54,12 @@ private sealed interface HomeDiscoveryState {
 fun PremiumHomeScreen(profileId: String = "default") {
     val context = LocalContext.current
     val library = remember { LocalLibraryStore(context) }
+    val cloudSync = remember { LibraryCloudSync(context) }
     val metadata = remember { AstraWaveMetadataGateway() }
     val recommender = remember { RecommendationEngine() }
     var libraryRefresh by remember { mutableStateOf(0) }
     var discovery by remember { mutableStateOf<HomeDiscoveryState>(HomeDiscoveryState.Loading) }
+    var cloudRestoreMessage by remember { mutableStateOf<String?>(null) }
 
     val continueWatching = remember(profileId, libraryRefresh) { library.continueWatching(profileId).take(20) }
     val watchlist = remember(profileId, libraryRefresh) { library.watchlist(profileId).take(24) }
@@ -64,6 +67,18 @@ fun PremiumHomeScreen(profileId: String = "default") {
     val recent = remember(profileId, libraryRefresh) { library.history(profileId).take(50) }
     val completed = remember(profileId, libraryRefresh) {
         library.progress(profileId).filter { it.completed }.map { it.item.id }.toSet()
+    }
+
+    LaunchedEffect(profileId) {
+        cloudSync.restore(profileId) { result ->
+            result.onSuccess { report ->
+                val restored = report.watchlistImported + report.favoritesImported + report.listsImported + report.progressImported
+                if (restored > 0) {
+                    cloudRestoreMessage = "Synced $restored library updates from your account"
+                    libraryRefresh += 1
+                }
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -134,10 +149,14 @@ fun PremiumHomeScreen(profileId: String = "default") {
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.bodyLarge,
         )
+        cloudRestoreMessage?.let { message ->
+            Spacer(Modifier.height(12.dp))
+            Text(message, color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+        }
         Spacer(Modifier.height(28.dp))
 
         if (continueWatching.isNotEmpty()) {
-            HomeSectionTitle("Continue Watching", "Resume across primary and backup playback sources")
+            HomeSectionTitle("Continue Watching", "Resume across devices and backup playback sources")
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -182,12 +201,22 @@ fun PremiumHomeScreen(profileId: String = "default") {
                 val candidateItems = current.movies + current.series
                 val byId = candidateItems.associateBy(::metadataLibraryId)
                 val currentYear = LocalDate.now().year
+                val recentMediaTypes = recent.take(12).map { history ->
+                    when (history.item.type) {
+                        LibraryMediaType.EPISODE -> LibraryMediaType.SERIES
+                        else -> history.item.type
+                    }
+                }.filter { it == LibraryMediaType.MOVIE || it == LibraryMediaType.SERIES }
+                val preferredMediaTypes = recentMediaTypes.groupingBy { it }.eachCount()
+                    .filterValues { it >= 2 }
+                    .keys
                 val profile = RecommendationProfile(
                     profileId = profileId,
                     favoriteItemIds = favorites.map { it.item.id }.toSet(),
                     watchlistItemIds = watchlist.map { it.item.id }.toSet(),
                     completedItemIds = completed,
                     recentItemIds = recent.map { it.item.id },
+                    preferredMediaTypes = preferredMediaTypes,
                 )
                 val candidates = candidateItems.mapIndexed { index, item ->
                     val releaseYear = item.releaseInfo?.take(4)?.toIntOrNull()
@@ -211,7 +240,10 @@ fun PremiumHomeScreen(profileId: String = "default") {
                     .mapNotNull { rankedItem -> byId[rankedItem.candidate.id] }
 
                 if (ranked.isNotEmpty()) {
-                    HomeSectionTitle("For You", "Ranked from your watchlist, favorites, history, freshness and what’s trending")
+                    HomeSectionTitle(
+                        if (recent.isNotEmpty()) "Because You Watched" else "For You",
+                        if (recent.isNotEmpty()) "Personalized from your recent viewing, saves and favorites" else "AstraWave-ranked picks from what’s fresh and trending",
+                    )
                     MetadataHomeRow(ranked, ::openMetadata)
                     Spacer(Modifier.height(24.dp))
                 }
