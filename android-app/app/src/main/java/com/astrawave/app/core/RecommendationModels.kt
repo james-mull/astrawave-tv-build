@@ -37,17 +37,11 @@ data class RankedRecommendation(
 )
 
 enum class RecommendationAvailabilityPolicy {
-    /** Discovery rows may include metadata-only items such as Coming Soon. */
     INCLUDE_METADATA_ONLY,
-
-    /** Watch-now / AI-grounded rows must have at least one eligible connected source. */
     REQUIRE_PLAYABLE_SOURCE,
 }
 
-/**
- * Deterministic local ranking used before any optional AI explanation/generation layer.
- * This keeps recommendations explainable and avoids fake model-derived confidence values.
- */
+/** Deterministic, explainable local ranking used before any optional AI layer. */
 class RecommendationEngine {
     fun rank(
         profile: RecommendationProfile,
@@ -74,11 +68,24 @@ class RecommendationEngine {
             val dislikedMatches = candidate.genres.intersect(profile.dislikedGenres).size
             if (dislikedMatches > 0) add(RecommendationReason("genre_dislike", "Contains genres you hide", dislikedMatches * -30.0))
 
-            if (candidate.id in profile.favoriteItemIds) add(RecommendationReason("favorite", "Already a favorite", 10.0))
-            if (candidate.id in profile.watchlistItemIds) add(RecommendationReason("watchlist", "On your watchlist", 8.0))
+            if (candidate.id in profile.favoriteItemIds) add(RecommendationReason("favorite", "Already a favorite", 12.0))
+            if (candidate.id in profile.watchlistItemIds) add(RecommendationReason("watchlist", "On your watchlist", 9.0))
+
+            val recentIndex = profile.recentItemIds.indexOf(candidate.id)
+            if (recentIndex >= 0) {
+                val penalty = when {
+                    recentIndex < 5 -> -28.0
+                    recentIndex < 15 -> -16.0
+                    else -> -8.0
+                }
+                add(RecommendationReason("recently_seen", "Recently watched", penalty))
+            } else if (profile.recentItemIds.isNotEmpty()) {
+                add(RecommendationReason("novelty", "Something new for you", 4.0))
+            }
+
             if (candidate.availableSourceCount > 0) add(RecommendationReason("available", "Available from your connected sources", minOf(candidate.availableSourceCount, 4) * 4.0))
             if (candidate.freshnessScore > 0) add(RecommendationReason("fresh", "Recently released or updated", candidate.freshnessScore.coerceIn(0.0, 10.0)))
-            if (candidate.popularityScore > 0) add(RecommendationReason("popular", "Popular with viewers", (candidate.popularityScore / 10.0).coerceIn(0.0, 8.0)))
+            if (candidate.popularityScore > 0) add(RecommendationReason("popular", "Popular with viewers", (candidate.popularityScore / 10.0).coerceIn(0.0, 10.0)))
         }
         return RankedRecommendation(candidate, reasons.sumOf { it.weight }, reasons)
     }
