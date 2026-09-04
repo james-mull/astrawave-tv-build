@@ -3,11 +3,11 @@ package com.astrawave.app.ui
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -30,9 +30,70 @@ private data class MassiveListSpec(
 )
 
 private sealed interface MassiveListState {
+    data object Idle : MassiveListState
     data object Loading : MassiveListState
     data class Ready(val items: List<AstraWaveMetadataGateway.Item>) : MassiveListState
     data class Error(val message: String) : MassiveListState
+}
+
+/**
+ * Shared browse cache for the large Movies/TV collection surfaces.
+ * Nothing is fetched until a user opens a collection. Repeated query strings are then reused across
+ * lists for 30 minutes, which removes the old hundreds-of-searches launch burst.
+ */
+private object MassiveListSearchCache {
+    private data class Entry(
+        val createdAtMs: Long,
+        val items: List<AstraWaveMetadataGateway.Item>,
+    )
+
+    private const val TTL_MS = 30L * 60L * 1000L
+    private val queryCache = mutableMapOf<String, Entry>()
+    private val collectionCache = mutableMapOf<String, Entry>()
+
+    fun peekCollection(spec: MassiveListSpec, mediaType: LibraryMediaType): List<AstraWaveMetadataGateway.Item>? {
+        val key = collectionKey(spec, mediaType)
+        return synchronized(this) {
+            collectionCache[key]?.takeIf { fresh(it) }?.items
+        }
+    }
+
+    fun load(
+        spec: MassiveListSpec,
+        mediaType: LibraryMediaType,
+        metadata: AstraWaveMetadataGateway,
+    ): List<AstraWaveMetadataGateway.Item> {
+        val collectionKey = collectionKey(spec, mediaType)
+        synchronized(this) {
+            collectionCache[collectionKey]?.takeIf { fresh(it) }?.let { return it.items }
+        }
+
+        val results = spec.queries
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinctBy { it.lowercase() }
+            .flatMap { query ->
+                val queryKey = query.lowercase()
+                synchronized(this) {
+                    queryCache[queryKey]?.takeIf { fresh(it) }?.items
+                } ?: metadata.search(query).also { loaded ->
+                    synchronized(this) { queryCache[queryKey] = Entry(System.currentTimeMillis(), loaded) }
+                }
+            }
+            .filter { item ->
+                if (mediaType == LibraryMediaType.MOVIE) item.type.equals("movie", true)
+                else item.type.equals("series", true) || item.type.equals("tv", true)
+            }
+            .distinctBy { "${it.type}:${it.id}" }
+            .take(60)
+            .onEach { ArtworkRegistry.register(it.name, it.backdropUrl ?: it.posterUrl) }
+
+        synchronized(this) { collectionCache[collectionKey] = Entry(System.currentTimeMillis(), results) }
+        return results
+    }
+
+    private fun collectionKey(spec: MassiveListSpec, mediaType: LibraryMediaType) = "${mediaType.name}:${spec.id}"
+    private fun fresh(entry: Entry) = System.currentTimeMillis() - entry.createdAtMs <= TTL_MS
 }
 
 private fun m(id: String, title: String, subtitle: String, vararg q: String) =
@@ -269,29 +330,25 @@ private fun MassiveListsScreen(
     val states = remember { mutableStateMapOf<String, MassiveListState>() }
     var selected by remember { mutableStateOf<MassiveListSpec?>(null) }
 
-    LaunchedEffect(rows) {
-        rows.flatMap { it.second }.forEach { spec ->
-            if (states.containsKey(spec.id)) return@forEach
-            states[spec.id] = MassiveListState.Loading
-            states[spec.id] = try {
-                val items = withContext(Dispatchers.IO) {
-                    spec.queries.flatMap { metadata.search(it) }
-                        .filter { item ->
-                            if (mediaType == LibraryMediaType.MOVIE) item.type.equals("movie", true)
-                            else item.type.equals("series", true) || item.type.equals("tv", true)
-                        }
-                        .distinctBy { it.id }
-                        .take(60)
-                        .onEach { ArtworkRegistry.register(it.name, it.posterUrl ?: it.backdropUrl) }
-                }
-                MassiveListState.Ready(items)
-            } catch (error: Exception) {
-                MassiveListState.Error(error.message ?: "Unable to load collection")
-            }
+    val selectedSpec = selected
+    LaunchedEffect(selectedSpec?.id, mediaType) {
+        val spec = selectedSpec ?: return@LaunchedEffect
+        val cached = MassiveListSearchCache.peekCollection(spec, mediaType)
+        if (cached != null) {
+            states[spec.id] = MassiveListState.Ready(cached)
+            return@LaunchedEffect
+        }
+        states[spec.id] = MassiveListState.Loading
+        states[spec.id] = try {
+            MassiveListState.Ready(
+                withContext(Dispatchers.IO) { MassiveListSearchCache.load(spec, mediaType, metadata) },
+            )
+        } catch (error: Exception) {
+            MassiveListState.Error(error.message ?: "Unable to load collection")
         }
     }
 
-    selected?.let { spec ->
+    selectedSpec?.let { spec ->
         MassiveListDetail(
             spec = spec,
             state = states[spec.id] ?: MassiveListState.Loading,
@@ -313,53 +370,75 @@ private fun MassiveListsScreen(
         return
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .background(AstraWaveColors.Background).padding(horizontal = 24.dp, vertical = 20.dp),
+    LazyColumn(
+        Modifier.fillMaxSize().background(AstraWaveColors.Background),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        AstraWavePageHeader(title = pageTitle, subtitle = pageSubtitle)
-        Spacer(Modifier.height(18.dp))
-        rows.forEach { (rowTitle, specs) ->
-            Text(rowTitle, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                specs.forEach { spec ->
-                    val items = (states[spec.id] as? MassiveListState.Ready)?.items.orEmpty()
-                    AstraWaveFocusableCard(Modifier.width(248.dp).clickable { selected = spec }) {
-                        Column {
-                            Box(Modifier.fillMaxWidth().height(138.dp)) {
-                                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    val coverItems = if (items.isEmpty()) listOf<AstraWaveMetadataGateway.Item?>(null, null, null)
-                                    else List(3) { i -> items.getOrNull(i % items.size) }
-                                    coverItems.forEach { item ->
-                                        Box(Modifier.weight(1f).fillMaxHeight()) {
-                                            AstraWaveArtwork(title = item?.name ?: spec.title, modifier = Modifier.fillMaxSize())
+        item(key = "header") {
+            Column {
+                AstraWavePageHeader(title = pageTitle, subtitle = pageSubtitle)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Collections load only when opened • results are cached for faster browsing",
+                    color = AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+
+        items(rows, key = { it.first }) { (rowTitle, specs) ->
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(rowTitle, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(specs, key = { it.id }) { spec ->
+                        val cached = MassiveListSearchCache.peekCollection(spec, mediaType)
+                        if (cached != null && states[spec.id] !is MassiveListState.Ready) {
+                            states[spec.id] = MassiveListState.Ready(cached)
+                        }
+                        val items = (states[spec.id] as? MassiveListState.Ready)?.items.orEmpty()
+                        AstraWaveFocusableCard(Modifier.width(280.dp).clickable { selected = spec }) {
+                            Column {
+                                Box(Modifier.fillMaxWidth().height(158.dp)) {
+                                    if (items.isNotEmpty()) {
+                                        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            List(3) { i -> items.getOrNull(i % items.size) }.forEach { item ->
+                                                Box(Modifier.weight(1f).fillMaxHeight()) {
+                                                    AstraWaveArtwork(
+                                                        title = item?.name ?: spec.title,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        kind = AstraWaveArtworkKind.Backdrop,
+                                                    )
+                                                }
+                                            }
                                         }
+                                    } else {
+                                        AstraWaveArtwork(
+                                            title = spec.title,
+                                            modifier = Modifier.fillMaxSize(),
+                                            kind = AstraWaveArtworkKind.Backdrop,
+                                        )
                                     }
+                                    Text(
+                                        if (items.isNotEmpty()) "${items.size}" else "OPEN",
+                                        color = AstraWaveColors.PrimaryText,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                            .background(AstraWaveColors.Background.copy(alpha = 0.82f), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
                                 }
-                                Text(
-                                    if (states[spec.id] is MassiveListState.Loading) "…" else items.size.toString(),
-                                    color = AstraWaveColors.PrimaryText,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                                        .background(AstraWaveColors.Background.copy(alpha = 0.82f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 7.dp, vertical = 4.dp),
-                                )
+                                Spacer(Modifier.height(9.dp))
+                                Text(spec.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                                Spacer(Modifier.height(3.dp))
+                                Text(spec.subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                             }
-                            Spacer(Modifier.height(9.dp))
-                            Text(spec.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                            Spacer(Modifier.height(3.dp))
-                            Text(spec.subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(22.dp))
         }
-        Spacer(Modifier.height(28.dp))
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
@@ -371,30 +450,50 @@ private fun MassiveListDetail(
     onBack: () -> Unit,
     onOpen: (AstraWaveMetadataGateway.Item) -> Unit,
 ) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .background(AstraWaveColors.Background).padding(horizontal = 24.dp, vertical = 20.dp),
+    LazyColumn(
+        Modifier.fillMaxSize().background(AstraWaveColors.Background),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AstraWavePageHeader(title = spec.title, subtitle = spec.subtitle)
-        Spacer(Modifier.height(10.dp))
-        AstraWaveSecondaryButton(label = "← Back to Lists", onClick = onBack)
-        Spacer(Modifier.height(18.dp))
+        item(key = "header") {
+            Column {
+                AstraWavePageHeader(title = spec.title, subtitle = spec.subtitle)
+                Spacer(Modifier.height(10.dp))
+                AstraWaveSecondaryButton(label = "← Back to Lists", onClick = onBack)
+            }
+        }
+
         when (state) {
-            MassiveListState.Loading -> AstraWaveStatePanel("Loading ${spec.title}…", "Refreshing this collection.", loading = true)
-            is MassiveListState.Error -> AstraWaveStatePanel("Collection unavailable", state.message)
+            MassiveListState.Idle, MassiveListState.Loading -> item(key = "loading") {
+                AstraWaveStatePanel("Loading ${spec.title}…", "Opening this collection on demand.", loading = true)
+            }
+            is MassiveListState.Error -> item(key = "error") {
+                AstraWaveStatePanel("Collection unavailable", state.message)
+            }
             is MassiveListState.Ready -> {
-                Text(
-                    "${state.items.size} ${if (mediaType == LibraryMediaType.MOVIE) "movies" else "series"}",
-                    color = AstraWaveColors.SecondaryText,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Spacer(Modifier.height(12.dp))
-                state.items.forEach { item ->
-                    AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp).clickable { onOpen(item) }) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.width(118.dp)) { AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth()) }
+                item(key = "count") {
+                    Text(
+                        "${state.items.size} ${if (mediaType == LibraryMediaType.MOVIE) "movies" else "series"}",
+                        color = AstraWaveColors.SecondaryText,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                items(state.items, key = { "${it.type}:${it.id}" }) { item ->
+                    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(item) }) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(210.dp)) {
+                                AstraWaveArtwork(
+                                    title = item.name,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    kind = AstraWaveArtworkKind.Backdrop,
+                                )
+                            }
                             Column(Modifier.weight(1f)) {
                                 Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                                item.releaseInfo?.takeIf { it.isNotBlank() }?.let {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(it, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
+                                }
                                 Spacer(Modifier.height(5.dp))
                                 Text(
                                     item.description ?: "Open for details and watch options.",
@@ -408,6 +507,6 @@ private fun MassiveListDetail(
                 }
             }
         }
-        Spacer(Modifier.height(28.dp))
+        item { Spacer(Modifier.height(16.dp)) }
     }
 }
