@@ -30,12 +30,15 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LocalLibraryStore
+import com.astrawave.app.data.PersonalMediaPlaybackRepository
 import com.astrawave.app.data.SeriesPlaybackCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +60,7 @@ class PlayerActivity : ComponentActivity() {
     private var upNextButton: Button? = null
 
     private var streamUrls: List<String> = emptyList()
+    private var requestHeaders: Map<String, String> = emptyMap()
     private var streamIndex = 0
     private var retryCountForCurrentStream = 0
     private var resumePositionMs = 0L
@@ -95,7 +99,9 @@ class PlayerActivity : ComponentActivity() {
             networkLost = !hasValidatedNetwork()
             if (networkLost) {
                 player?.let { lastKnownPositionMs = maxOf(lastKnownPositionMs, it.currentPosition.coerceAtLeast(0L)) }
-                runOnUiThread { Toast.makeText(this@PlayerActivity, "Network lost. Playback will resume automatically.", Toast.LENGTH_SHORT).show() }
+                runOnUiThread {
+                    Toast.makeText(this@PlayerActivity, "Network lost. Playback will resume automatically.", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
@@ -119,14 +125,32 @@ class PlayerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        profileId = intent.getStringExtra(EXTRA_PROFILE_ID).orEmpty().ifBlank { DEFAULT_PROFILE_ID }
         val primary = intent.getStringExtra(EXTRA_URL)
         val alternates = intent.getStringArrayListExtra(EXTRA_URLS).orEmpty()
-        val trustedDirect = intent.getBooleanExtra(EXTRA_TRUSTED_DIRECT, false)
-        streamUrls = (listOfNotNull(primary) + alternates).filter { it.isNotBlank() }.distinct()
-        profileId = intent.getStringExtra(EXTRA_PROFILE_ID).orEmpty().ifBlank { DEFAULT_PROFILE_ID }
+        val requestedUrls = (listOfNotNull(primary) + alternates).filter { it.isNotBlank() }.distinct()
+        val personalResolver = PersonalMediaPlaybackRepository(this)
+        val personalRequested = primary?.let(personalResolver::isLocator) == true
+        val personalPlan = primary?.takeIf(personalResolver::isLocator)?.let { personalResolver.resolve(it, profileId) }
+
+        if (personalRequested && personalPlan == null) {
+            Toast.makeText(this, "Personal media access could not be authorized on this device.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        if (personalPlan != null) {
+            streamUrls = listOf(personalPlan.url)
+            requestHeaders = personalPlan.headers
+            libraryItem = personalPlan.libraryItem
+        } else {
+            streamUrls = requestedUrls
+            libraryItem = intentLibraryItem()
+        }
+
+        val trustedDirect = intent.getBooleanExtra(EXTRA_TRUSTED_DIRECT, false) || personalPlan != null
         introEndMs = intent.getLongExtra(EXTRA_INTRO_END_MS, 0L).coerceAtLeast(0L)
         recapEndMs = intent.getLongExtra(EXTRA_RECAP_END_MS, 0L).coerceAtLeast(0L)
-        libraryItem = intentLibraryItem()
         if (libraryItem != null) {
             libraryStore = LocalLibraryStore(this)
             cloudStore = FirebaseCloudRepository(this)
@@ -151,55 +175,67 @@ class PlayerActivity : ComponentActivity() {
         configurePictureInPicture()
         registerNetworkCallback()
         buildPlayerSurface()
-        player = ExoPlayer.Builder(this).build().also { exo ->
-            playerView?.player = exo
-            exo.addListener(object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
-                    persistProgress(exo, allowCloud = true)
-                    if (networkLost || !hasValidatedNetwork()) {
-                        networkLost = true
-                        Toast.makeText(this@PlayerActivity, "Waiting for network…", Toast.LENGTH_SHORT).show()
-                        return
-                    }
-                    when {
-                        retryCountForCurrentStream < MAX_RETRIES_PER_STREAM -> {
-                            retryCountForCurrentStream++
-                            Toast.makeText(this@PlayerActivity, "Stream interrupted. Reconnecting…", Toast.LENGTH_SHORT).show()
-                            handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, RETRY_DELAY_MS)
-                        }
-                        streamIndex + 1 < streamUrls.size -> {
-                            streamIndex++
-                            retryCountForCurrentStream = 0
-                            updateSourceButton()
-                            Toast.makeText(this@PlayerActivity, "Switching to backup ${streamIndex + 1} of ${streamUrls.size}…", Toast.LENGTH_SHORT).show()
-                            handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, BACKUP_FAILOVER_DELAY_MS)
-                        }
-                        else -> Toast.makeText(this@PlayerActivity, "All available streams failed.", Toast.LENGTH_LONG).show()
-                    }
-                }
 
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_READY) {
-                        retryCountForCurrentStream = 0
-                        exo.setPlaybackSpeed(playbackSpeed)
-                        if (!historyRecorded) {
-                            libraryItem?.let { libraryStore?.recordHistory(profileId, it) }
-                            historyRecorded = true
-                        }
-                        prepareNextEpisode()
-                    } else if (playbackState == Player.STATE_ENDED) {
-                        persistProgress(exo, allowCloud = true)
-                        if (!autoplayCancelled && nextPlan != null) playNextEpisode()
-                    }
-                }
-
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    if (isPlaying) lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
-                }
-            })
-            playCurrent(exo, resumePositionMs)
+        val dataSourceFactory = DefaultHttpDataSource.Factory().apply {
+            if (requestHeaders.isNotEmpty()) setDefaultRequestProperties(requestHeaders)
         }
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .also { exo ->
+                playerView?.player = exo
+                exo.addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
+                        persistProgress(exo, allowCloud = true)
+                        if (networkLost || !hasValidatedNetwork()) {
+                            networkLost = true
+                            Toast.makeText(this@PlayerActivity, "Waiting for network…", Toast.LENGTH_SHORT).show()
+                            return
+                        }
+                        when {
+                            retryCountForCurrentStream < MAX_RETRIES_PER_STREAM -> {
+                                retryCountForCurrentStream++
+                                Toast.makeText(this@PlayerActivity, "Stream interrupted. Reconnecting…", Toast.LENGTH_SHORT).show()
+                                handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, RETRY_DELAY_MS)
+                            }
+                            streamIndex + 1 < streamUrls.size -> {
+                                streamIndex++
+                                retryCountForCurrentStream = 0
+                                updateSourceButton()
+                                Toast.makeText(
+                                    this@PlayerActivity,
+                                    "Switching to backup ${streamIndex + 1} of ${streamUrls.size}…",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, BACKUP_FAILOVER_DELAY_MS)
+                            }
+                            else -> Toast.makeText(this@PlayerActivity, "All available streams failed.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == Player.STATE_READY) {
+                            retryCountForCurrentStream = 0
+                            exo.setPlaybackSpeed(playbackSpeed)
+                            if (!historyRecorded) {
+                                libraryItem?.let { libraryStore?.recordHistory(profileId, it) }
+                                historyRecorded = true
+                            }
+                            prepareNextEpisode()
+                        } else if (playbackState == Player.STATE_ENDED) {
+                            persistProgress(exo, allowCloud = true)
+                            if (!autoplayCancelled && nextPlan != null) playNextEpisode()
+                        }
+                    }
+
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        if (isPlaying) lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
+                    }
+                })
+                playCurrent(exo, resumePositionMs)
+            }
         handler.postDelayed(progressTicker, UI_TICK_MS)
     }
 
@@ -258,6 +294,7 @@ class PlayerActivity : ComponentActivity() {
         val item = libraryItem ?: return
         if (item.type != LibraryMediaType.EPISODE || nextPlanLoading || nextPlan != null) return
         val sourceId = item.sourceId ?: return
+        if (sourceId.startsWith("personal:", ignoreCase = true)) return
         nextPlanLoading = true
         playbackScope.launch {
             val plan = runCatching { SeriesPlaybackCoordinator(this@PlayerActivity).prepareNext(sourceId, profileId) }.getOrNull()
