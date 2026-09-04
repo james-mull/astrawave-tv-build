@@ -1,3 +1,5 @@
+package com.astrawave.app
+
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
@@ -231,7 +233,12 @@ private fun RebuildRoot() {
                             else -> MultiviewLayout.FOUR_UP
                         }
                         MultiviewScreen(
-                            session = MultiviewSession("active", layout, multiviewPanes, multiviewAudioPaneId ?: multiviewPanes.first().id),
+                            session = MultiviewSession(
+                                id = "active",
+                                layout = layout,
+                                panes = multiviewPanes,
+                                activeAudioPaneId = multiviewAudioPaneId ?: multiviewPanes.first().id,
+                            ),
                             onActivateAudio = { multiviewAudioPaneId = it },
                             onOpenPane = { pane -> context.startActivity(Intent(context, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, pane.streamUrl)) },
                             onReplacePane = { pane ->
@@ -248,7 +255,13 @@ private fun RebuildRoot() {
                 RebuildDestination.Discover -> CombinedDiscoverScreen(profileId = activeProfileId)
                 RebuildDestination.Search -> UniversalSearchScreen(profileId = activeProfileId)
                 RebuildDestination.My -> MyAstraWaveHub(
-                    account = AccountOverview("local", "AstraWave User", activeProfileId = activeProfileId, planName = "AstraWave Free", cloudSyncEnabled = false),
+                    account = AccountOverview(
+                        userId = "local",
+                        displayName = "AstraWave User",
+                        activeProfileId = activeProfileId,
+                        planName = "AstraWave Free",
+                        cloudSyncEnabled = false,
+                    ),
                     lists = emptyList(),
                     onOpenAccountSection = { section ->
                         current = when (section) {
