@@ -9,21 +9,29 @@ package com.astrawave.app.data
 class ZeroConfigCatalogRepository(
     private val gateway: AstraWaveMetadataGateway = AstraWaveMetadataGateway(),
 ) {
-    fun loadTrendingMovies(): TmdbCatalogPage = TmdbCatalogPage(
-        catalog = AstraWaveCatalog.TRENDING_MOVIES,
-        page = 1,
-        totalPages = 1,
-        items = gateway.load(AstraWaveMetadataGateway.Catalog.TRENDING_MOVIES)
-            .map { it.toTmdbItem("movie") },
-    )
+    /**
+     * Loads a real zero-config catalog while preserving the existing AstraWave catalog
+     * identity expected by the UI. Until the backend exposes every specialized row,
+     * movie rows fall back to the real movie discovery feed and TV rows to the real
+     * series discovery feed instead of showing placeholders or requiring a user key.
+     */
+    fun load(catalog: AstraWaveCatalog): TmdbCatalogPage {
+        val source = if (catalog.mediaType == "movie") {
+            AstraWaveMetadataGateway.Catalog.TRENDING_MOVIES
+        } else {
+            AstraWaveMetadataGateway.Catalog.TRENDING_SERIES
+        }
+        return TmdbCatalogPage(
+            catalog = catalog,
+            page = 1,
+            totalPages = 1,
+            items = gateway.load(source).map { it.toTmdbItem(catalog.mediaType) },
+        )
+    }
 
-    fun loadTrendingSeries(): TmdbCatalogPage = TmdbCatalogPage(
-        catalog = AstraWaveCatalog.TRENDING_TV,
-        page = 1,
-        totalPages = 1,
-        items = gateway.load(AstraWaveMetadataGateway.Catalog.TRENDING_SERIES)
-            .map { it.toTmdbItem("tv") },
-    )
+    fun loadTrendingMovies(): TmdbCatalogPage = load(AstraWaveCatalog.TRENDING_MOVIES)
+
+    fun loadTrendingSeries(): TmdbCatalogPage = load(AstraWaveCatalog.TRENDING_TV)
 
     fun search(query: String): List<TmdbItem> = gateway.search(query).mapNotNull { item ->
         val mediaType = when (item.type.lowercase()) {
