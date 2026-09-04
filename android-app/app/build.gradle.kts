@@ -12,8 +12,8 @@ android {
         applicationId = "com.astrawave.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 35
+        versionName = "1.0.0-rc13-v35"
 
         val firebaseApiKey = providers.gradleProperty("ASTRAWAVE_FIREBASE_API_KEY").orNull
             ?: providers.environmentVariable("ASTRAWAVE_FIREBASE_API_KEY").orNull
