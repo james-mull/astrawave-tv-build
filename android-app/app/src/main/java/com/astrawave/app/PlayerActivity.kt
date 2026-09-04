@@ -3,6 +3,7 @@ package com.astrawave.app
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.media3.common.MediaItem
@@ -15,9 +16,12 @@ class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var streamUrls: List<String> = emptyList()
     private var streamIndex: Int = 0
+    private var retryCountForCurrentStream: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         val primary = intent.getStringExtra(EXTRA_URL)
         val alternates = intent.getStringArrayListExtra(EXTRA_URLS).orEmpty()
         val trustedDirect = intent.getBooleanExtra(EXTRA_TRUSTED_DIRECT, false)
@@ -48,16 +52,39 @@ class PlayerActivity : ComponentActivity() {
             playerView.player = exo
             exo.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    if (streamIndex + 1 < streamUrls.size) {
-                        streamIndex += 1
-                        Toast.makeText(
-                            this@PlayerActivity,
-                            "Stream failed. Trying alternate ${streamIndex + 1} of ${streamUrls.size}…",
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                        playCurrent(exo)
-                    } else {
-                        Toast.makeText(this@PlayerActivity, "All available streams for this channel failed.", Toast.LENGTH_LONG).show()
+                    when {
+                        retryCountForCurrentStream < MAX_RETRIES_PER_STREAM -> {
+                            retryCountForCurrentStream += 1
+                            Toast.makeText(
+                                this@PlayerActivity,
+                                "Stream interrupted. Reconnecting…",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            playCurrent(exo)
+                        }
+                        streamIndex + 1 < streamUrls.size -> {
+                            streamIndex += 1
+                            retryCountForCurrentStream = 0
+                            Toast.makeText(
+                                this@PlayerActivity,
+                                "Trying backup stream ${streamIndex + 1} of ${streamUrls.size}…",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            playCurrent(exo)
+                        }
+                        else -> {
+                            Toast.makeText(
+                                this@PlayerActivity,
+                                "All available streams for this channel failed.",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) {
+                        retryCountForCurrentStream = 0
                     }
                 }
             })
@@ -83,6 +110,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_URL = "stream_url"
         const val EXTRA_URLS = "stream_urls"
         const val EXTRA_TRUSTED_DIRECT = "trusted_direct"
+        private const val MAX_RETRIES_PER_STREAM = 1
 
         fun isDirectMediaUrl(url: String): Boolean {
             val normalized = url.substringBefore('?').substringBefore('#').lowercase()
