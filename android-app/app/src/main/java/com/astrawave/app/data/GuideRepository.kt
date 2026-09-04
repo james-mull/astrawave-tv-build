@@ -12,22 +12,24 @@ data class GuideChannelRow(
     val playableCandidateCount: Int,
     val preferredSource: String?,
     val playableUrl: String?,
+    val externalUrl: String? = null,
 )
 
 data class GuideSnapshot(
     val rows: List<GuideChannelRow>,
     val sourceGroups: Int,
     val freeChannelCount: Int,
+    val handoffCount: Int,
     val userChannelCount: Int,
 )
 
-/** Guide-facing projection over the combined Live TV source model. */
+/** Guide-facing projection over direct Live TV plus reviewed official-provider handoffs. */
 class GuideRepository(
     private val combined: CombinedLiveTvRepository = CombinedLiveTvRepository(),
 ) {
     fun load(sources: List<IptvSource>): GuideSnapshot {
         val live = combined.load(sources)
-        val rows = live.groups.map { group ->
+        val directRows = live.groups.map { group ->
             val preferred = group.bestCandidate
             GuideChannelRow(
                 id = group.canonicalName,
@@ -41,10 +43,27 @@ class GuideRepository(
                 playableUrl = preferred?.url,
             )
         }
+        val handoffRows = live.handoffs.map { handoff ->
+            GuideChannelRow(
+                id = "handoff:${handoff.id}",
+                name = handoff.name,
+                logo = null,
+                group = handoff.group,
+                now = null,
+                next = null,
+                playableCandidateCount = 0,
+                preferredSource = handoff.provider ?: "Official provider",
+                playableUrl = null,
+                externalUrl = handoff.actionUrl,
+            )
+        }
         return GuideSnapshot(
-            rows = rows,
+            rows = (directRows + handoffRows).sortedWith(
+                compareBy<GuideChannelRow> { it.group ?: "ZZZ" }.thenBy { it.name },
+            ),
             sourceGroups = live.totalChannelGroups,
             freeChannelCount = live.freeChannelCount,
+            handoffCount = live.handoffCount,
             userChannelCount = live.userChannelCount,
         )
     }
