@@ -78,6 +78,7 @@ import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
 import com.astrawave.app.ui.LibraryActionRow
 import com.astrawave.app.ui.LiveTvHubScreen
+import com.astrawave.app.ui.MovieListsScreen
 import com.astrawave.app.ui.MultiviewScreen
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.PersonalMediaScreen
@@ -213,7 +214,7 @@ private fun RebuildRoot() {
             if (!useRail) SectionStrip(current, primaryDestinations) { current = it }
             when (current) {
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
-                RebuildDestination.Movies -> CatalogLanding("Movies", movieCatalogs)
+                RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
                 RebuildDestination.Shows -> CatalogLanding("TV Shows", tvCatalogs)
                 RebuildDestination.Live -> LiveTvHubScreen(
                     sources = iptvSources,
