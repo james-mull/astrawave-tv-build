@@ -7,7 +7,7 @@ data class KidsProfilePolicy(
     val allowLiveTv: Boolean = false,
     val allowSports: Boolean = true,
     val allowExternalAddons: Boolean = false,
-    val requirePinForProfileExit: Boolean = true,
+    val requirePinForProfileExit: Boolean = false,
 )
 
 data class PrivacyPreferences(
@@ -18,15 +18,9 @@ data class PrivacyPreferences(
     val savePlaybackHistory: Boolean = true,
     val saveSearchHistory: Boolean = true,
 ) {
-    /** Local-only mode is authoritative and cannot leak state into cloud or telemetry paths. */
     fun effective(): PrivacyPreferences = if (localOnlyMode) {
-        copy(
-            analyticsEnabled = false,
-            cloudSyncEnabled = false,
-        )
-    } else {
-        this
-    }
+        copy(analyticsEnabled = false, cloudSyncEnabled = false)
+    } else this
 }
 
 data class AccessibilityPreferences(
