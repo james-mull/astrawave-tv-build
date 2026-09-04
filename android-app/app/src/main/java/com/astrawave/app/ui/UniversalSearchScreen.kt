@@ -23,7 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.data.DynamicCollectionRepository
 import com.astrawave.app.data.HouseholdProfileStore
+import com.astrawave.app.data.KidsContentRatingRepository
 import com.astrawave.app.data.KidsModePolicyStore
 import com.astrawave.app.data.StremioCatalogAggregator
 import com.astrawave.app.data.StremioSearchHit
@@ -52,6 +54,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
     val addonSearch = remember { StremioCatalogAggregator(context) }
     val household = remember { HouseholdProfileStore(context) }
     val kidsPolicyStore = remember { KidsModePolicyStore(context) }
+    val kidsRating = remember { KidsContentRatingRepository() }
     val profile = remember(profileId) { household.profiles().firstOrNull { it.id == profileId } }
     val isKids = profile?.kidsMode == true
     val kidsPolicy = remember(profileId) { kidsPolicyStore.load(profileId) }
@@ -62,16 +65,13 @@ fun UniversalSearchScreen(profileId: String = "default") {
     var state by remember { mutableStateOf<SearchState>(SearchState.Idle) }
 
     Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .background(AstraWaveColors.Background)
-            .padding(24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .background(AstraWaveColors.Background).padding(24.dp),
     ) {
         AstraWavePageHeader(
             title = if (isKids) "Kids Search" else "Search",
             subtitle = if (isKids) {
-                "Kids Mode searches AstraWave's built-in metadata only. External addon search is disabled for kids profiles."
+                "Kids Search uses built-in metadata only and applies this profile's content-rating policy before showing results."
             } else {
                 "Search AstraWave metadata and your enabled compatible addons in one place — no API key setup required."
             },
@@ -84,7 +84,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
                 message = if (bedtime) {
                     "Kids viewing and search are paused during the parent-set bedtime window."
                 } else {
-                    "Browse the approved Kids Movies and Kids TV collections instead. A parent can change this in Kids Mode settings."
+                    "Browse Kids Movies and Kids TV instead. In Approved Only mode, individual titles must be unlocked by a parent."
                 },
             )
             return@Column
@@ -112,13 +112,21 @@ fun UniversalSearchScreen(profileId: String = "default") {
                         state = try {
                             withContext(Dispatchers.IO) {
                                 val metadataResult = runCatching { metadataRepository.search(trimmed) }
-                                val addonResult = if (isKids) {
-                                    Result.success(emptyList())
-                                } else {
-                                    runCatching { addonSearch.search(trimmed, profileId) }
-                                }
+                                val rawItems = metadataResult.getOrDefault(emptyList())
+                                val safeItems = if (isKids) {
+                                    rawItems.filter { item ->
+                                        val media = if (item.mediaType.equals("movie", true)) {
+                                            DynamicCollectionRepository.Media.MOVIE
+                                        } else {
+                                            DynamicCollectionRepository.Media.SERIES
+                                        }
+                                        val rating = kidsRating.rating(media, item.id.toString()).rating
+                                        kidsPolicyStore.ratingAllowed(profileId, rating, item.id.toString())
+                                    }
+                                } else rawItems
+                                val addonResult = if (isKids) Result.success(emptyList()) else runCatching { addonSearch.search(trimmed, profileId) }
                                 SearchState.Ready(
-                                    astrWaveItems = metadataResult.getOrDefault(emptyList()),
+                                    astrWaveItems = safeItems,
                                     addonItems = addonResult.getOrDefault(emptyList()),
                                     metadataError = metadataResult.exceptionOrNull()?.message,
                                     addonError = addonResult.exceptionOrNull()?.message,
@@ -135,21 +143,21 @@ fun UniversalSearchScreen(profileId: String = "default") {
         Spacer(Modifier.height(20.dp))
 
         when (val current = state) {
-            SearchState.Idle -> SearchMessage("Start searching", if (isKids) "Search family-friendly AstraWave metadata." else "Enter a title or keyword to search AstraWave discovery.")
+            SearchState.Idle -> SearchMessage("Start searching", if (isKids) "Search titles allowed by this Kids profile." else "Enter a title or keyword to search AstraWave discovery.")
             SearchState.Loading -> Row(Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) {
                 CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
                 Spacer(Modifier.padding(6.dp))
-                Text(if (isKids) "Searching Kids Mode metadata…" else "Searching all connected discovery sources…", color = AstraWaveColors.SecondaryText)
+                Text(if (isKids) "Searching and checking ratings…" else "Searching all connected discovery sources…", color = AstraWaveColors.SecondaryText)
             }
             is SearchState.Error -> SearchMessage("Search unavailable", current.message)
             is SearchState.Ready -> {
                 if (current.astrWaveItems.isEmpty() && current.addonItems.isEmpty()) {
-                    SearchMessage("No matches", if (isKids) "No Kids Mode metadata matched this search." else "No connected movie, TV or addon metadata matched this search.")
+                    SearchMessage("No matches", if (isKids) "No search results passed this Kids profile's rating and approval rules." else "No connected movie, TV or addon metadata matched this search.")
                 } else {
                     if (current.astrWaveItems.isNotEmpty()) {
                         AstraWaveSectionHeader(
                             title = "AstraWave",
-                            subtitle = if (isKids) "Built-in metadata only while Kids Mode is active." else "Built-in metadata from the AstraWave backend with Cinemeta fallback.",
+                            subtitle = if (isKids) "Certification-filtered built-in metadata." else "Built-in metadata from the AstraWave backend with Cinemeta fallback.",
                         )
                         Spacer(Modifier.height(8.dp))
                         current.astrWaveItems.take(40).forEach { item ->
@@ -172,30 +180,20 @@ fun UniversalSearchScreen(profileId: String = "default") {
                     }
 
                     if (!isKids && current.addonItems.isNotEmpty()) {
-                        AstraWaveSectionHeader(
-                            title = "From Your Addons",
-                            subtitle = "Provider-attributed metadata from enabled compatible addons.",
-                        )
+                        AstraWaveSectionHeader(title = "From Your Addons", subtitle = "Provider-attributed metadata from enabled compatible addons.")
                         Spacer(Modifier.height(8.dp))
                         current.addonItems.take(40).forEach { hit ->
                             AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                                 Column {
                                     Text(hit.item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                                     Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        "${hit.addonName} • ${hit.catalogName} • ${hit.item.type}",
-                                        color = AstraWaveColors.Accent,
-                                        style = MaterialTheme.typography.labelMedium,
-                                    )
+                                    Text("${hit.addonName} • ${hit.catalogName} • ${hit.item.type}", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
                                     hit.item.description?.takeIf { it.isNotBlank() }?.let { description ->
                                         Spacer(Modifier.height(4.dp))
                                         Text(description, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
                                     }
                                     Spacer(Modifier.height(10.dp))
-                                    LibraryActionRow(
-                                        item = hit.item.toLibraryItemRef(hit.addonId),
-                                        profileId = profileId,
-                                    )
+                                    LibraryActionRow(item = hit.item.toLibraryItemRef(hit.addonId), profileId = profileId)
                                 }
                             }
                         }
