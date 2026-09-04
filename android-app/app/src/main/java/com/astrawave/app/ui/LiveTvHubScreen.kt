@@ -37,7 +37,9 @@ import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.core.ProfileSafetyPolicy
 import com.astrawave.app.data.CombinedLiveTvRepository
 import com.astrawave.app.data.CombinedLiveTvSnapshot
+import com.astrawave.app.data.LastLiveChannel
 import com.astrawave.app.data.LiveChannelGroup
+import com.astrawave.app.data.LivePlaybackStore
 import com.astrawave.app.data.LiveTvPreferenceStore
 import com.astrawave.app.data.ProfileSafetyStore
 import com.astrawave.app.data.StreamHealthChecker
@@ -80,11 +82,13 @@ fun LiveTvHubScreen(
 
     val scope = rememberCoroutineScope()
     val preferences = remember { LiveTvPreferenceStore(context) }
+    val playbackStore = remember { LivePlaybackStore(context) }
     var mode by remember { mutableStateOf(LiveTvMode.CHANNELS) }
     var filter by remember { mutableStateOf(LiveTvFilter.ALL) }
     var query by remember { mutableStateOf("") }
     var favoriteIds by remember { mutableStateOf(preferences.favoriteIds()) }
     var recentIds by remember { mutableStateOf(preferences.recentIds()) }
+    var lastChannel by remember { mutableStateOf(playbackStore.last()) }
     var state by remember(sources) { mutableStateOf<LiveTvLoadState>(LiveTvLoadState.Loading) }
 
     LaunchedEffect(sources) {
@@ -94,6 +98,17 @@ fun LiveTvHubScreen(
         } catch (error: Exception) {
             LiveTvLoadState.Error(error.message ?: "Unable to load Live TV")
         }
+    }
+
+    fun launchPlayer(channel: LastLiveChannel) {
+        val urls = ArrayList(channel.urls.distinct())
+        if (urls.isEmpty()) return
+        context.startActivity(
+            Intent(context, PlayerActivity::class.java)
+                .putExtra(PlayerActivity.EXTRA_URL, urls.first())
+                .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, urls)
+                .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+        )
     }
 
     fun play(group: LiveChannelGroup) {
@@ -107,14 +122,36 @@ fun LiveTvHubScreen(
                 Toast.makeText(context, "No working stream is available for this channel right now.", Toast.LENGTH_LONG).show()
                 return@launch
             }
-            val urls = ArrayList(healthyCandidates.map { it.url }.distinct())
             recentIds = preferences.markWatched(group.canonicalName)
-            context.startActivity(
-                Intent(context, PlayerActivity::class.java)
-                    .putExtra(PlayerActivity.EXTRA_URL, urls.first())
-                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, urls)
-                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+            val channel = LastLiveChannel(
+                id = group.canonicalName,
+                name = group.displayName,
+                source = healthyCandidates.first().source,
+                urls = healthyCandidates.map { it.url }.distinct(),
+                watchedAtEpochMs = System.currentTimeMillis(),
             )
+            playbackStore.save(channel)
+            lastChannel = channel
+            launchPlayer(channel)
+        }
+    }
+
+    fun resumeLast() {
+        val channel = lastChannel ?: return
+        scope.launch {
+            val healthyUrls = withContext(Dispatchers.IO) {
+                channel.urls.filter { url ->
+                    runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
+                }
+            }
+            if (healthyUrls.isEmpty()) {
+                Toast.makeText(context, "Your last channel is unavailable right now.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val refreshed = channel.copy(urls = healthyUrls, watchedAtEpochMs = System.currentTimeMillis())
+            playbackStore.save(refreshed)
+            lastChannel = refreshed
+            launchPlayer(refreshed)
         }
     }
 
@@ -139,6 +176,9 @@ fun LiveTvHubScreen(
             ) {
                 LiveModeButton("Watch", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
                 LiveModeButton("My Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+                lastChannel?.let { channel ->
+                    LiveModeButton("▶ Resume ${channel.name}", false, ::resumeLast)
+                }
                 if (multiviewCount > 0) {
                     LiveModeButton("Multiview ($multiviewCount)", false, onOpenMultiview)
                 }
@@ -352,7 +392,7 @@ private fun LiveModeButton(label: String, selected: Boolean, onClick: () -> Unit
         ),
         shape = MaterialTheme.shapes.large,
     ) {
-        Text(label)
+        Text(label, maxLines = 1)
     }
 }
 
