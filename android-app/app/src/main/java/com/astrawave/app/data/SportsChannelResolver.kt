@@ -31,19 +31,16 @@ data class SportsResolution(
 }
 
 /**
- * Resolves expected sports broadcasters against the normalized combined channel inventory.
- * Playback still goes through the normal stream health/eligibility path before launch.
- *
- * Matching is intentionally strict. Team-branded .TV labels and paid/authorized-only
- * network labels stay as search/broadcaster metadata and are never treated as proof that
- * a similarly named public stream carries the event.
+ * Resolves sports broadcasters against the normalized combined channel inventory.
+ * Matching is confidence-scored instead of driven by a fixed blacklist. Decorative labels
+ * such as HD, East/West, Live and Feed are ignored, while weak one-word overlaps remain
+ * too risky to claim as a playable match. Playback still goes through stream health checks.
  */
 class SportsChannelResolver {
     fun resolve(event: SportsGuideEvent, channelGroups: List<LiveChannelGroup>): SportsResolution {
         val broadcasters = event.broadcasterNames
-            .filterNot(::unsafeFallbackBroadcaster)
             .flatMap(::aliasesFor)
-            .map(::normalize)
+            .map(::coreName)
             .filter { it.isNotBlank() }
             .distinct()
         if (broadcasters.isEmpty()) return SportsResolution(event, emptyList())
@@ -51,7 +48,7 @@ class SportsChannelResolver {
         val candidates = buildList {
             channelGroups.forEach { group ->
                 group.candidates.forEach { channel ->
-                    val channelName = normalize(channel.name)
+                    val channelName = coreName(channel.name)
                     val score = broadcasters.maxOfOrNull { broadcaster -> matchScore(broadcaster, channelName) } ?: 0
                     if (score >= MIN_ACCEPTED_SCORE) {
                         add(
@@ -62,13 +59,13 @@ class SportsChannelResolver {
                                 streamUrl = channel.url,
                                 broadcasterMatchScore = score,
                                 priority = channel.priority,
-                            )
+                            ),
                         )
                     }
                 }
             }
         }
-            .distinctBy { "${it.streamUrl}:${normalize(it.channelName)}" }
+            .distinctBy { "${it.streamUrl}:${coreName(it.channelName)}" }
             .sortedWith(
                 compareByDescending<SportsWatchCandidate> { it.broadcasterMatchScore }
                     .thenBy { it.priority }
@@ -80,41 +77,44 @@ class SportsChannelResolver {
 
     private fun matchScore(expected: String, channel: String): Int {
         if (expected == channel) return 100
+
         val expectedTokens = expected.split(' ').filter { it.length > 1 }.toSet()
         val channelTokens = channel.split(' ').filter { it.length > 1 }.toSet()
         if (expectedTokens.isEmpty() || channelTokens.isEmpty()) return 0
+
+        // A single brand token is only safe as an exact match. This blocks collisions such as
+        // Reds.TV -> Redseat The First, ESPN -> ESPN Deportes, and FOX -> FOX Weather.
         if (expectedTokens.size == 1) return 0
 
         val overlap = expectedTokens.intersect(channelTokens).size
+        val coverage = overlap.toDouble() / expectedTokens.size
+        val reverseCoverage = overlap.toDouble() / channelTokens.size
+
         return when {
-            overlap == expectedTokens.size && expectedTokens.size >= 2 -> 88
-            overlap >= 3 && overlap == channelTokens.size -> 84
+            overlap == expectedTokens.size && channelTokens.size <= expectedTokens.size + 2 -> 88
+            overlap >= 2 && coverage >= 0.75 && reverseCoverage >= 0.60 -> 76
             else -> 0
         }
-    }
-
-    private fun unsafeFallbackBroadcaster(value: String): Boolean {
-        if (Regex("\\.tv$", RegexOption.IGNORE_CASE).containsMatchIn(value.trim())) return true
-        val normalized = normalize(value)
-        return normalized in setOf(
-            "mlb tv", "nba tv", "nfl network", "nhl network",
-            "espn", "espn2", "espnu", "espn plus",
-            "fs1", "fs2", "tnt", "tbs", "trutv",
-            "cbs sports network", "cbssn", "sec network", "acc network", "big ten network",
-            "peacock", "paramount plus", "prime video", "apple tv", "max", "netflix",
-        )
     }
 
     private fun aliasesFor(value: String): List<String> {
         val normalized = normalize(value)
         return when (normalized) {
-            "fox sports 1" -> listOf("fox sports 1")
-            "fox sports 2" -> listOf("fox sports 2")
+            "fs1", "fox sports 1" -> listOf("fs1", "fox sports 1")
+            "fs2", "fox sports 2" -> listOf("fs2", "fox sports 2")
+            "cbs sports network", "cbssn" -> listOf("cbs sports network", "cbssn")
             "nbc sports network", "nbcsn" -> listOf("nbc sports network", "nbcsn")
+            "nba tv", "nbatv" -> listOf("nba tv", "nbatv")
             "mlb network" -> listOf("mlb network")
+            "nhl network" -> listOf("nhl network")
             else -> listOf(normalized)
         }
     }
+
+    private fun coreName(value: String): String = normalize(value)
+        .replace(Regex("\\b(hd|fhd|uhd|4k|live|east|west|eastern|western|feed|channel)\\b"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
 
     private fun normalize(value: String): String = value
         .lowercase(Locale.US)
@@ -125,6 +125,6 @@ class SportsChannelResolver {
         .replace(Regex("\\s+"), " ")
 
     companion object {
-        private const val MIN_ACCEPTED_SCORE = 84
+        private const val MIN_ACCEPTED_SCORE = 76
     }
 }
