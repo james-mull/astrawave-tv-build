@@ -281,15 +281,23 @@ private fun TitleDetailsScreen(
 
             if (!seriesMode) {
                 when {
-                    movieContextLoading -> LoadingRow("Finding AstraWave lists and movie series…")
-                    movieContext.lists.isNotEmpty() -> MovieListMembershipPanel(movieContext.lists)
+                    movieContextLoading -> LoadingRow("Finding AstraWave lists, related movies and franchises…")
+                    movieContext.lists.isNotEmpty() -> MovieListMembershipPanel(movieContext.lists, profileId)
                 }
                 movieContext.collection?.let { collection ->
-                    MovieCollectionPanel(
-                        collection = collection,
-                        currentMovieId = tmdbId?.toString(),
-                        profileId = profileId,
-                    )
+                    MovieCollectionPanel(collection, tmdbId?.toString(), profileId)
+                }
+                movieContext.universe?.takeIf { it.parts.isNotEmpty() }?.let { universe ->
+                    MovieUniversePanel(universe, tmdbId?.toString(), profileId)
+                }
+                movieContext.related.similar.takeIf { it.isNotEmpty() }?.let {
+                    RelatedMoviePanel("Similar Movies", "Movies with related themes, audiences and metadata", it, profileId)
+                }
+                movieContext.related.director?.takeIf { it.movies.isNotEmpty() }?.let {
+                    RelatedMoviePanel("More From ${it.name}", "Other movies directed by ${it.name}", it.movies, profileId)
+                }
+                movieContext.related.actor?.takeIf { it.movies.isNotEmpty() }?.let {
+                    RelatedMoviePanel("More With ${it.name}", "Other movies featuring ${it.name}", it.movies, profileId)
                 }
             }
 
@@ -387,18 +395,31 @@ private fun TitleDetailsScreen(
 }
 
 @Composable
-private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.ListMembership>) {
+private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.ListMembership>, profileId: String) {
+    val context = LocalContext.current
     Column(
         Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("In These AstraWave Lists", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("Metadata-matched collections this movie belongs in across AstraWave.", color = DetailsMuted, fontSize = 12.sp)
+        Text("Tap any list to jump directly into that collection.", color = DetailsMuted, fontSize = 12.sp)
         lists.forEach { item ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier.fillMaxWidth().clickable {
+                    context.startActivity(
+                        Intent(context, MovieListDetailActivity::class.java)
+                            .putExtra(MovieListDetailActivity.EXTRA_TITLE, item.title)
+                            .putExtra(MovieListDetailActivity.EXTRA_REASON, item.reason)
+                            .putExtra(MovieListDetailActivity.EXTRA_QUERY, item.query)
+                            .putExtra(MovieListDetailActivity.EXTRA_GENRE, item.genre)
+                            .putExtra(MovieListDetailActivity.EXTRA_PROFILE_ID, profileId),
+                    )
+                }.padding(vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(item.title, color = DetailsAccent, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.42f))
                 Column(Modifier.weight(0.58f)) {
-                    Text(item.category, color = DetailsPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("${item.category} • Open list →", color = DetailsPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     if (item.reason.isNotBlank()) Text(item.reason, color = DetailsMuted, fontSize = 11.sp)
                 }
             }
@@ -412,42 +433,89 @@ private fun MovieCollectionPanel(
     currentMovieId: String?,
     profileId: String,
 ) {
-    val context = LocalContext.current
     Column(
         Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Movie Series / Collection", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(collection.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text("${collection.parts.size} movie${if (collection.parts.size == 1) "" else "s"} • release order", color = DetailsMuted, fontSize = 12.sp)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            collection.parts.forEachIndexed { index, movie ->
-                Column(
-                    Modifier.width(150.dp).clickable {
-                        context.startActivity(
-                            Intent(context, TitleDetailsActivity::class.java)
-                                .putExtra(TitleDetailsActivity.EXTRA_TITLE, movie.title)
-                                .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "MOVIE")
-                                .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, "tmdb:${movie.id}")
-                                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
-                        )
-                    },
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    AsyncImage(
-                        model = movie.posterUrl ?: movie.backdropUrl,
-                        contentDescription = movie.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().height(210.dp).background(Color(0xFF202736), RoundedCornerShape(12.dp)),
+        Text("${collection.parts.size} movie${if (collection.parts.size == 1) "" else "s"} • official collection • release order", color = DetailsMuted, fontSize = 12.sp)
+        MovieCards(collection.parts, currentMovieId, profileId)
+    }
+}
+
+@Composable
+private fun MovieUniversePanel(
+    universe: MovieDetailContextRepository.MovieUniverse,
+    currentMovieId: String?,
+    profileId: String,
+) {
+    Column(
+        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Connected Universe", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(universe.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            if (universe.editorial) "AstraWave editorial universe grouping • broader than one official TMDB collection" else "Connected collection",
+            color = DetailsMuted,
+            fontSize = 12.sp,
+        )
+        MovieCards(universe.parts, currentMovieId, profileId)
+    }
+}
+
+@Composable
+private fun RelatedMoviePanel(
+    title: String,
+    subtitle: String,
+    movies: List<MovieDetailContextRepository.CollectionMovie>,
+    profileId: String,
+) {
+    Column(
+        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = DetailsMuted, fontSize = 12.sp)
+        MovieCards(movies, null, profileId)
+    }
+}
+
+@Composable
+private fun MovieCards(
+    movies: List<MovieDetailContextRepository.CollectionMovie>,
+    currentMovieId: String?,
+    profileId: String,
+) {
+    val context = LocalContext.current
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        movies.forEachIndexed { index, movie ->
+            Column(
+                Modifier.width(150.dp).clickable {
+                    context.startActivity(
+                        Intent(context, TitleDetailsActivity::class.java)
+                            .putExtra(TitleDetailsActivity.EXTRA_TITLE, movie.title)
+                            .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "MOVIE")
+                            .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, "tmdb:${movie.id}")
+                            .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
                     )
-                    Text("${index + 1}. ${movie.title}", color = DetailsPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    val year = movie.releaseDate?.take(4)
-                    Text(
-                        listOfNotNull(year, if (movie.id == currentMovieId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" },
-                        color = if (movie.id == currentMovieId) DetailsSuccess else DetailsMuted,
-                        fontSize = 11.sp,
-                    )
-                }
+                },
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AsyncImage(
+                    model = movie.posterUrl ?: movie.backdropUrl,
+                    contentDescription = movie.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(210.dp).background(Color(0xFF202736), RoundedCornerShape(12.dp)),
+                )
+                Text("${index + 1}. ${movie.title}", color = DetailsPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val year = movie.releaseDate?.take(4)
+                Text(
+                    listOfNotNull(year, if (movie.id == currentMovieId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" },
+                    color = if (movie.id == currentMovieId) DetailsSuccess else DetailsMuted,
+                    fontSize = 11.sp,
+                )
             }
         }
     }
