@@ -3,22 +3,43 @@ package com.astrawave.app.data
 import com.astrawave.app.core.IptvSource
 
 /**
- * AstraWave Free TV client. The published playlist contains only reviewed
- * direct streams. Official-provider pages are loaded separately as handoffs.
+ * AstraWave Free TV client.
+ *
+ * Sources are split deliberately:
+ * - AstraWave's reviewed registry playlist (highest priority)
+ * - FreeCastHub's public-broadcaster playlist, whose repository states that it
+ *   only includes free, legal, official public streams. These remain lower
+ *   priority and are still health-checked before playback.
  */
 class AstraWaveFreeTvRepository(
     private val playlistUrl: String = DEFAULT_PLAYLIST_URL,
+    private val publicBroadcasterPlaylistUrl: String = DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL,
 ) {
-    fun loadChannels(): List<LiveChannel> =
-        LiveTvRepository().loadM3u(
-            url = playlistUrl,
-            source = "AstraWave Free TV",
-            priority = 5,
-        )
+    fun loadChannels(): List<LiveChannel> {
+        val liveTv = LiveTvRepository()
+        val reviewed = runCatching {
+            liveTv.loadM3u(
+                url = playlistUrl,
+                source = "AstraWave Free TV",
+                priority = 5,
+            )
+        }.getOrDefault(emptyList())
+        val publicBroadcasters = runCatching {
+            liveTv.loadM3u(
+                url = publicBroadcasterPlaylistUrl,
+                source = "AstraWave Public TV",
+                priority = 8,
+            )
+        }.getOrDefault(emptyList())
+        return (reviewed + publicBroadcasters).distinctBy { "${it.source}:${it.id}:${it.url}" }
+    }
 
     companion object {
         const val DEFAULT_PLAYLIST_URL =
             "https://raw.githubusercontent.com/james-mull/astrawave-tv-build/feature/nuvio-core-rebuild/astrawave-free-tv/astrawave-free-tv.m3u"
+
+        const val DEFAULT_PUBLIC_BROADCASTER_PLAYLIST_URL =
+            "https://raw.githubusercontent.com/freecasthub/public-iptv/main/playlist.m3u"
     }
 }
 
