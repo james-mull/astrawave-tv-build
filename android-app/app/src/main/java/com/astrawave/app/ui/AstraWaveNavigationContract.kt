@@ -16,49 +16,49 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("more", "More"),
     )
 
-    /** Premium phone hub destinations exposed behind More. */
+    /** Premium phone hub destinations exposed behind More, ordered by fastest path to entertainment. */
     val mobileMore = listOf(
-        AstraWaveNavItem("guide", "Guide"),
+        AstraWaveNavItem("search", "Search Everything"),
+        AstraWaveNavItem("guide", "Live Guide"),
         AstraWaveNavItem("sports", "Game Day"),
         AstraWaveNavItem("multiview", "Multiview"),
         AstraWaveNavItem("discover", "Discover"),
-        AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("audio", "Radio & Podcasts"),
+        AstraWaveNavItem("audio", "Music & Podcasts"),
         AstraWaveNavItem("personal-media", "Personal Media"),
         AstraWaveNavItem("addons", "Source Manager"),
         AstraWaveNavItem("my", "My AstraWave"),
         AstraWaveNavItem("settings", "Settings"),
     )
 
-    /** Full tablet / wide-phone destination set, ordered by viewing workflow. */
+    /** Full tablet / phone command strip: high-intent actions first, deep catalog browsing second. */
     val mobileTablet = listOf(
         AstraWaveNavItem("home", "Home"),
-        AstraWaveNavItem("discover", "Discover"),
-        AstraWaveNavItem("movies", "Movies"),
-        AstraWaveNavItem("tv", "TV Shows"),
+        AstraWaveNavItem("search", "Search"),
         AstraWaveNavItem("live", "Live TV"),
         AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Game Day"),
+        AstraWaveNavItem("movies", "Movies"),
+        AstraWaveNavItem("tv", "TV Shows"),
+        AstraWaveNavItem("discover", "Discover"),
         AstraWaveNavItem("multiview", "Multiview"),
-        AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("audio", "Radio & Podcasts"),
+        AstraWaveNavItem("audio", "Music & Podcasts"),
         AstraWaveNavItem("personal-media", "Personal Media"),
         AstraWaveNavItem("addons", "Source Manager"),
         AstraWaveNavItem("my", "My AstraWave"),
     )
 
-    /** Persistent 10-foot TV rail: discovery first, live/sports together, personal surfaces last. */
+    /** Persistent 10-foot TV rail: immediate watch/search actions first, then browsing and personal surfaces. */
     val tv = listOf(
         AstraWaveNavItem("home", "Home"),
-        AstraWaveNavItem("discover", "Discover"),
-        AstraWaveNavItem("movies", "Movies"),
-        AstraWaveNavItem("tv", "TV Shows"),
+        AstraWaveNavItem("search", "Search"),
         AstraWaveNavItem("live", "Live TV"),
         AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Game Day"),
+        AstraWaveNavItem("movies", "Movies"),
+        AstraWaveNavItem("tv", "TV Shows"),
+        AstraWaveNavItem("discover", "Discover"),
         AstraWaveNavItem("multiview", "Multiview"),
-        AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("audio", "Radio & Podcasts"),
+        AstraWaveNavItem("audio", "Music & Podcasts"),
         AstraWaveNavItem("personal-media", "Personal Media"),
         AstraWaveNavItem("addons", "Source Manager"),
         AstraWaveNavItem("my", "My AstraWave"),
@@ -70,9 +70,12 @@ object AstraWaveNavigationContract {
         check(mobileTablet.map { it.route }.distinct().size == mobileTablet.size)
         check(tv.map { it.route }.distinct().size == tv.size)
         check(mobilePrimary.map { it.label } == listOf("Home", "Movies", "TV", "Live", "More"))
-        check(mobileMore.first().label == "Guide")
+        check(mobileMore.first().route == "search")
+        check(mobileMore.take(3).map { it.route } == listOf("search", "guide", "sports"))
         check(mobileMore.any { it.route == "multiview" })
         check(mobileMore.any { it.route == "addons" })
+        check(mobileTablet.take(5).map { it.route } == listOf("home", "search", "live", "guide", "sports"))
+        check(tv.take(5).map { it.route } == listOf("home", "search", "live", "guide", "sports"))
         check(tv.any { it.route == "multiview" })
         check(tv.any { it.route == "personal-media" })
         check(tv.any { it.route == "addons" })
