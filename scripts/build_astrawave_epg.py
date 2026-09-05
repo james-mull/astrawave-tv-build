@@ -13,13 +13,15 @@ SOURCES = [
 ]
 OUT_JSON = 'astrawave-epg/us.json.gz'
 OUT_XML = 'astrawave-epg/us.xml.gz'
+OUT_NOW = 'astrawave-epg/us-now-next.json'
 WINDOW_HOURS = 96
+NOW_WINDOW_HOURS = 18
 MAX_CHANNELS = 5000
 MAX_PROGRAMMES_PER_CHANNEL = 80
 
 
 def fetch_gz(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={'User-Agent': 'AstraWave-EPG-Builder/1.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'AstraWave-EPG-Builder/1.1'})
     with urllib.request.urlopen(req, timeout=120) as r:
         return r.read()
 
@@ -98,6 +100,30 @@ def write_xmltv(channels, programmes):
         f.write(payload)
 
 
+def write_now_next(doc, now):
+    end_ms = int((now + timedelta(hours=NOW_WINDOW_HOURS)).timestamp() * 1000)
+    min_ms = int((now - timedelta(hours=1)).timestamp() * 1000)
+    programmes = {}
+    for cid, rows in doc['programs'].items():
+        filtered = [p for p in rows if p['stop'] >= min_ms and p['start'] <= end_ms][:24]
+        if filtered:
+            programmes[cid] = filtered
+    used = set(programmes.keys())
+    channels = [c for c in doc['channels'] if c['id'] in used]
+    compact = {
+        'schema': 2,
+        'generatedAt': doc['generatedAt'],
+        'windowHours': NOW_WINDOW_HOURS,
+        'linkedChannels': len(channels),
+        'scheduledChannels': len(programmes),
+        'sources': doc['sources'],
+        'channels': channels,
+        'programs': programmes,
+    }
+    with open(OUT_NOW, 'w', encoding='utf-8') as f:
+        json.dump(compact, f, separators=(',', ':'), ensure_ascii=False)
+
+
 def main():
     now = datetime.now(timezone.utc)
     end = now + timedelta(hours=WINDOW_HOURS)
@@ -131,7 +157,8 @@ def main():
     with gzip.open(OUT_JSON, 'wt', encoding='utf-8', compresslevel=9) as f:
         json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
     write_xmltv(channels, programmes)
-    print(f'Wrote {OUT_JSON} and {OUT_XML}: {len(channels)} channels, {sum(len(v) for v in programmes.values())} programmes')
+    write_now_next(doc, now)
+    print(f'Wrote {OUT_JSON}, {OUT_XML} and {OUT_NOW}: {len(channels)} channels, {sum(len(v) for v in programmes.values())} programmes')
 
 
 if __name__ == '__main__':
