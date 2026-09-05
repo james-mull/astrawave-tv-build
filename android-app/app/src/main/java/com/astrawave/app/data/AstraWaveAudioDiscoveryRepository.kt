@@ -21,12 +21,18 @@ class AstraWaveAudioDiscoveryRepository {
     val podcastTopics = listOf(
         "news", "comedy", "true crime", "sports", "business", "technology",
         "science", "history", "society culture", "education", "health fitness",
-        "music", "tv film", "kids family", "arts", "fiction",
+        "music", "tv film", "kids family", "arts", "fiction", "politics",
+        "daily news", "entrepreneurship", "investing", "design", "food", "travel",
+        "parenting", "relationships", "gaming", "automotive", "nature", "medicine",
+        "self improvement",
     )
 
     val musicGenres = listOf(
         "pop", "rock", "hip hop", "r&b", "country", "electronic",
         "alternative", "jazz", "classical", "latin", "reggae", "metal",
+        "dance", "blues", "folk", "indie", "punk", "gospel", "world",
+        "afrobeats", "k-pop", "j-pop", "ambient", "house", "techno", "trance",
+        "disco", "funk", "soul",
     )
 
     fun discoverRadio(limit: Int = 80): List<RadioStation> {
@@ -75,18 +81,18 @@ class AstraWaveAudioDiscoveryRepository {
         }.distinctBy { it.id }
     }
 
-    fun discoverPodcasts(perTopic: Int = 5): List<AudioSubscription> {
-        val limit = perTopic.coerceIn(1, 10)
+    fun discoverPodcasts(perTopic: Int = 6): List<AudioSubscription> {
+        val limit = perTopic.coerceIn(1, 12)
         return podcastTopics.flatMap { topic -> searchPodcasts(topic, limit) }
             .distinctBy { it.feedUrl.lowercase() }
-            .take(80)
+            .take(140)
     }
 
-    fun searchPodcasts(query: String, limit: Int = 40): List<AudioSubscription> {
+    fun searchPodcasts(query: String, limit: Int = 80): List<AudioSubscription> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
         val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
-        val capped = limit.coerceIn(1, 60)
+        val capped = limit.coerceIn(1, 120)
         val root = runCatching {
             JSONObject(SimpleHttp.getText("https://itunes.apple.com/search?media=podcast&entity=podcast&country=US&limit=$capped&term=$encoded"))
         }.getOrNull() ?: return emptyList()
@@ -111,16 +117,16 @@ class AstraWaveAudioDiscoveryRepository {
         }.distinctBy { it.feedUrl.lowercase() }
     }
 
-    fun discoverMusic(perGenre: Int = 5): List<AudioItem> = musicGenres
+    fun discoverMusic(perGenre: Int = 6): List<AudioItem> = musicGenres
         .flatMap { genre -> searchMusic(genre, perGenre) }
         .distinctBy { it.id }
-        .take(80)
+        .take(160)
 
-    fun searchMusic(query: String, limit: Int = 50): List<AudioItem> {
+    fun searchMusic(query: String, limit: Int = 90): List<AudioItem> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
         val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
-        val capped = limit.coerceIn(1, 80)
+        val capped = limit.coerceIn(1, 120)
         val root = runCatching {
             JSONObject(SimpleHttp.getText("https://itunes.apple.com/search?media=music&entity=song&country=US&limit=$capped&term=$encoded"))
         }.getOrNull() ?: return emptyList()
