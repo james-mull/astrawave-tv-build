@@ -130,10 +130,11 @@ class CombinedLiveTvRepository(
     private val liveTv: LiveTvRepository = LiveTvRepository(),
 ) {
     private val market = AstraWaveFreeTvRepository.sanitizeCountry(marketCountry)
-    private val publicEpgUrls = listOf(
-        "https://dearbulut.github.io/iptv/epg/$market.xml",
-        "https://iptv-epg.org/files/epg-$market.xml",
-    )
+    private val publicEpgUrls = buildList {
+        if (market == "us") add("https://raw.githubusercontent.com/james-mull/astrawave-tv-build/feature/nuvio-core-rebuild/astrawave-epg/us.xml.gz")
+        add("https://dearbulut.github.io/iptv/epg/$market.xml")
+        add("https://iptv-epg.org/files/epg-$market.xml")
+    }
 
     private val publicProgrammes: List<XmlTvProgramme> by lazy {
         publicEpgUrls
