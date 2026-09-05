@@ -35,20 +35,24 @@ jobs:
         run: |
           test -s astrawave-epg/us.json.gz
           test -s astrawave-epg/us.xml.gz
+          test -s astrawave-epg/us-now-next.json
           python - <<'PY'
           import gzip, json, xml.etree.ElementTree as ET
           with gzip.open('astrawave-epg/us.json.gz','rt',encoding='utf-8') as f: d=json.load(f)
           assert d.get('scheduledChannels',0) > 0, d
           assert d.get('linkedChannels',0) > 0, d
+          with open('astrawave-epg/us-now-next.json','r',encoding='utf-8') as f: n=json.load(f)
+          assert n.get('scheduledChannels',0) > 0, n
+          assert n.get('programs'), n
           with gzip.open('astrawave-epg/us.xml.gz','rb') as f: root=ET.parse(f).getroot()
           assert root.findall('programme'), 'XMLTV has no programmes'
-          print('EPG cache validated:', d['linkedChannels'], 'channels')
+          print('EPG cache validated:', d['linkedChannels'], 'channels; now/next:', n['scheduledChannels'])
           PY
       - name: Publish last-known-good cache
         run: |
           git config user.name 'AstraWave EPG Bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add astrawave-epg/us.json.gz astrawave-epg/us.xml.gz
+          git add astrawave-epg/us.json.gz astrawave-epg/us.xml.gz astrawave-epg/us-now-next.json
           if git diff --cached --quiet; then
             echo 'No EPG cache changes.'
           else
