@@ -11,7 +11,8 @@ SOURCES = [
     ('us-national', 'https://epgshare01.online/epgshare01/epg_ripper_US2.xml.gz'),
     ('us-sports', 'https://epgshare01.online/epgshare01/epg_ripper_US_SPORTS1.xml.gz'),
 ]
-OUT = 'astrawave-epg/us.json.gz'
+OUT_JSON = 'astrawave-epg/us.json.gz'
+OUT_XML = 'astrawave-epg/us.xml.gz'
 WINDOW_HOURS = 96
 MAX_CHANNELS = 5000
 MAX_PROGRAMMES_PER_CHANNEL = 80
@@ -38,6 +39,10 @@ def parse_time(raw: str):
         return dt
     except Exception:
         return None
+
+
+def xmltv_time(epoch_ms: int) -> str:
+    return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc).strftime('%Y%m%d%H%M%S +0000')
 
 
 def read_source(label: str, url: str, now: datetime, end: datetime, channels, programmes):
@@ -73,6 +78,26 @@ def read_source(label: str, url: str, now: datetime, end: datetime, channels, pr
             channels[cid] = {'id': cid, 'title': channel_names.get(cid, cid), 'posterUrl': channel_icons.get(cid, ''), 'source': label, 'tvgId': cid, 'kind': 'live'}
 
 
+def write_xmltv(channels, programmes):
+    tv = ET.Element('tv', {'generator-info-name': 'AstraWave EPG Cache'})
+    for channel in channels:
+        ch = ET.SubElement(tv, 'channel', {'id': channel['id']})
+        ET.SubElement(ch, 'display-name').text = channel['title']
+        if channel.get('posterUrl'):
+            ET.SubElement(ch, 'icon', {'src': channel['posterUrl']})
+    for cid, rows in programmes.items():
+        for item in rows:
+            p = ET.SubElement(tv, 'programme', {'channel': cid, 'start': xmltv_time(item['start']), 'stop': xmltv_time(item['stop'])})
+            ET.SubElement(p, 'title').text = item['title']
+            if item.get('category'):
+                ET.SubElement(p, 'category').text = item['category']
+            if item.get('desc'):
+                ET.SubElement(p, 'desc').text = item['desc']
+    payload = ET.tostring(tv, encoding='utf-8', xml_declaration=True)
+    with gzip.open(OUT_XML, 'wb', compresslevel=9) as f:
+        f.write(payload)
+
+
 def main():
     now = datetime.now(timezone.utc)
     end = now + timedelta(hours=WINDOW_HOURS)
@@ -102,10 +127,11 @@ def main():
         'channels': channels,
         'programs': programmes,
     }
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with gzip.open(OUT, 'wt', encoding='utf-8', compresslevel=9) as f:
+    os.makedirs(os.path.dirname(OUT_JSON), exist_ok=True)
+    with gzip.open(OUT_JSON, 'wt', encoding='utf-8', compresslevel=9) as f:
         json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
-    print(f'Wrote {OUT}: {len(channels)} channels, {sum(len(v) for v in programmes.values())} programmes')
+    write_xmltv(channels, programmes)
+    print(f'Wrote {OUT_JSON} and {OUT_XML}: {len(channels)} channels, {sum(len(v) for v in programmes.values())} programmes')
 
 
 if __name__ == '__main__':
