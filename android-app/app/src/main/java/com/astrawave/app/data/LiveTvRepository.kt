@@ -1,9 +1,11 @@
 package com.astrawave.app.data
 
-import java.io.ByteArrayInputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.GZIPInputStream
 
 /** Unified live-TV pipeline for AstraWave-authorized feeds and user-provided M3U/Xtream sources. */
 data class LiveChannel(
@@ -50,8 +52,15 @@ class LiveTvRepository {
         loadM3u(XtreamEndpoints.liveM3u(server, username, password), "Xtream", 15)
 
     fun loadXmlTv(url: String): List<XmlTvProgramme> {
-        val xml = SimpleHttp.getText(url)
-        return XmlTvParser.parse(ByteArrayInputStream(xml.toByteArray()))
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 12_000
+        connection.readTimeout = 30_000
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("User-Agent", "AstraWave/0.3 EPG")
+        connection.inputStream.use { raw ->
+            val input = if (url.endsWith(".gz", ignoreCase = true)) GZIPInputStream(raw) else raw
+            input.use { return XmlTvParser.parse(it) }
+        }
     }
 
     fun merge(channelLists: List<List<LiveChannel>>, programmes: List<XmlTvProgramme> = emptyList()): List<LiveChannelGroup> {
