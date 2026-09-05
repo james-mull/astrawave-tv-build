@@ -76,7 +76,7 @@ object XtreamEndpoints {
 }
 
 object XmlTvParser {
-    fun parse(input: InputStream, maxItems: Int = 2000): List<XmlTvProgramme> {
+    fun parse(input: InputStream, maxItems: Int = 50_000): List<XmlTvProgramme> {
         val parser = Xml.newPullParser().apply { setInput(input, null) }
         val items = mutableListOf<XmlTvProgramme>()
         var event = parser.eventType
@@ -103,7 +103,7 @@ object XmlTvParser {
 }
 
 object PodcastRssParser {
-    fun parse(input: InputStream, maxItems: Int = 200): List<PodcastEpisode> {
+    fun parse(input: InputStream, maxItems: Int = 500): List<PodcastEpisode> {
         val parser = Xml.newPullParser().apply { setInput(input, null) }
         val episodes = mutableListOf<PodcastEpisode>()
         var event = parser.eventType
@@ -133,9 +133,9 @@ object SimpleHttp {
     fun getText(url: String, headers: Map<String, String> = emptyMap()): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 10_000
-        connection.readTimeout = 15_000
+        connection.readTimeout = 20_000
         connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "AstraWave/0.1")
+        connection.setRequestProperty("User-Agent", "AstraWave/0.2")
         headers.forEach { (key, value) -> connection.setRequestProperty(key, value) }
         connection.inputStream.use { input ->
             BufferedReader(InputStreamReader(input)).use { return it.readText() }
