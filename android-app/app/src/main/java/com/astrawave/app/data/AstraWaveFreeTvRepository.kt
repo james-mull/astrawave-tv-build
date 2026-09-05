@@ -128,10 +128,17 @@ class CombinedLiveTvRepository(
     private val handoffRepository: FreeTvHandoffRepository = FreeTvHandoffRepository(),
     private val userSources: IptvSourceRepository = IptvSourceRepository(),
     private val liveTv: LiveTvRepository = LiveTvRepository(),
-    private val publicEpgUrl: String = "https://dearbulut.github.io/iptv/epg/${AstraWaveFreeTvRepository.sanitizeCountry(marketCountry)}.xml",
 ) {
+    private val market = AstraWaveFreeTvRepository.sanitizeCountry(marketCountry)
+    private val publicEpgUrls = listOf(
+        "https://dearbulut.github.io/iptv/epg/$market.xml",
+        "https://iptv-epg.org/files/epg-$market.xml",
+    )
+
     private val publicProgrammes: List<XmlTvProgramme> by lazy {
-        runCatching { liveTv.loadXmlTv(publicEpgUrl) }.getOrDefault(emptyList())
+        publicEpgUrls
+            .flatMap { url -> runCatching { liveTv.loadXmlTv(url) }.getOrDefault(emptyList()) }
+            .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
     }
 
     fun load(userSourcesConfig: List<IptvSource>): CombinedLiveTvSnapshot {
