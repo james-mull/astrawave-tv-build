@@ -9,13 +9,14 @@ on:
       - feature/nuvio-core-rebuild
     paths:
       - 'scripts/build_astrawave_epg.py'
+      - 'scripts/build_astrawave_epg_lite.py'
       - '.github/workflows/build-astrawave-epg.yml'
 
 permissions:
   contents: write
 
 concurrency:
-  group: astrwave-epg-cache
+  group: astrawave-epg-cache
   cancel-in-progress: true
 
 jobs:
@@ -29,30 +30,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build compact guide cache
-        run: python scripts/build_astrawave_epg.py
+      - name: Build full and runtime guide caches
+        run: |
+          python scripts/build_astrawave_epg.py
+          python scripts/build_astrawave_epg_lite.py
       - name: Validate cache
         run: |
           test -s astrawave-epg/us.json.gz
           test -s astrawave-epg/us.xml.gz
           test -s astrawave-epg/us-now-next.json
+          test -s astrawave-epg/us-live-guide.json
           python - <<'PY'
           import gzip, json, xml.etree.ElementTree as ET
           with gzip.open('astrawave-epg/us.json.gz','rt',encoding='utf-8') as f: d=json.load(f)
-          assert d.get('scheduledChannels',0) > 0, d
-          assert d.get('linkedChannels',0) > 0, d
           with open('astrawave-epg/us-now-next.json','r',encoding='utf-8') as f: n=json.load(f)
-          assert n.get('scheduledChannels',0) > 0, n
-          assert n.get('programs'), n
+          with open('astrawave-epg/us-live-guide.json','r',encoding='utf-8') as f: l=json.load(f)
+          assert d.get('scheduledChannels',0)>0 and d.get('linkedChannels',0)>0, d
+          assert n.get('scheduledChannels',0)>0 and n.get('programs'), n
+          assert l.get('scheduledChannels',0)>0 and l.get('programs'), l
+          assert len(json.dumps(l,separators=(',',':')).encode())<1500000, 'Runtime guide is too large'
           with gzip.open('astrawave-epg/us.xml.gz','rb') as f: root=ET.parse(f).getroot()
           assert root.findall('programme'), 'XMLTV has no programmes'
-          print('EPG cache validated:', d['linkedChannels'], 'channels; now/next:', n['scheduledChannels'])
+          print('EPG validated:',d['linkedChannels'],'full;',l['scheduledChannels'],'runtime channels')
           PY
       - name: Publish last-known-good cache
         run: |
           git config user.name 'AstraWave EPG Bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add astrawave-epg/us.json.gz astrawave-epg/us.xml.gz astrawave-epg/us-now-next.json
+          git add astrawave-epg/us.json.gz astrawave-epg/us.xml.gz astrawave-epg/us-now-next.json astrawave-epg/us-live-guide.json
           if git diff --cached --quiet; then
             echo 'No EPG cache changes.'
           else
