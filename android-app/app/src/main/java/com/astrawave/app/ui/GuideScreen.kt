@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,6 +90,11 @@ fun AstraWaveGuideScreen(
     var selectedGroup by remember { mutableStateOf<String?>(null) }
     var nowOnly by remember { mutableStateOf(false) }
     var horizonHours by remember { mutableStateOf(6) }
+
+    DisposableEffect(channelStore, profileId) {
+        val registration = channelStore.addChangeListener(profileId) { refreshKey += 1 }
+        onDispose { registration.close() }
+    }
 
     LaunchedEffect(sources, profileId, refreshKey) {
         state = GuideLoadState.Loading
@@ -226,7 +232,7 @@ fun AstraWaveGuideScreen(
 
                 AstraWaveSectionHeader(
                     title = "Timeline",
-                    subtitle = "${visible.size} channels • ${horizonHours} hour horizon • profile channel edits and manual guide mappings are active.",
+                    subtitle = "${visible.size} channels • ${horizonHours} hour horizon • profile channel edits and manual guide mappings update live.",
                 )
                 Spacer(Modifier.height(8.dp))
                 TimelineHeader(horizonHours)
