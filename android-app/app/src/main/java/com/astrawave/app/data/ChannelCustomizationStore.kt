@@ -1,6 +1,7 @@
 package com.astrawave.app.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.astrawave.app.core.ChannelCustomization
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,6 +27,20 @@ class ChannelCustomizationStore(context: Context) {
     fun visible(profileId:String,rows:List<GuideChannelRow>):List<GuideChannelRow>{
         val map=load(profileId).associateBy{it.channelId}
         return rows.filterNot{map[it.id]?.hidden==true}.map{row->apply(profileId,row)}.sortedWith(compareBy<GuideChannelRow>{map[it.id]?.sortOrder?:Int.MAX_VALUE}.thenBy{map[it.id]?.customNumber?:Int.MAX_VALUE}.thenBy{it.name})
+    }
+
+    /**
+     * Observe profile-scoped channel customization writes. This is intentionally backed by
+     * SharedPreferences so local edits and DeviceConfigCloudSync imports use the same signal.
+     * Call the returned function when the observing screen leaves composition.
+     */
+    fun observe(profileId:String,onChanged:()->Unit):()->Unit{
+        val key="channels_$profileId"
+        val listener=SharedPreferences.OnSharedPreferenceChangeListener{_,changedKey->
+            if(changedKey==key)onChanged()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     private fun saveAll(profileId:String,items:List<ChannelCustomization>){val a=JSONArray();items.forEach{c->a.put(JSONObject().put("channelId",c.channelId).put("customName",c.customName?:JSONObject.NULL).put("customNumber",c.customNumber?:JSONObject.NULL).put("customGroup",c.customGroup?:JSONObject.NULL).put("hidden",c.hidden).put("sortOrder",c.sortOrder).put("epgIdOverride",c.epgIdOverride?:JSONObject.NULL).put("logoUrlOverride",c.logoUrlOverride?:JSONObject.NULL))};prefs.edit().putString("channels_$profileId",a.toString()).apply()}
