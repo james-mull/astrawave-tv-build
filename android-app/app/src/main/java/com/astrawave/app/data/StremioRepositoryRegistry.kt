@@ -33,7 +33,6 @@ object StremioRepositoryRegistry {
         ),
     )
 
-    /** High-value official addons seeded automatically by StremioAddonStore. */
     val recommendedOfficialManifestUrls: List<String> = listOf(
         "https://v3-cinemeta.strem.io/manifest.json",
         "https://v3-channels.strem.io/manifest.json",
@@ -41,4 +40,12 @@ object StremioRepositoryRegistry {
         "https://caching.stremio.net/publicdomainmovies.now.sh/manifest.json",
         "https://opensubtitles-v3.strem.io/manifest.json",
     )
+
+    val customerHardcodedManifestUrls: List<String> = listOf(
+        StremioAddonStore.USA_TV_MANIFEST,
+        StremioAddonStore.NETFLIX_CATALOG_MANIFEST,
+    )
+
+    val hardcodedDefaultManifestUrls: List<String> =
+        (recommendedOfficialManifestUrls + customerHardcodedManifestUrls).distinct()
 }
