@@ -7,6 +7,7 @@ import com.astrawave.app.core.StremioEligibility
 import com.astrawave.app.core.StremioResource
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import org.json.JSONObject
 
 /**
  * Unified VOD resolver used by movie, series and episode detail surfaces.
@@ -19,11 +20,9 @@ class UnifiedVodSourceRepository(context: Context) {
     private val appContext = context.applicationContext
     private val publicSources = SourceDiscoveryRepository()
     private val addonStore = StremioAddonStore(appContext)
-    private val gateway = StremioHttpGateway { addon, stream ->
-        val direct = stream.optString("url")
-        addon.manifestUrl.contains("publicdomainmovies", ignoreCase = true) && direct.startsWith("https://")
-    }
-    private val catalogAggregator = StremioCatalogAggregator(appContext, gateway)
+    private val authorizationStore = VodProviderAuthorizationStore(appContext)
+    private val catalogGateway = StremioHttpGateway()
+    private val catalogAggregator = StremioCatalogAggregator(appContext, catalogGateway)
     private val healthCache = linkedMapOf<String, CachedHealth>()
 
     /** Backwards-compatible source list consumed by the current TitleDetailsActivity. */
@@ -92,6 +91,7 @@ class UnifiedVodSourceRepository(context: Context) {
     private fun discoverApprovedStremioById(type: String, id: String, profileId: String): List<ResolvedSource> {
         val streamAddons = addonStore.load(profileId)
             .filter { it.enabled && StremioResource.STREAM in it.manifest.resources }
+        val gateway = streamGateway(profileId)
 
         return streamAddons.flatMap { addon ->
             runCatching { gateway.loadStreams(addon, type, id) }
@@ -116,13 +116,14 @@ class UnifiedVodSourceRepository(context: Context) {
                         health.contentType?.contains("video", true) == true -> 30
                         else -> 0
                     }
+                    val publicDomain = isReviewedPublicDomainManifest(addon.manifestUrl)
                     val link = ScrapedLink(
                         url = url,
                         sourceName = stream.name.ifBlank { addon.manifest.name },
                         quality = quality,
                         mimeType = health.contentType,
                         direct = true,
-                        licenseLabel = "Approved addon source",
+                        licenseLabel = if (publicDomain) "Reviewed public-domain source" else "Customer-authorized provider",
                         attribution = addon.manifest.name,
                     )
                     ResolvedSource(
@@ -135,6 +136,18 @@ class UnifiedVodSourceRepository(context: Context) {
                 }
         }
     }
+
+    private fun streamGateway(profileId: String): StremioHttpGateway = StremioHttpGateway { addon, stream ->
+        val direct = stream.optString("url").trim()
+        when {
+            !direct.startsWith("https://") -> false
+            isReviewedPublicDomainManifest(addon.manifestUrl) -> true
+            else -> authorizationStore.isAuthorized(profileId, addon.manifestUrl, direct)
+        }
+    }
+
+    private fun isReviewedPublicDomainManifest(manifestUrl: String): Boolean =
+        manifestUrl.contains("publicdomainmovies", ignoreCase = true)
 
     private fun healthFor(url: String): StreamHealth? {
         val now = System.currentTimeMillis()
