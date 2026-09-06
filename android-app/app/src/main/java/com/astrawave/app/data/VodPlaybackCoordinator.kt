@@ -5,19 +5,22 @@ import android.content.Intent
 import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.core.ScrapeRequest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * Shared one-click VOD playback path for details, search, home and Astra intents.
  *
- * It resolves eligible sources, picks the highest-ranked candidate and passes every remaining
- * candidate to PlayerActivity as ordered failover backups. Catalog presence alone never makes a
- * source playable; UnifiedVodSourceRepository still owns eligibility and authorization checks.
+ * It searches owned personal media and eligible online sources in parallel. Strong personal-media
+ * matches use AstraWave's secure personal locator, while online candidates are ranked and handed to
+ * PlayerActivity with ordered failover backups. Catalog presence alone never grants playback.
  */
 class VodPlaybackCoordinator(context: Context) {
     private val appContext = context.applicationContext
     private val resolver = UnifiedVodSourceRepository(appContext)
+    private val personalResolver = PersonalMediaVodResolver(appContext)
 
-    suspend fun prepare(request: VodPlaybackRequest): VodPlaybackLaunch {
+    suspend fun prepare(request: VodPlaybackRequest): VodPlaybackLaunch = coroutineScope {
         val scrapeRequest = ScrapeRequest(
             title = request.title,
             year = request.year,
@@ -28,13 +31,26 @@ class VodPlaybackCoordinator(context: Context) {
                 request.stremioType?.takeIf(String::isNotBlank)?.let { put("stremio_type", it) }
             },
         )
-        val plan = resolver.plan(scrapeRequest, request.profileId)
-        return VodPlaybackLaunch(request, plan)
+        val online = async { resolver.plan(scrapeRequest, request.profileId) }
+        val personal = async { personalResolver.findBest(request) }
+        VodPlaybackLaunch(
+            request = request,
+            plan = online.await(),
+            personal = personal.await(),
+        )
     }
 
     fun intent(launch: VodPlaybackLaunch): Intent? {
-        if (!launch.plan.playable) return null
+        if (!launch.playable) return null
         val request = launch.request
+        launch.personal?.let { personal ->
+            return Intent(appContext, PlayerActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(PlayerActivity.EXTRA_URL, personal.locator)
+                .putExtra(PlayerActivity.EXTRA_PROFILE_ID, request.profileId)
+        }
+
+        if (!launch.plan.playable) return null
         val libraryType = when {
             request.season != null && request.episode != null -> LibraryMediaType.EPISODE
             request.mediaType.equals("series", true) || request.mediaType.equals("tv", true) -> LibraryMediaType.SERIES
@@ -93,10 +109,12 @@ data class VodPlaybackRequest(
 data class VodPlaybackLaunch(
     val request: VodPlaybackRequest,
     val plan: VodPlaybackPlan,
+    val personal: PersonalVodCandidate? = null,
 ) {
-    val playable: Boolean get() = plan.playable
+    val playable: Boolean get() = personal != null || plan.playable
     val bestSource: ResolvedSource? get() = plan.preferred
     val backupCount: Int get() = plan.backupCount
-    val providerCount: Int get() = plan.providers.size
+    val providerCount: Int get() = plan.providers.size + if (personal != null) 1 else 0
     val bestQuality: String? get() = plan.bestQuality
+    val bestProviderLabel: String? get() = personal?.let { "${it.provider.name} • ${it.connectionName}" } ?: bestSource?.link?.sourceName
 }
