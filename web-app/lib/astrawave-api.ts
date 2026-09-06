@@ -71,5 +71,18 @@ export const AstraWaveApi = {
   liveChannels: () => getJson<LiveChannel[]>('/v1/live/channels'),
   guide: () => getJson<LiveChannel[]>('/v1/live/guide'),
   sportsToday: () => getJson<SportsEvent[]>('/v1/sports/today'),
+  audioTrending: async () => {
+    const response = await fetch('https://de1.api.radio-browser.info/json/stations/topvote/36?hidebroken=true', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Radio directory ${response.status}`);
+    const stations = await response.json() as any[];
+    return stations.slice(0, 30).filter((station) => station.url_resolved || station.url).map((station) => ({
+      id: String(station.stationuuid || station.changeuuid || station.name),
+      kind: 'podcast' as const,
+      title: String(station.name || 'Public radio'),
+      subtitle: [station.country, station.tags?.split(',')?.[0]].filter(Boolean).join(' • '),
+      posterUrl: station.favicon || undefined,
+      streamUrl: station.url_resolved || station.url,
+    }));
+  },
   search: (query: string) => getJson<CatalogItem[]>(`/v1/search?q=${encodeURIComponent(query)}`),
 };
