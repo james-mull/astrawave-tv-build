@@ -8,15 +8,13 @@ data class LiveSourceCapabilities(
     val supportsTimeshift: Boolean = false,
     val catchUpWindowHours: Int? = null,
     val maxRecordingHours: Int? = null,
+    /** Provider-supplied template only. Supported placeholders: {channelId}, {start}, {end}, {duration}. */
+    val catchUpUrlTemplate: String? = null,
+    val supportsSeriesRecording: Boolean = false,
+    val recordingStorageLabel: String? = null,
 )
 
-enum class RecordingState {
-    SCHEDULED,
-    RECORDING,
-    COMPLETE,
-    FAILED,
-    CANCELED,
-}
+enum class RecordingState { SCHEDULED, RECORDING, COMPLETE, FAILED, CANCELED }
 
 data class RecordingRequest(
     val id: String,
@@ -46,6 +44,15 @@ data class TimeshiftSession(
     val currentPositionEpochMs: Long,
 )
 
+data class CatchUpProgram(
+    val sourceId: String,
+    val channelId: String,
+    val programId: String,
+    val title: String,
+    val startEpochMs: Long,
+    val endEpochMs: Long,
+)
+
 data class CatchUpItem(
     val sourceId: String,
     val channelId: String,
@@ -67,14 +74,11 @@ interface DvrGateway {
 
 object DvrEligibility {
     fun canSchedule(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsDvr
-    fun canCatchUp(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsCatchUp
+    fun canCatchUp(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsCatchUp && !capabilities.catchUpUrlTemplate.isNullOrBlank()
     fun canTimeshift(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsTimeshift
+    fun canSeriesRecord(capabilities: LiveSourceCapabilities): Boolean = capabilities.supportsDvr && capabilities.supportsSeriesRecording
 
-    fun validateRequest(
-        request: RecordingRequest,
-        capabilities: LiveSourceCapabilities,
-        nowEpochMs: Long = System.currentTimeMillis(),
-    ): List<String> = buildList {
+    fun validateRequest(request: RecordingRequest, capabilities: LiveSourceCapabilities, nowEpochMs: Long = System.currentTimeMillis()): List<String> = buildList {
         if (request.id.isBlank()) add("Recording id is required")
         if (request.profileId.isBlank()) add("Profile id is required")
         if (request.sourceId.isBlank()) add("Source id is required")
@@ -83,9 +87,9 @@ object DvrEligibility {
         if (request.endEpochMs <= request.startEpochMs) add("Recording end time must be after start time")
         if (request.endEpochMs <= nowEpochMs) add("Recording has already ended")
         if (!canSchedule(capabilities)) add("This source does not advertise authorized DVR support")
+        if (request.seriesId != null && !canSeriesRecord(capabilities)) add("This source does not advertise series-recording support")
         capabilities.maxRecordingHours?.let { maxHours ->
-            val durationMs = request.endEpochMs - request.startEpochMs
-            if (durationMs > maxHours * 3_600_000L) add("Recording exceeds this source's maximum duration")
+            if (request.endEpochMs - request.startEpochMs > maxHours * 3_600_000L) add("Recording exceeds this source's maximum duration")
         }
     }
 }
