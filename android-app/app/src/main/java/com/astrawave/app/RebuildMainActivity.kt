@@ -1,5 +1,6 @@
 package com.astrawave.app
 
+import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
@@ -43,6 +44,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -63,6 +65,7 @@ import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.core.MultiviewSession
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
+import com.astrawave.app.data.DeviceConfigCloudSync
 import com.astrawave.app.data.HouseholdProfileStore
 import com.astrawave.app.data.IptvSourceStore
 import com.astrawave.app.data.StremioCatalogAggregator
@@ -139,6 +142,7 @@ private fun RebuildRoot() {
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
     val profileStore = remember { HouseholdProfileStore(context) }
+    val cloudConfigSync = remember { DeviceConfigCloudSync(context) }
     var activeProfileId by remember { mutableStateOf(profileStore.activeProfileId()) }
     var activeProfile by remember(activeProfileId) { mutableStateOf(profileStore.profiles().firstOrNull { it.id == activeProfileId } ?: profileStore.activeProfile()) }
     var showProfileGate by remember { mutableStateOf(profileStore.shouldPromptAtLaunch()) }
@@ -180,6 +184,21 @@ private fun RebuildRoot() {
     var current by remember { mutableStateOf(RebuildDestination.Home) }
     var multiviewPanes by remember { mutableStateOf<List<MultiviewPane>>(emptyList()) }
     var multiviewAudioPaneId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(activeProfileId) {
+        cloudConfigSync.restore(activeProfileId) { result ->
+            if (result.isSuccess) iptvSources = IptvSourceStore(context).load(activeProfileId)
+        }
+    }
+    DisposableEffect(activeProfileId) {
+        val preferences = context.getSharedPreferences("astrawave_iptv_sources", Context.MODE_PRIVATE)
+        val watchedKey = "sources_$activeProfileId"
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == watchedKey) iptvSources = IptvSourceStore(context).load(activeProfileId)
+        }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     fun selectProfile(profile: HouseholdProfileStore.Profile) {
         profileStore.setActive(profile.id)
