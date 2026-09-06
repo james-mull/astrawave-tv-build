@@ -106,14 +106,17 @@ data class HouseholdWatchSession(
     val votes: List<HouseholdVote> = emptyList(),
     val createdAtEpochMs: Long = System.currentTimeMillis(),
 ) {
-    fun score(mediaId: String): Int = votes.filter { it.mediaId == mediaId }.sumOf {
-        when (it.value) {
-            HouseholdVoteValue.LOVE -> 4
-            HouseholdVoteValue.LIKE -> 2
-            HouseholdVoteValue.MAYBE -> 1
-            HouseholdVoteValue.PASS -> -3
+    fun score(mediaId: String): Int = votes
+        .asSequence()
+        .filter { it.mediaId == mediaId }
+        .fold(0) { total, vote ->
+            total + when (vote.value) {
+                HouseholdVoteValue.LOVE -> 4
+                HouseholdVoteValue.LIKE -> 2
+                HouseholdVoteValue.MAYBE -> 1
+                HouseholdVoteValue.PASS -> -3
+            }
         }
-    }
 
     fun winner(): HouseholdCandidate? = candidates.maxByOrNull { score(it.mediaId) }
 }
