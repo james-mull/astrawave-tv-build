@@ -7,16 +7,19 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.QuerySnapshot
 
 /**
- * Pulls the signed-in user's AstraWave web control-center configuration into the TV app.
- * Secrets are not invented or shared publicly; this reads the user's private Firestore paths.
+ * Synchronizes the signed-in user's AstraWave web Control Center configuration into the TV app.
+ * The initial restore is followed by Firestore listeners so an open TV can receive later web changes.
  */
 class DeviceConfigCloudSync(private val context: Context) {
-    private val ready = AstraWaveFirebase.initialize(context)
+    private val appContext = context.applicationContext
+    private val ready = AstraWaveFirebase.initialize(appContext)
     private val auth: FirebaseAuth? get() = if (ready) FirebaseAuth.getInstance() else null
     private val db: FirebaseFirestore? get() = if (ready) FirebaseFirestore.getInstance() else null
+    private val syncPrefs = appContext.getSharedPreferences("astrawave_device_cloud_sync", Context.MODE_PRIVATE)
 
     data class RestoreReport(
         val configVersion: Long,
@@ -25,6 +28,20 @@ class DeviceConfigCloudSync(private val context: Context) {
         val cloudStreamReposApplied: Int,
     )
 
+    fun startLiveSync(profileId: String = "default") {
+        val uid = auth?.currentUser?.uid ?: return
+        val database = db ?: return
+        val key = "$uid:$profileId"
+        synchronized(activeListeners) {
+            if (activeListeners.containsKey(key)) return
+            val settings = database.collection("users").document(uid).collection("settings").document("app")
+                .addSnapshotListener { _, error -> if (error == null) restore(profileId) { } }
+            val sources = database.collection("users").document(uid).collection("sources")
+                .addSnapshotListener { _, error -> if (error == null) restore(profileId) { } }
+            activeListeners[key] = listOf(settings, sources)
+        }
+    }
+
     fun restore(profileId: String = "default", onComplete: (Result<RestoreReport>) -> Unit) {
         val uid = auth?.currentUser?.uid
         val database = db
@@ -32,17 +49,11 @@ class DeviceConfigCloudSync(private val context: Context) {
             onComplete(Result.success(RestoreReport(0, 0, 0, 0)))
             return
         }
-
         val configTask = database.collection("users").document(uid).collection("settings").document("app").get()
         val sourcesTask = database.collection("users").document(uid).collection("sources").get()
-
         Tasks.whenAllSuccess<Any>(configTask, sourcesTask)
             .addOnSuccessListener { values ->
-                runCatching {
-                    val config = values[0] as DocumentSnapshot
-                    val sources = values[1] as QuerySnapshot
-                    apply(profileId, config, sources)
-                }.also(onComplete)
+                runCatching { apply(profileId, values[0] as DocumentSnapshot, values[1] as QuerySnapshot) }.also(onComplete)
             }
             .addOnFailureListener { onComplete(Result.failure(it)) }
     }
@@ -56,13 +67,10 @@ class DeviceConfigCloudSync(private val context: Context) {
                 "M3U", "PUBLIC" -> {
                     val url = rawConfig["m3uUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" } ?: return@mapNotNull null
                     IptvSource(
-                        id = doc.id,
-                        profileId = profileId,
+                        id = doc.id, profileId = profileId,
                         name = doc.getString("name").orEmpty().ifBlank { "Cloud IPTV" },
-                        type = IptvSourceType.M3U,
-                        enabled = enabled,
-                        priority = (doc.getLong("priority") ?: 20L).toInt(),
-                        m3uUrl = url,
+                        type = IptvSourceType.M3U, enabled = enabled,
+                        priority = (doc.getLong("priority") ?: 20L).toInt(), m3uUrl = url,
                         xmlTvUrl = rawConfig["xmlTvUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
                     )
                 }
@@ -71,15 +79,11 @@ class DeviceConfigCloudSync(private val context: Context) {
                     val username = rawConfig["username"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     val password = rawConfig["password"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     IptvSource(
-                        id = doc.id,
-                        profileId = profileId,
+                        id = doc.id, profileId = profileId,
                         name = doc.getString("name").orEmpty().ifBlank { "Cloud Xtream" },
-                        type = IptvSourceType.XTREAM,
-                        enabled = enabled,
+                        type = IptvSourceType.XTREAM, enabled = enabled,
                         priority = (doc.getLong("priority") ?: 20L).toInt(),
-                        xtreamServer = server,
-                        xtreamUsername = username,
-                        xtreamPassword = password,
+                        xtreamServer = server, xtreamUsername = username, xtreamPassword = password,
                         xmlTvUrl = rawConfig["xmlTvUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
                     )
                 }
@@ -87,17 +91,17 @@ class DeviceConfigCloudSync(private val context: Context) {
             }
         }
 
-        if (importedSources.isNotEmpty()) {
-            val store = IptvSourceStore(context)
-            val localOnly = store.load(profileId).filterNot { local -> importedSources.any { it.id == local.id } }
-            store.save(profileId, localOnly + importedSources)
-        }
+        val sourceStore = IptvSourceStore(appContext)
+        val previousCloudIds = syncPrefs.getStringSet("$profileId:cloudSourceIds", emptySet()).orEmpty()
+        val newCloudIds = importedSources.map { it.id }.toSet()
+        val localOnly = sourceStore.load(profileId).filterNot { it.id in previousCloudIds || it.id in newCloudIds }
+        sourceStore.save(profileId, localOnly + importedSources)
+        syncPrefs.edit().putStringSet("$profileId:cloudSourceIds", newCloudIds).apply()
 
         val addons = config.get("addons") as? List<*> ?: emptyList<Any>()
-        val stremioStore = StremioAddonStore(context)
+        val stremioStore = StremioAddonStore(appContext)
         var stremioApplied = 0
         val cloudRepos = mutableListOf<CloudStreamRepositoryPreference>()
-
         addons.forEach { raw ->
             val map = raw as? Map<*, *> ?: return@forEach
             val id = map["id"]?.toString().orEmpty()
@@ -107,35 +111,23 @@ class DeviceConfigCloudSync(private val context: Context) {
             val enabled = map["enabled"] as? Boolean ?: false
             val custom = map["custom"] as? Boolean ?: false
             when (kind) {
-                "stremio" -> if (url != null) {
-                    runCatching {
-                        val addon = stremioStore.install(url)
-                        stremioStore.setEnabled(addon.manifest.id, enabled)
-                        stremioApplied++
-                    }
+                "stremio" -> if (url != null) runCatching {
+                    val addon = stremioStore.install(url)
+                    stremioStore.setEnabled(addon.manifest.id, enabled)
+                    stremioApplied++
                 }
-                "cloudstream" -> if (url != null) {
-                    cloudRepos += CloudStreamRepositoryPreference(
-                        id = id.ifBlank { "cloud-${url.hashCode()}" },
-                        name = name.ifBlank { "CloudStream Repo" },
-                        url = url,
-                        enabled = enabled,
-                        custom = custom,
-                    )
-                }
+                "cloudstream" -> if (url != null) cloudRepos += CloudStreamRepositoryPreference(
+                    id = id.ifBlank { "cloud-${url.hashCode()}" }, name = name.ifBlank { "CloudStream Repo" },
+                    url = url, enabled = enabled, custom = custom,
+                )
             }
         }
+        CloudStreamRepositoryPreferenceStore(appContext).save(profileId, cloudRepos)
 
-        if (cloudRepos.isNotEmpty()) {
-            CloudStreamRepositoryPreferenceStore(context).save(profileId, cloudRepos)
-        }
-
-        val experience = context.getSharedPreferences("astrawave_experience", Context.MODE_PRIVATE)
+        val experience = appContext.getSharedPreferences("astrawave_experience", Context.MODE_PRIVATE)
         val editor = experience.edit()
         config.getString("theme")?.let { editor.putString("$profileId:theme", if (it == "dark") "AstraWave" else it) }
-        config.getString("homeDensity")?.let { density ->
-            editor.putString("$profileId:density", if (density.equals("compact", true)) "Compact" else "Standard")
-        }
+        config.getString("homeDensity")?.let { editor.putString("$profileId:density", if (it.equals("compact", true)) "Compact" else "Standard") }
         config.getBoolean("autoplayTrailers")?.let { editor.putBoolean("$profileId:autoplayTrailers", it) }
         config.getBoolean("aiDiscovery")?.let { editor.putBoolean("$profileId:aiDiscovery", it) }
         config.getString("preferredLanguage")?.let { editor.putString("$profileId:preferredLanguage", it) }
@@ -149,5 +141,9 @@ class DeviceConfigCloudSync(private val context: Context) {
             stremioAddonsApplied = stremioApplied,
             cloudStreamReposApplied = cloudRepos.size,
         )
+    }
+
+    companion object {
+        private val activeListeners = mutableMapOf<String, List<ListenerRegistration>>()
     }
 }
