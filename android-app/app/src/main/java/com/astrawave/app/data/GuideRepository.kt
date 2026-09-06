@@ -27,8 +27,11 @@ data class GuideSnapshot(
 
 /** Guide-facing projection over direct Live TV plus reviewed official-provider handoffs. */
 class GuideRepository(private val combined: CombinedLiveTvRepository = CombinedLiveTvRepository()) {
-    fun load(sources: List<IptvSource>): GuideSnapshot {
-        val live = combined.load(sources)
+    fun load(
+        sources: List<IptvSource>,
+        epgOverrides: Map<String, String> = emptyMap(),
+    ): GuideSnapshot {
+        val live = combined.load(sources, epgOverrides)
         val directRows = live.groups.map { group ->
             val preferred = group.bestCandidate
             GuideChannelRow(
