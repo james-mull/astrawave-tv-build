@@ -102,6 +102,32 @@ export type SourceRegistry = {
   policy: string;
 };
 
+export type TitlePerson = { id: string; name: string; role?: string; profileUrl?: string };
+export type TitleTrailer = { key: string; name: string; type: string; official: boolean; url: string };
+export type TitleDetails = {
+  id: string;
+  kind: 'movie' | 'series';
+  title: string;
+  overview: string;
+  tagline?: string;
+  posterUrl?: string;
+  backdropUrl?: string;
+  releaseDate?: string;
+  runtimeMinutes?: number | null;
+  rating?: string | null;
+  score: number;
+  voteCount: number;
+  genres: string[];
+  status?: string;
+  seasons?: number;
+  episodes?: number;
+  homepage?: string;
+  cast: TitlePerson[];
+  crew: TitlePerson[];
+  trailers: TitleTrailer[];
+  related: CatalogItem[];
+};
+
 const base = process.env.NEXT_PUBLIC_ASTRA_API_BASE?.replace(/\/$/, '') || '/api/astrawave';
 
 async function getJson<T>(path: string): Promise<T> {
@@ -117,6 +143,7 @@ export const AstraWaveApi = {
   sourceRegistry: () => getJson<SourceRegistry>('/source-registry'),
   liveData: (source = 'all-free') => getJson<LiveData>(`/live-data?source=${encodeURIComponent(source)}`),
   sportsData: () => getJson<{ dates: string[]; events: SportsEvent[]; leagues: string[]; count: number }>('/sports-data'),
+  titleDetails: (kind: 'movie' | 'series', id: string) => getJson<{ configured: boolean; details?: TitleDetails }>(`/title/${kind}/${encodeURIComponent(id)}`),
   trendingMovies: () => getJson<CatalogItem[]>('/v1/catalog/movies/trending'),
   trendingShows: () => getJson<CatalogItem[]>('/v1/catalog/series/trending'),
   sources: (kind: string, id: string) => getJson<SourceCandidate[]>(`/v1/sources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`),
