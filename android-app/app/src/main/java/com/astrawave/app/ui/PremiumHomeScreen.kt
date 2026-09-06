@@ -32,20 +32,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.PlayerActivity
 import com.astrawave.app.TitleDetailsActivity
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
-import com.astrawave.app.core.RecommendationCandidate
-import com.astrawave.app.core.RecommendationEngine
-import com.astrawave.app.core.RecommendationProfile
 import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.AstraWaveMetadataGateway
 import com.astrawave.app.data.HomeIntelligenceRepository
+import com.astrawave.app.data.IptvSourceStore
 import com.astrawave.app.data.LibraryCloudSync
 import com.astrawave.app.data.LocalLibraryStore
+import com.astrawave.app.data.SportsGuideItem
+import com.astrawave.app.data.SportsGuideRepository
+import com.astrawave.app.data.SportsPreferenceStore
+import com.astrawave.app.data.SourceFusionPlaybackPlanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.ZoneOffset
 
 private sealed interface HomeDiscoveryState {
     data object Loading : HomeDiscoveryState
@@ -56,37 +60,43 @@ private sealed interface HomeDiscoveryState {
     data class Error(val message: String) : HomeDiscoveryState
 }
 
+private sealed interface HomeSportsState {
+    data object Loading : HomeSportsState
+    data class Ready(val events: List<SportsGuideItem>) : HomeSportsState
+    data object Empty : HomeSportsState
+}
+
 @Composable
 fun PremiumHomeScreen(profileId: String = "default") {
     val context = LocalContext.current
     val library = remember { LocalLibraryStore(context) }
     val cloudSync = remember { LibraryCloudSync(context) }
     val metadata = remember { AstraWaveMetadataGateway() }
-    val recommender = remember { RecommendationEngine() }
     val intelligence = remember { HomeIntelligenceRepository(context) }
+    val sportsRepository = remember { SportsGuideRepository() }
+    val sportsPreferences = remember { SportsPreferenceStore(context) }
+    val fusion = remember { SourceFusionPlaybackPlanner(context) }
+
     var libraryRefresh by remember { mutableStateOf(0) }
     var discovery by remember { mutableStateOf<HomeDiscoveryState>(HomeDiscoveryState.Loading) }
     var intelligentRows by remember(profileId) { mutableStateOf<List<HomeIntelligenceRepository.Row>>(emptyList()) }
     var intelligenceLoading by remember(profileId) { mutableStateOf(true) }
+    var sports by remember(profileId) { mutableStateOf<HomeSportsState>(HomeSportsState.Loading) }
     var cloudRestoreMessage by remember { mutableStateOf<String?>(null) }
 
     val allContinue = remember(profileId, libraryRefresh) { library.continueWatching(profileId).take(30) }
-    val continueSeries = remember(allContinue) { allContinue.filter { it.item.type == LibraryMediaType.EPISODE }.take(20) }
-    val continueWatching = remember(allContinue) { allContinue.filter { it.item.type != LibraryMediaType.EPISODE }.take(20) }
+    val continueSeries = remember(allContinue) { allContinue.filter { it.item.type == LibraryMediaType.EPISODE }.take(18) }
+    val continueWatching = remember(allContinue) { allContinue.filter { it.item.type != LibraryMediaType.EPISODE }.take(18) }
     val heroProgress = remember(continueSeries, continueWatching) { continueSeries.firstOrNull() ?: continueWatching.firstOrNull() }
     val watchlist = remember(profileId, libraryRefresh) { library.watchlist(profileId).take(24) }
-    val favorites = remember(profileId, libraryRefresh) { library.favorites(profileId).take(50) }
-    val recent = remember(profileId, libraryRefresh) { library.history(profileId).take(50) }
-    val completed = remember(profileId, libraryRefresh) {
-        library.progress(profileId).filter { it.completed }.map { it.item.id }.toSet()
-    }
+    val recent = remember(profileId, libraryRefresh) { library.history(profileId).take(40) }
 
     LaunchedEffect(profileId) {
         cloudSync.restore(profileId) { result ->
             result.onSuccess { report ->
                 val restored = report.watchlistImported + report.favoritesImported + report.listsImported + report.progressImported
                 if (restored > 0) {
-                    cloudRestoreMessage = "Synced $restored library updates from your account"
+                    cloudRestoreMessage = "Cloud synced"
                     intelligence.invalidate(profileId)
                     libraryRefresh += 1
                 }
@@ -95,7 +105,6 @@ fun PremiumHomeScreen(profileId: String = "default") {
     }
 
     LaunchedEffect(Unit) {
-        discovery = HomeDiscoveryState.Loading
         discovery = try {
             val pair = withContext(Dispatchers.IO) {
                 metadata.load(AstraWaveMetadataGateway.Catalog.TRENDING_MOVIES).take(24) to
@@ -121,6 +130,27 @@ fun PremiumHomeScreen(profileId: String = "default") {
         intelligenceLoading = false
     }
 
+    LaunchedEffect(profileId) {
+        sports = withContext(Dispatchers.IO) {
+            val sources = IptvSourceStore(context).load(profileId)
+            runCatching {
+                val snapshot = sportsRepository.load(
+                    date = LocalDate.now(ZoneOffset.UTC),
+                    sources = sources,
+                )
+                val favorites = sportsPreferences.teams(profileId).map { it.name.lowercase() }.toSet()
+                val ranked = snapshot.events.sortedWith(
+                    compareByDescending<SportsGuideItem> { item -> item.event.isLive }
+                        .thenByDescending { item ->
+                            listOfNotNull(item.event.homeTeam, item.event.awayTeam).any { it.lowercase() in favorites }
+                        }
+                        .thenByDescending { item -> item.watchCandidate != null },
+                ).take(12)
+                if (ranked.isEmpty()) HomeSportsState.Empty else HomeSportsState.Ready(ranked)
+            }.getOrDefault(HomeSportsState.Empty)
+        }
+    }
+
     fun openItem(item: LibraryItemRef) {
         context.startActivity(
             Intent(context, TitleDetailsActivity::class.java)
@@ -133,15 +163,6 @@ fun PremiumHomeScreen(profileId: String = "default") {
 
     fun metadataType(item: AstraWaveMetadataGateway.Item): LibraryMediaType =
         if (item.type.equals("series", true) || item.type.equals("tv", true)) LibraryMediaType.SERIES else LibraryMediaType.MOVIE
-
-    fun metadataLibraryId(item: AstraWaveMetadataGateway.Item): String {
-        val type = metadataType(item)
-        return when {
-            item.id.startsWith("tt", true) -> "stremio:cinemeta:${if (type == LibraryMediaType.SERIES) "series" else "movie"}:${item.id}"
-            item.id.toLongOrNull() != null -> "tmdb:${if (type == LibraryMediaType.SERIES) "tv" else "movie"}:${item.id}"
-            else -> "metadata:${item.type}:${item.id}"
-        }
-    }
 
     fun openMetadata(item: AstraWaveMetadataGateway.Item) {
         val mediaType = metadataType(item)
@@ -159,48 +180,91 @@ fun PremiumHomeScreen(profileId: String = "default") {
         )
     }
 
+    fun playSports(item: SportsGuideItem) {
+        val candidates = item.resolution?.candidates?.map { it.streamUrl }.orEmpty()
+        val plan = fusion.urls(candidates, item.watchCandidate?.source ?: "Sports")
+        if (plan.urls.isEmpty()) return
+        context.startActivity(
+            Intent(context, PlayerActivity::class.java)
+                .putExtra(PlayerActivity.EXTRA_URL, plan.urls.first())
+                .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(plan.urls))
+                .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+        )
+    }
+
+    val liveFeatured = (sports as? HomeSportsState.Ready)?.events?.firstOrNull { it.event.isLive && it.watchCandidate != null }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(26.dp),
     ) {
-        item(key = "home-header") {
-            Column {
-                Text("ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(8.dp))
-                Text("Everything you watch and listen to.", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge)
-                Spacer(Modifier.height(7.dp))
-                Text(
-                    "Pick up where you left off, jump into your list, or discover something new without setup friction.",
-                    color = AstraWaveColors.SecondaryText,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                cloudRestoreMessage?.let { message ->
-                    Spacer(Modifier.height(12.dp))
-                    Text(message, color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+        item(key = "home-topline") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+                    Text("Your entertainment, already organized.", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+                }
+                cloudRestoreMessage?.let { Text(it, color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium) }
+            }
+        }
+
+        when {
+            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") {
+                HomeSportsHero(liveFeatured, ::playSports)
+            }
+            heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") {
+                HomeHero(heroProgress, ::openItem)
+            }
+            discovery is HomeDiscoveryState.Ready -> {
+                val first = (discovery as HomeDiscoveryState.Ready).movies.firstOrNull()
+                    ?: (discovery as HomeDiscoveryState.Ready).series.firstOrNull()
+                if (first != null) item(key = "discovery-hero-${first.id}") {
+                    HomeDiscoveryHero(first, ::openMetadata)
                 }
             }
         }
 
-        heroProgress?.let { progress ->
-            item(key = "home-hero-${progress.item.id}") { HomeHero(progress, ::openItem) }
+        val sportsReady = sports as? HomeSportsState.Ready
+        if (sportsReady != null) {
+            item(key = "sports-pulse") {
+                HomeSection(
+                    title = "Game Day",
+                    subtitle = "Live and upcoming events, with your teams and watch-ready matches first",
+                ) {
+                    HomeSportsRow(sportsReady.events, ::playSports)
+                }
+            }
         }
 
         if (continueSeries.isNotEmpty()) {
             item(key = "continue-series") {
-                HomeSection(
-                    title = "Continue Series",
-                    subtitle = "Resume the exact episode you left unfinished",
-                ) { ProgressHomeRow(continueSeries, "CONTINUE SERIES", ::openItem) }
+                HomeSection("Continue Series", "Resume the exact episode") {
+                    ProgressHomeRow(continueSeries, "CONTINUE SERIES", ::openItem)
+                }
             }
         }
 
         if (continueWatching.isNotEmpty()) {
             item(key = "continue-watching") {
-                HomeSection(
-                    title = "Continue Watching",
-                    subtitle = "Resume movies and other playback across devices",
-                ) { ProgressHomeRow(continueWatching, "CONTINUE", ::openItem) }
+                HomeSection("Continue Watching", "Pick up instantly across your library") {
+                    ProgressHomeRow(continueWatching, "CONTINUE", ::openItem)
+                }
+            }
+        }
+
+        if (intelligenceLoading && recent.isNotEmpty() && intelligentRows.isEmpty()) {
+            item(key = "intelligence-loading") {
+                HomeSection("For You", "Personalizing from your history") { HomeSkeletonRow() }
+            }
+        } else {
+            items(
+                items = intelligentRows,
+                key = { row -> "intel:${row.title}:${row.badge.orEmpty()}" },
+            ) { row ->
+                HomeSection(row.title, row.subtitle) {
+                    MetadataHomeRow(row.items, row.badge, ::openMetadata)
+                }
             }
         }
 
@@ -212,115 +276,49 @@ fun PremiumHomeScreen(profileId: String = "default") {
             }
         }
 
-        if (intelligenceLoading && recent.isNotEmpty() && intelligentRows.isEmpty()) {
-            item(key = "intelligence-skeleton") {
-                HomeSection("Personalizing your Home…", "Connecting your viewing to better picks") {
-                    HomeSkeletonRow()
-                }
-            }
-        } else {
-            items(
-                items = intelligentRows,
-                key = { row -> "intelligence-${row.title}-${row.badge.orEmpty()}" },
-            ) { row ->
-                HomeSection(row.title, row.subtitle) {
-                    MetadataHomeRow(row.items, row.badge, ::openMetadata)
-                }
-            }
-        }
-
         when (val current = discovery) {
             HomeDiscoveryState.Loading -> item(key = "discovery-loading") {
-                HomeSection("Building your Home…", "Loading fresh AstraWave discovery") { HomeSkeletonRow() }
+                HomeSection("Discover", "Loading fresh picks") { HomeSkeletonRow() }
             }
             is HomeDiscoveryState.Error -> item(key = "discovery-error") {
-                AstraWaveStatePanel("Discovery is temporarily unavailable", current.message)
+                AstraWavePartialDataState(message = current.message, actionLabel = null)
             }
             is HomeDiscoveryState.Ready -> {
-                val candidateItems = current.movies + current.series
-                val byId = candidateItems.associateBy(::metadataLibraryId)
-                val currentYear = LocalDate.now().year
-                val recentMediaTypes = recent.take(12).map { history ->
-                    when (history.item.type) {
-                        LibraryMediaType.EPISODE -> LibraryMediaType.SERIES
-                        else -> history.item.type
-                    }
-                }.filter { it == LibraryMediaType.MOVIE || it == LibraryMediaType.SERIES }
-                val preferredMediaTypes = recentMediaTypes.groupingBy { it }.eachCount().filterValues { it >= 2 }.keys
-                val profile = RecommendationProfile(
-                    profileId = profileId,
-                    favoriteItemIds = favorites.map { it.item.id }.toSet(),
-                    watchlistItemIds = watchlist.map { it.item.id }.toSet(),
-                    completedItemIds = completed,
-                    recentItemIds = recent.map { it.item.id },
-                    preferredMediaTypes = preferredMediaTypes,
-                )
-                val candidates = candidateItems.mapIndexed { index, item ->
-                    val releaseYear = item.releaseInfo?.take(4)?.toIntOrNull()
-                    val freshness = when (releaseYear) {
-                        currentYear -> 10.0
-                        currentYear - 1 -> 7.0
-                        currentYear - 2 -> 4.0
-                        else -> 1.0
-                    }
-                    RecommendationCandidate(
-                        id = metadataLibraryId(item),
-                        title = item.name,
-                        mediaType = metadataType(item),
-                        popularityScore = (candidateItems.size - index).coerceAtLeast(1) * 3.0,
-                        freshnessScore = freshness,
-                        posterUrl = item.posterUrl,
-                        metadataSource = "AstraWave",
-                    )
-                }
-                val ranked = recommender.rank(profile, candidates, limit = 18)
-                    .mapNotNull { rankedItem -> byId[rankedItem.candidate.id] }
-                val recentlyAdded = candidateItems
-                    .sortedByDescending { it.releaseInfo?.take(10).orEmpty() }
-                    .distinctBy { "${it.type}:${it.id}" }
-                    .take(20)
-
-                if (ranked.isNotEmpty() && intelligentRows.none { it.title == "Because You Watched" }) {
-                    item(key = "fallback-for-you") {
-                        HomeSection(
-                            if (recent.isNotEmpty()) "Because You Watched" else "For You",
-                            if (recent.isNotEmpty()) "Personalized from recent viewing, saves and favorites" else "Fresh AstraWave-ranked picks",
-                        ) { MetadataHomeRow(ranked, "FOR YOU", ::openMetadata) }
-                    }
-                }
-                if (recentlyAdded.isNotEmpty()) {
-                    item(key = "recently-added") {
-                        HomeSection("Recently Added", "Fresh movies and series from AstraWave discovery") {
-                            MetadataHomeRow(recentlyAdded, "NEW", ::openMetadata)
-                        }
-                    }
-                }
                 item(key = "trending-movies") {
-                    HomeSection("Trending Movies", "Fresh discovery from AstraWave metadata") {
+                    HomeSection("Trending Movies", "What people are watching now") {
                         MetadataHomeRow(current.movies, "TRENDING", ::openMetadata)
                     }
                 }
-                item(key = "trending-tv") {
-                    HomeSection("Trending TV", "Series people are watching now") {
+                item(key = "trending-series") {
+                    HomeSection("Trending TV", "Series moving right now") {
                         MetadataHomeRow(current.series, "TRENDING", ::openMetadata)
+                    }
+                }
+                val fresh = (current.movies + current.series)
+                    .sortedByDescending { it.releaseInfo?.take(10).orEmpty() }
+                    .distinctBy { "${it.type}:${it.id}" }
+                    .take(20)
+                if (fresh.isNotEmpty()) item(key = "fresh") {
+                    HomeSection("Fresh This Week", "Newer releases across movies and television") {
+                        MetadataHomeRow(fresh, "NEW", ::openMetadata)
                     }
                 }
             }
         }
 
         if (recent.isNotEmpty()) {
-            item(key = "recently-watched") {
-                HomeSection("Recently Watched", "Your latest playback history") {
+            item(key = "recent") {
+                HomeSection("Recently Watched", "Jump back into something familiar") {
                     LibraryHomeRow(recent.take(24).map { it.item }, "RECENT", ::openItem)
                 }
             }
         }
 
-        item(key = "home-refresh") {
+        item(key = "refresh") {
             Text(
-                "Home updates automatically as you watch, save, and revisit titles. Tap to refresh personalized shelves.",
-                color = AstraWaveColors.TertiaryText,
-                style = MaterialTheme.typography.labelMedium,
+                "Refresh personalized Home",
+                color = AstraWaveColors.Accent,
+                style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.clickable {
                     intelligence.invalidate(profileId)
                     libraryRefresh += 1
@@ -331,9 +329,78 @@ fun PremiumHomeScreen(profileId: String = "default") {
 }
 
 @Composable
+private fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> Unit) {
+    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onWatch(item) }) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(24.dp))
+                .padding(horizontal = 28.dp, vertical = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("● LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
+                Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
+                Text(
+                    listOfNotNull(item.event.league, item.watchCandidate?.channelName, item.watchCandidate?.source).joinToString(" • "),
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                item.event.homeScore?.let { home ->
+                    item.event.awayScore?.let { away ->
+                        Text(
+                            "${item.event.awayTeam ?: "Away"} $away  •  ${item.event.homeTeam ?: "Home"} $home",
+                            color = AstraWaveColors.PrimaryText,
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                    }
+                }
+                Text("Watch now →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
+            }
+            Column(Modifier.width(250.dp)) {
+                Text("GAME DAY", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(8.dp))
+                Text("Best matched source selected automatically", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${(item.resolution?.candidates?.size ?: 1).coerceAtLeast(1)} source option${if ((item.resolution?.candidates?.size ?: 1) == 1) "" else "s"}",
+                    color = AstraWaveColors.Success,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (AstraWaveMetadataGateway.Item) -> Unit) {
+    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(item) }) {
+        Row(
+            Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(24.dp)).padding(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeBadge("FEATURED")
+                Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
+                Text(item.description ?: "Open details, ratings, trailers and watch options.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge, maxLines = 3)
+                Text("Explore →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
+            }
+            Box(Modifier.width(360.dp)) {
+                AstraWaveArtwork(item.name, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
+            }
+        }
+    }
+}
+
+@Composable
 private fun HomeSection(title: String, subtitle: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().animateContentSize()) {
-        HomeSectionTitle(title, subtitle)
+        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(3.dp))
+        Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(11.dp))
         content()
     }
 }
@@ -343,30 +410,53 @@ private fun HomeHero(progress: LocalLibraryStore.PlaybackProgress, onOpen: (Libr
     val ratio = if (progress.durationMs > 0L) {
         (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
-    val isEpisode = progress.item.type == LibraryMediaType.EPISODE
     AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(progress.item) }) {
         Row(
-            Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(22.dp)).padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(22.dp),
+            Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(24.dp)).padding(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeBadge(if (isEpisode) "CONTINUE SERIES" else "CONTINUE")
-                Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium, maxLines = 3)
-                Text(
-                    if (isEpisode) "Pick up the exact episode you left unfinished." else "Jump back in from where you stopped.",
-                    color = AstraWaveColors.SecondaryText,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                HomeBadge(if (progress.item.type == LibraryMediaType.EPISODE) "CONTINUE SERIES" else "CONTINUE")
+                Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
                 LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
-                Text("${(ratio * 100).toInt()}% watched • Resume now →", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+                Text("${(ratio * 100).toInt()}% watched • Resume →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
             }
-            Box(Modifier.width(260.dp)) {
-                AstraWaveArtwork(
-                    title = progress.item.title,
-                    modifier = Modifier.fillMaxWidth(),
-                    kind = AstraWaveArtworkKind.Backdrop,
-                )
+            Box(Modifier.width(360.dp)) {
+                AstraWaveArtwork(progress.item.title, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeSportsRow(events: List<SportsGuideItem>, onWatch: (SportsGuideItem) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
+        items(events, key = { it.event.id }) { item ->
+            AstraWaveFocusableCard(
+                Modifier
+                    .width(310.dp)
+                    .clickable(enabled = item.watchCandidate != null) { onWatch(item) },
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        if (item.event.isLive) "● LIVE" else if (item.watchCandidate != null) "WATCH READY" else "UPCOMING",
+                        color = if (item.event.isLive) AstraWaveColors.Live else if (item.watchCandidate != null) AstraWaveColors.Success else AstraWaveColors.Accent,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                    Text(
+                        listOfNotNull(item.event.league, item.event.time).joinToString(" • "),
+                        color = AstraWaveColors.SecondaryText,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        item.watchCandidate?.let { "${it.channelName} • ${it.source}" } ?: "Broadcast match pending",
+                        color = if (item.watchCandidate != null) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
@@ -378,37 +468,24 @@ private fun ProgressHomeRow(
     badge: String,
     onOpen: (LibraryItemRef) -> Unit,
 ) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(end = 20.dp),
-    ) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(progressItems, key = { it.item.id }) { progress ->
             val ratio = if (progress.durationMs > 0L) {
                 (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
             } else 0f
-            AstraWaveFocusableCard(Modifier.width(280.dp).clickable { onOpen(progress.item) }) {
-                Column(Modifier.animateContentSize()) {
+            AstraWaveFocusableCard(Modifier.width(286.dp).clickable { onOpen(progress.item) }) {
+                Column {
                     HomeBadge(badge)
                     Spacer(Modifier.height(7.dp))
                     AstraWaveArtwork(progress.item.title, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
                     Spacer(Modifier.height(9.dp))
                     Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(7.dp))
                     LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(5.dp))
-                    Text("${(ratio * 100).toInt()}% watched", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
     }
-}
-
-@Composable
-private fun HomeSectionTitle(title: String, subtitle: String) {
-    Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
-    Spacer(Modifier.height(3.dp))
-    Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-    Spacer(Modifier.height(10.dp))
 }
 
 @Composable
@@ -426,20 +503,9 @@ private fun HomeSkeletonRow() {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(5) { index ->
             Column(Modifier.width(280.dp)) {
-                Box(
-                    Modifier.fillMaxWidth().height(158.dp)
-                        .background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)),
-                )
+                Box(Modifier.fillMaxWidth().height(158.dp).background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)))
                 Spacer(Modifier.height(10.dp))
-                Box(
-                    Modifier.width((150 + index * 8).dp).height(18.dp)
-                        .background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(6.dp)),
-                )
-                Spacer(Modifier.height(7.dp))
-                Box(
-                    Modifier.width(110.dp).height(12.dp)
-                        .background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(6.dp)),
-                )
+                Box(Modifier.width((150 + index * 8).dp).height(18.dp).background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(6.dp)))
             }
         }
     }
@@ -450,18 +516,12 @@ private fun LibraryHomeRow(items: List<LibraryItemRef>, badge: String? = null, o
     val unique = items.distinctBy { it.id }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(unique, key = { it.id }) { item ->
-            AstraWaveFocusableCard(Modifier.width(190.dp).clickable { onOpen(item) }) {
+            AstraWaveFocusableCard(Modifier.width(196.dp).clickable { onOpen(item) }) {
                 Column {
                     badge?.let { HomeBadge(it); Spacer(Modifier.height(7.dp)) }
                     AstraWaveArtwork(item.title, Modifier.fillMaxWidth())
                     Spacer(Modifier.height(9.dp))
                     Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                    Spacer(Modifier.height(5.dp))
-                    Text(
-                        if (item.type == LibraryMediaType.EPISODE) "Continue episode" else "Open details",
-                        color = AstraWaveColors.Accent,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
                 }
             }
         }
@@ -477,7 +537,7 @@ private fun MetadataHomeRow(
     val unique = metadataItems.distinctBy { "${it.type}:${it.id}" }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(unique, key = { "${it.type}:${it.id}" }) { item ->
-            AstraWaveFocusableCard(Modifier.width(280.dp).clickable { onOpen(item) }) {
+            AstraWaveFocusableCard(Modifier.width(286.dp).clickable { onOpen(item) }) {
                 Column(Modifier.animateContentSize()) {
                     badge?.let { HomeBadge(it); Spacer(Modifier.height(7.dp)) }
                     AstraWaveArtwork(item.name, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
@@ -487,13 +547,6 @@ private fun MetadataHomeRow(
                         Spacer(Modifier.height(4.dp))
                         Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                     }
-                    Spacer(Modifier.height(5.dp))
-                    Text(
-                        item.description ?: "Open for details and watch options.",
-                        color = AstraWaveColors.SecondaryText,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                    )
                 }
             }
         }
