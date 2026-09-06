@@ -11,10 +11,11 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.QuerySnapshot
 
-/** Restores Firestore library state into the durable local-first store for the active profile. */
+/** Restores Firestore library state and device configuration into local-first stores. */
 class LibraryCloudSync(context: Context) {
     private val cloud = FirebaseCloudRepository(context)
     private val local = LocalLibraryStore(context)
+    private val deviceConfig = DeviceConfigCloudSync(context)
 
     data class RestoreReport(
         val watchlistImported: Int,
@@ -28,6 +29,10 @@ class LibraryCloudSync(context: Context) {
             onComplete(Result.success(RestoreReport(0, 0, 0, 0)))
             return
         }
+
+        // Web Control Center settings are intentionally restored alongside library state so
+        // a signed-in TV refreshes sources/addons/repos/preferences without a separate setup flow.
+        deviceConfig.restore(profileId) { }
 
         val watchlistTask = cloud.readWatchlist(profileId)
         val favoritesTask = cloud.readFavorites(profileId)
