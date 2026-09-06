@@ -2,6 +2,7 @@ package com.astrawave.app.data
 
 import android.content.Context
 import com.astrawave.app.core.CatchUpItem
+import com.astrawave.app.core.CatchUpProgram
 import com.astrawave.app.core.DvrEligibility
 import com.astrawave.app.core.DvrGateway
 import com.astrawave.app.core.LiveSourceCapabilities
@@ -11,152 +12,59 @@ import com.astrawave.app.core.RecordingState
 import com.astrawave.app.core.TimeshiftSession
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
-/**
- * Local persistence/orchestration layer for DVR requests. It never manufactures DVR capability:
- * each source must explicitly register support before scheduling, catch-up, or timeshift is exposed.
- * Actual recording transport/storage is supplied by a provider-specific adapter later.
- */
+/** Local DVR/catch-up orchestration for explicitly capable authorized providers. */
 class LocalDvrGateway(context: Context) : DvrGateway {
     private val prefs = context.getSharedPreferences("astrawave_dvr_v1", Context.MODE_PRIVATE)
 
     fun registerCapabilities(capabilities: LiveSourceCapabilities) {
-        val all = loadCapabilities().toMutableMap()
-        all[capabilities.sourceId] = capabilities
+        val all = loadCapabilities().toMutableMap(); all[capabilities.sourceId] = capabilities
         val root = JSONObject()
-        all.values.forEach { cap ->
-            root.put(cap.sourceId, JSONObject()
-                .put("supportsDvr", cap.supportsDvr)
-                .put("supportsCatchUp", cap.supportsCatchUp)
-                .put("supportsTimeshift", cap.supportsTimeshift)
-                .put("catchUpWindowHours", cap.catchUpWindowHours ?: JSONObject.NULL)
-                .put("maxRecordingHours", cap.maxRecordingHours ?: JSONObject.NULL))
-        }
-        prefs.edit().putString(KEY_CAPABILITIES, root.toString()).apply()
+        all.values.forEach { cap -> root.put(cap.sourceId, JSONObject()
+            .put("supportsDvr",cap.supportsDvr).put("supportsCatchUp",cap.supportsCatchUp).put("supportsTimeshift",cap.supportsTimeshift)
+            .put("catchUpWindowHours",cap.catchUpWindowHours?:JSONObject.NULL).put("maxRecordingHours",cap.maxRecordingHours?:JSONObject.NULL)
+            .put("catchUpUrlTemplate",cap.catchUpUrlTemplate?:JSONObject.NULL).put("supportsSeriesRecording",cap.supportsSeriesRecording)
+            .put("recordingStorageLabel",cap.recordingStorageLabel?:JSONObject.NULL)) }
+        prefs.edit().putString(KEY_CAPABILITIES,root.toString()).apply()
     }
 
-    override fun capabilities(sourceId: String): LiveSourceCapabilities =
-        loadCapabilities()[sourceId] ?: LiveSourceCapabilities(sourceId = sourceId)
-
-    override fun schedule(request: RecordingRequest): Recording {
-        val cap = capabilities(request.sourceId)
-        val validationErrors = DvrEligibility.validateRequest(request, cap)
-        require(validationErrors.isEmpty()) { validationErrors.joinToString(" • ") }
-        val recording = Recording(request = request, state = RecordingState.SCHEDULED)
-        upsert(recording)
-        return recording
+    fun registerCatchUpPrograms(programs: List<CatchUpProgram>) {
+        val all = loadCatchUpPrograms().filterNot { existing -> programs.any { it.sourceId==existing.sourceId && it.programId==existing.programId } } + programs
+        val a=JSONArray();all.takeLast(MAX_CATCHUP_PROGRAMS).forEach { p -> a.put(JSONObject().put("sourceId",p.sourceId).put("channelId",p.channelId).put("programId",p.programId).put("title",p.title).put("start",p.startEpochMs).put("end",p.endEpochMs)) }
+        prefs.edit().putString(KEY_CATCHUP,a.toString()).apply()
     }
 
-    override fun cancel(recordingId: String): Boolean {
-        val all = loadRecordings().toMutableList()
-        val index = all.indexOfFirst { it.request.id == recordingId }
-        if (index < 0) return false
-        all[index] = all[index].copy(state = RecordingState.CANCELED)
-        writeRecordings(all)
-        return true
+    override fun capabilities(sourceId:String):LiveSourceCapabilities=loadCapabilities()[sourceId]?:LiveSourceCapabilities(sourceId=sourceId)
+
+    override fun schedule(request:RecordingRequest):Recording {
+        val cap=capabilities(request.sourceId);val errors=DvrEligibility.validateRequest(request,cap);require(errors.isEmpty()){errors.joinToString(" • ")}
+        val recording=Recording(request,RecordingState.SCHEDULED);upsert(recording);return recording
     }
 
-    override fun recordings(profileId: String): List<Recording> =
-        loadRecordings().filter { it.request.profileId == profileId }.sortedByDescending { it.request.startEpochMs }
+    override fun cancel(recordingId:String):Boolean { val all=loadRecordings().toMutableList();val i=all.indexOfFirst{it.request.id==recordingId};if(i<0)return false;all[i]=all[i].copy(state=RecordingState.CANCELED);writeRecordings(all);return true }
+    override fun recordings(profileId:String):List<Recording> = loadRecordings().filter{it.request.profileId==profileId}.sortedByDescending{it.request.startEpochMs}
 
-    override fun catchUp(channelId: String, fromEpochMs: Long, toEpochMs: Long): List<CatchUpItem> = emptyList()
+    override fun catchUp(channelId:String,fromEpochMs:Long,toEpochMs:Long):List<CatchUpItem> = loadCatchUpPrograms().filter { it.channelId==channelId && it.endEpochMs>=fromEpochMs && it.startEpochMs<=toEpochMs }.mapNotNull { program ->
+        val cap=capabilities(program.sourceId);val template=cap.catchUpUrlTemplate?.takeIf{DvrEligibility.canCatchUp(cap)}?:return@mapNotNull null
+        val now=System.currentTimeMillis();val window=cap.catchUpWindowHours?.times(3_600_000L)
+        if(window!=null && program.endEpochMs < now-window)return@mapNotNull null
+        val duration=((program.endEpochMs-program.startEpochMs)/1000L).coerceAtLeast(1)
+        val url=template.replace("{channelId}",enc(program.channelId)).replace("{start}",(program.startEpochMs/1000L).toString()).replace("{end}",(program.endEpochMs/1000L).toString()).replace("{duration}",duration.toString())
+        if(!url.startsWith("http://")&&!url.startsWith("https://"))return@mapNotNull null
+        CatchUpItem(program.sourceId,program.channelId,program.programId,program.title,program.startEpochMs,program.endEpochMs,url)
+    }.sortedByDescending{it.startEpochMs}
 
-    override fun startTimeshift(sourceId: String, channelId: String): TimeshiftSession? {
-        val cap = capabilities(sourceId)
-        if (!DvrEligibility.canTimeshift(cap)) return null
-        if (channelId.isBlank()) return null
-        val now = System.currentTimeMillis()
-        val windowMs = (cap.catchUpWindowHours ?: 2).coerceAtLeast(1) * 3_600_000L
-        return TimeshiftSession(
-            id = "timeshift:$sourceId:$channelId:$now",
-            sourceId = sourceId,
-            channelId = channelId,
-            liveEdgeEpochMs = now,
-            earliestSeekEpochMs = now - windowMs,
-            currentPositionEpochMs = now,
-        )
-    }
+    override fun startTimeshift(sourceId:String,channelId:String):TimeshiftSession? { val cap=capabilities(sourceId);if(!DvrEligibility.canTimeshift(cap)||channelId.isBlank())return null;val now=System.currentTimeMillis();val windowMs=(cap.catchUpWindowHours?:2).coerceAtLeast(1)*3_600_000L;return TimeshiftSession("timeshift:$sourceId:$channelId:$now",sourceId,channelId,now,now-windowMs,now) }
 
-    private fun upsert(recording: Recording) {
-        val all = loadRecordings().toMutableList()
-        val index = all.indexOfFirst { it.request.id == recording.request.id }
-        if (index >= 0) all[index] = recording else all += recording
-        writeRecordings(all)
-    }
+    private fun upsert(recording:Recording){val all=loadRecordings().toMutableList();val i=all.indexOfFirst{it.request.id==recording.request.id};if(i>=0)all[i]=recording else all+=recording;writeRecordings(all)}
 
-    private fun loadCapabilities(): Map<String, LiveSourceCapabilities> {
-        val raw = prefs.getString(KEY_CAPABILITIES, null) ?: return emptyMap()
-        return runCatching {
-            val root = JSONObject(raw)
-            buildMap {
-                root.keys().forEach { sourceId ->
-                    val obj = root.getJSONObject(sourceId)
-                    put(sourceId, LiveSourceCapabilities(
-                        sourceId = sourceId,
-                        supportsDvr = obj.optBoolean("supportsDvr"),
-                        supportsCatchUp = obj.optBoolean("supportsCatchUp"),
-                        supportsTimeshift = obj.optBoolean("supportsTimeshift"),
-                        catchUpWindowHours = obj.optInt("catchUpWindowHours").takeIf { !obj.isNull("catchUpWindowHours") },
-                        maxRecordingHours = obj.optInt("maxRecordingHours").takeIf { !obj.isNull("maxRecordingHours") },
-                    ))
-                }
-            }
-        }.getOrDefault(emptyMap())
-    }
+    private fun loadCapabilities():Map<String,LiveSourceCapabilities>{val raw=prefs.getString(KEY_CAPABILITIES,null)?:return emptyMap();return runCatching{val root=JSONObject(raw);buildMap{root.keys().forEach{sourceId->val o=root.getJSONObject(sourceId);put(sourceId,LiveSourceCapabilities(sourceId,o.optBoolean("supportsDvr"),o.optBoolean("supportsCatchUp"),o.optBoolean("supportsTimeshift"),o.optInt("catchUpWindowHours").takeIf{!o.isNull("catchUpWindowHours")},o.optInt("maxRecordingHours").takeIf{!o.isNull("maxRecordingHours")},o.optString("catchUpUrlTemplate").takeIf{it.isNotBlank()&&it!="null"},o.optBoolean("supportsSeriesRecording"),o.optString("recordingStorageLabel").takeIf{it.isNotBlank()&&it!="null"}))}}}.getOrDefault(emptyMap())}
+    private fun loadCatchUpPrograms():List<CatchUpProgram>{val raw=prefs.getString(KEY_CATCHUP,null)?:return emptyList();return runCatching{val a=JSONArray(raw);buildList{for(i in 0 until a.length()){val o=a.getJSONObject(i);add(CatchUpProgram(o.getString("sourceId"),o.getString("channelId"),o.getString("programId"),o.getString("title"),o.getLong("start"),o.getLong("end")))}}}.getOrDefault(emptyList())}
 
-    private fun loadRecordings(): List<Recording> {
-        val raw = prefs.getString(KEY_RECORDINGS, null) ?: return emptyList()
-        return runCatching {
-            val array = JSONArray(raw)
-            buildList {
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    val req = obj.getJSONObject("request")
-                    add(Recording(
-                        request = RecordingRequest(
-                            id = req.getString("id"),
-                            profileId = req.getString("profileId"),
-                            sourceId = req.getString("sourceId"),
-                            channelId = req.getString("channelId"),
-                            title = req.getString("title"),
-                            startEpochMs = req.getLong("startEpochMs"),
-                            endEpochMs = req.getLong("endEpochMs"),
-                            seriesId = req.optString("seriesId").takeIf { it.isNotBlank() },
-                            eventId = req.optString("eventId").takeIf { it.isNotBlank() },
-                        ),
-                        state = runCatching { RecordingState.valueOf(obj.getString("state")) }.getOrDefault(RecordingState.FAILED),
-                        playbackUrl = obj.optString("playbackUrl").takeIf { it.isNotBlank() },
-                        error = obj.optString("error").takeIf { it.isNotBlank() },
-                    ))
-                }
-            }
-        }.getOrDefault(emptyList())
-    }
-
-    private fun writeRecordings(recordings: List<Recording>) {
-        val array = JSONArray()
-        recordings.forEach { recording ->
-            val req = recording.request
-            array.put(JSONObject()
-                .put("state", recording.state.name)
-                .put("playbackUrl", recording.playbackUrl ?: JSONObject.NULL)
-                .put("error", recording.error ?: JSONObject.NULL)
-                .put("request", JSONObject()
-                    .put("id", req.id)
-                    .put("profileId", req.profileId)
-                    .put("sourceId", req.sourceId)
-                    .put("channelId", req.channelId)
-                    .put("title", req.title)
-                    .put("startEpochMs", req.startEpochMs)
-                    .put("endEpochMs", req.endEpochMs)
-                    .put("seriesId", req.seriesId ?: JSONObject.NULL)
-                    .put("eventId", req.eventId ?: JSONObject.NULL)))
-        }
-        prefs.edit().putString(KEY_RECORDINGS, array.toString()).apply()
-    }
-
-    private companion object {
-        const val KEY_CAPABILITIES = "capabilities"
-        const val KEY_RECORDINGS = "recordings"
-    }
+    private fun loadRecordings():List<Recording>{val raw=prefs.getString(KEY_RECORDINGS,null)?:return emptyList();return runCatching{val a=JSONArray(raw);buildList{for(i in 0 until a.length()){val o=a.getJSONObject(i);val r=o.getJSONObject("request");add(Recording(RecordingRequest(r.getString("id"),r.getString("profileId"),r.getString("sourceId"),r.getString("channelId"),r.getString("title"),r.getLong("startEpochMs"),r.getLong("endEpochMs"),r.optString("seriesId").takeIf{it.isNotBlank()},r.optString("eventId").takeIf{it.isNotBlank()}),runCatching{RecordingState.valueOf(o.getString("state"))}.getOrDefault(RecordingState.FAILED),o.optString("playbackUrl").takeIf{it.isNotBlank()},o.optString("error").takeIf{it.isNotBlank()}))}}}.getOrDefault(emptyList())}
+    private fun writeRecordings(items:List<Recording>){val a=JSONArray();items.forEach{rec->val r=rec.request;a.put(JSONObject().put("state",rec.state.name).put("playbackUrl",rec.playbackUrl?:JSONObject.NULL).put("error",rec.error?:JSONObject.NULL).put("request",JSONObject().put("id",r.id).put("profileId",r.profileId).put("sourceId",r.sourceId).put("channelId",r.channelId).put("title",r.title).put("startEpochMs",r.startEpochMs).put("endEpochMs",r.endEpochMs).put("seriesId",r.seriesId?:JSONObject.NULL).put("eventId",r.eventId?:JSONObject.NULL)))};prefs.edit().putString(KEY_RECORDINGS,a.toString()).apply()}
+    private fun enc(v:String)=URLEncoder.encode(v,StandardCharsets.UTF_8.name())
+    private companion object { const val KEY_CAPABILITIES="capabilities";const val KEY_RECORDINGS="recordings";const val KEY_CATCHUP="catchup_programs";const val MAX_CATCHUP_PROGRAMS=5000 }
 }
