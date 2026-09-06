@@ -19,9 +19,8 @@ data class SportsGuideItem(
     val broadcasterNames: List<String>,
     val resolution: SportsResolution?,
     val addonCatalogMatches: List<String> = emptyList(),
-) {
-    val watchCandidate: SportsWatchCandidate? get() = resolution?.best
-}
+    val watchCandidate: SportsWatchCandidate? = resolution?.best,
+)
 
 data class SportsGuideSnapshot(
     val date: String,
