@@ -17,6 +17,19 @@ service cloud.firestore {
     function validFavoriteTeam(docId) { return request.resource.data.teamId == docId && request.resource.data.name is string && hasUpdatedAt(); }
     function validSettings() { return request.resource.data is map && hasUpdatedAt(); }
     function validSource() { return request.resource.data.name is string && request.resource.data.type is string && request.resource.data.enabled is bool && (!('priority' in request.resource.data) || request.resource.data.priority is number) && (!('config' in request.resource.data) || request.resource.data.config is map) && hasUpdatedAt(); }
+    function validChannelCustomization() {
+      return request.resource.data.profileId is string &&
+        request.resource.data.channelId is string &&
+        request.resource.data.channelId.size() > 0 &&
+        request.resource.data.hidden is bool &&
+        (!('customName' in request.resource.data) || request.resource.data.customName == null || request.resource.data.customName is string) &&
+        (!('customNumber' in request.resource.data) || request.resource.data.customNumber == null || request.resource.data.customNumber is number) &&
+        (!('customGroup' in request.resource.data) || request.resource.data.customGroup == null || request.resource.data.customGroup is string) &&
+        (!('sortOrder' in request.resource.data) || request.resource.data.sortOrder is number) &&
+        (!('epgIdOverride' in request.resource.data) || request.resource.data.epgIdOverride == null || request.resource.data.epgIdOverride is string) &&
+        (!('logoUrlOverride' in request.resource.data) || request.resource.data.logoUrlOverride == null || request.resource.data.logoUrlOverride is string) &&
+        hasUpdatedAt();
+    }
     function validDevice() { return request.resource.data.name is string && request.resource.data.type is string && request.resource.data.online is bool && request.resource.data.lastSeenAt is timestamp; }
     function validCommand() { return request.resource.data.deviceId is string && request.resource.data.command is string && request.resource.data.status is string && request.resource.data.createdAt is timestamp; }
     function validRecording() { return request.resource.data.title is string && request.resource.data.channelId is string && request.resource.data.sourceId is string && request.resource.data.startEpochMs is number && request.resource.data.endEpochMs is number && request.resource.data.state is string && hasUpdatedAt(); }
@@ -39,6 +52,7 @@ service cloud.firestore {
       match /favoriteTeams/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validFavoriteTeam(docId); allow delete: if owns(uid); }
       match /settings/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validSettings(); allow delete: if owns(uid); }
       match /sources/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validSource(); allow delete: if owns(uid); }
+      match /channelCustomizations/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validChannelCustomization(); allow delete: if owns(uid); }
       match /devices/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validDevice(); allow delete: if owns(uid); }
       match /commands/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validCommand(); allow delete: if owns(uid); }
       match /recordings/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validRecording(); allow delete: if owns(uid); }
