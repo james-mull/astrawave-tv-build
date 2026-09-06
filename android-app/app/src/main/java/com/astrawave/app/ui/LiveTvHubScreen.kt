@@ -35,6 +35,8 @@ import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.IptvSource
 import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.core.ProfileSafetyPolicy
+import com.astrawave.app.data.ChannelCustomizationProjection
+import com.astrawave.app.data.ChannelCustomizationStore
 import com.astrawave.app.data.CombinedLiveTvRepository
 import com.astrawave.app.data.CombinedLiveTvSnapshot
 import com.astrawave.app.data.LastLiveChannel
@@ -43,6 +45,7 @@ import com.astrawave.app.data.LivePlaybackStore
 import com.astrawave.app.data.LiveTvPreferenceStore
 import com.astrawave.app.data.ProfileSafetyStore
 import com.astrawave.app.data.SourceFusionPlaybackPlanner
+import com.astrawave.app.data.SourceFusionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,7 +55,12 @@ private enum class LiveTvFilter { ALL, FAVORITES, RECENTS }
 
 private sealed interface LiveTvLoadState {
     data object Loading : LiveTvLoadState
-    data class Ready(val snapshot: CombinedLiveTvSnapshot) : LiveTvLoadState
+    data class Ready(
+        val snapshot: CombinedLiveTvSnapshot,
+        val presentations: List<ChannelCustomizationProjection.LivePresentation>,
+        val customizedCount: Int,
+        val epgOverrideCount: Int,
+    ) : LiveTvLoadState
     data class Error(val message: String) : LiveTvLoadState
 }
 
@@ -70,15 +78,9 @@ fun LiveTvHubScreen(
     val safety = remember(profileId) { ProfileSafetyStore(context).load(profileId) }
     if (!ProfileSafetyPolicy.liveTvAllowed(safety)) {
         Column(Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp)) {
-            AstraWavePageHeader(
-                title = "Live TV",
-                subtitle = "Live TV is disabled for this kids profile.",
-            )
+            AstraWavePageHeader("Live TV", "Live TV is disabled for this kids profile.")
             Spacer(Modifier.height(18.dp))
-            AstraWaveStatePanel(
-                title = "Restricted by profile settings",
-                message = "A household administrator can enable Live TV for this profile from Privacy & Parental Controls.",
-            )
+            AstraWaveStatePanel("Restricted by profile settings", "A household administrator can enable Live TV for this profile from Privacy & Parental Controls.")
         }
         return
     }
@@ -87,18 +89,31 @@ fun LiveTvHubScreen(
     val preferences = remember { LiveTvPreferenceStore(context) }
     val playbackStore = remember { LivePlaybackStore(context) }
     val playbackPlanner = remember { SourceFusionPlaybackPlanner(context) }
+    val fusion = remember { SourceFusionRepository(context) }
+    val channelStore = remember { ChannelCustomizationStore(context) }
+    val channelProjection = remember { ChannelCustomizationProjection(context) }
     var mode by remember { mutableStateOf(LiveTvMode.CHANNELS) }
     var filter by remember { mutableStateOf(LiveTvFilter.ALL) }
     var query by remember { mutableStateOf("") }
     var favoriteIds by remember { mutableStateOf(preferences.favoriteIds()) }
     var recentIds by remember { mutableStateOf(preferences.recentIds()) }
     var lastChannel by remember { mutableStateOf(playbackStore.last()) }
-    var state by remember(sources) { mutableStateOf<LiveTvLoadState>(LiveTvLoadState.Loading) }
+    var state by remember(sources, profileId) { mutableStateOf<LiveTvLoadState>(LiveTvLoadState.Loading) }
 
-    LaunchedEffect(sources) {
+    LaunchedEffect(sources, profileId) {
         state = LiveTvLoadState.Loading
         state = try {
-            LiveTvLoadState.Ready(withContext(Dispatchers.IO) { repository.load(sources) })
+            val edits = channelStore.load(profileId)
+            val epgOverrides = edits.mapNotNull { edit ->
+                edit.epgIdOverride?.takeIf(String::isNotBlank)?.let { edit.channelId to it }
+            }.toMap()
+            val snapshot = withContext(Dispatchers.IO) { repository.load(sources, epgOverrides) }
+            LiveTvLoadState.Ready(
+                snapshot = snapshot,
+                presentations = channelProjection.live(profileId, snapshot.groups),
+                customizedCount = edits.size,
+                epgOverrideCount = epgOverrides.size,
+            )
         } catch (error: Exception) {
             LiveTvLoadState.Error(error.message ?: "Unable to load Live TV")
         }
@@ -115,7 +130,7 @@ fun LiveTvHubScreen(
         )
     }
 
-    fun play(group: LiveChannelGroup) {
+    fun play(group: LiveChannelGroup, displayName: String) {
         scope.launch {
             val plan = withContext(Dispatchers.IO) { playbackPlanner.live(group) }
             if (plan.urls.isEmpty()) {
@@ -125,7 +140,7 @@ fun LiveTvHubScreen(
             recentIds = preferences.markWatched(group.canonicalName)
             val channel = LastLiveChannel(
                 id = group.canonicalName,
-                name = group.displayName,
+                name = displayName,
                 source = plan.bestProvider ?: group.bestCandidate?.source.orEmpty(),
                 urls = plan.urls,
                 watchedAtEpochMs = System.currentTimeMillis(),
@@ -139,9 +154,7 @@ fun LiveTvHubScreen(
     fun resumeLast() {
         val channel = lastChannel ?: return
         scope.launch {
-            val plan = withContext(Dispatchers.IO) {
-                playbackPlanner.urls(channel.urls, channel.source.ifBlank { "Live TV" })
-            }
+            val plan = withContext(Dispatchers.IO) { playbackPlanner.urls(channel.urls, channel.source.ifBlank { "Live TV" }) }
             if (plan.urls.isEmpty()) {
                 Toast.makeText(context, "Your last channel is unavailable right now.", Toast.LENGTH_LONG).show()
                 return@launch
@@ -159,61 +172,39 @@ fun LiveTvHubScreen(
 
     fun openOfficial(url: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-            .onFailure {
-                Toast.makeText(context, "No app is available to open this official provider.", Toast.LENGTH_LONG).show()
-            }
+            .onFailure { Toast.makeText(context, "No app is available to open this official provider.", Toast.LENGTH_LONG).show() }
     }
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp)) {
             AstraWavePageHeader(
                 title = "Live TV",
-                subtitle = "Merged channels with Smart Source Fusion, learned reliability, automatic failover and your own providers.",
+                subtitle = "TiviMate-style control with AstraWave Smart Source Fusion, personalized channels and automatic backup streams.",
             )
             Spacer(Modifier.height(16.dp))
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 LiveModeButton("Watch", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
-                LiveModeButton("My Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
-                lastChannel?.let { channel ->
-                    LiveModeButton("▶ Resume ${channel.name}", false, ::resumeLast)
-                }
-                if (multiviewCount > 0) {
-                    LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)
-                }
+                LiveModeButton("My Sources & Editor", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+                lastChannel?.let { channel -> LiveModeButton("▶ Resume ${channel.name}", false, ::resumeLast) }
+                if (multiviewCount > 0) LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)
             }
         }
 
         when (mode) {
             LiveTvMode.SOURCES -> MyIptvScreen(sources = sources, onSourcesChanged = onSourcesChanged)
             LiveTvMode.CHANNELS -> Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 4.dp),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 4.dp),
             ) {
                 when (val current = state) {
-                    LiveTvLoadState.Loading -> AstraWaveLoadingState(
-                        title = "Getting Live TV ready",
-                        message = "Loading merged channels, guide data and provider candidates.",
-                    )
-                    is LiveTvLoadState.Error -> AstraWaveErrorState(
-                        title = "Live TV unavailable",
-                        message = current.message,
-                        retryLabel = null,
-                    )
+                    LiveTvLoadState.Loading -> AstraWaveLoadingState("Getting Live TV ready", "Loading merged channels, guide mappings, profile edits and provider candidates.")
+                    is LiveTvLoadState.Error -> AstraWaveErrorState("Live TV unavailable", current.message, retryLabel = null)
                     is LiveTvLoadState.Ready -> {
                         val snapshot = current.snapshot
-                        val totalChannels = snapshot.freeChannelCount + snapshot.userChannelCount
-                        Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            LiveMetric("CHANNELS", snapshot.groups.size.toString())
-                            LiveMetric("CANDIDATES", totalChannels.toString())
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LiveMetric("CHANNELS", current.presentations.size.toString())
                             LiveMetric("MY SOURCES", sources.count { it.enabled }.toString())
+                            LiveMetric("CUSTOM", current.customizedCount.toString())
+                            LiveMetric("EPG MAPS", current.epgOverrideCount.toString())
                             LiveMetric("OFFICIAL", snapshot.handoffCount.toString())
                         }
                         Spacer(Modifier.height(16.dp))
@@ -226,10 +217,7 @@ fun LiveTvHubScreen(
                             label = { Text("Search channels, groups or sources") },
                         )
                         Spacer(Modifier.height(10.dp))
-                        Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             LiveFilterButton("All", filter == LiveTvFilter.ALL) { filter = LiveTvFilter.ALL }
                             LiveFilterButton("★ Favorites ${favoriteIds.size}", filter == LiveTvFilter.FAVORITES) { filter = LiveTvFilter.FAVORITES }
                             LiveFilterButton("Recent ${recentIds.size}", filter == LiveTvFilter.RECENTS) { filter = LiveTvFilter.RECENTS }
@@ -237,63 +225,56 @@ fun LiveTvHubScreen(
                         Spacer(Modifier.height(16.dp))
 
                         val normalizedQuery = query.trim().lowercase()
-                        val groups = snapshot.groups
-                            .filter { group ->
+                        val visible = current.presentations
+                            .filter { presentation ->
                                 normalizedQuery.isBlank() ||
-                                    group.displayName.lowercase().contains(normalizedQuery) ||
-                                    group.candidates.any { candidate ->
-                                        candidate.source.lowercase().contains(normalizedQuery) ||
-                                            candidate.group.orEmpty().lowercase().contains(normalizedQuery)
-                                    }
+                                    presentation.displayName.lowercase().contains(normalizedQuery) ||
+                                    presentation.displayGroup.orEmpty().lowercase().contains(normalizedQuery) ||
+                                    presentation.group.candidates.any { it.source.lowercase().contains(normalizedQuery) }
                             }
-                            .filter { group ->
+                            .filter { presentation ->
                                 when (filter) {
                                     LiveTvFilter.ALL -> true
-                                    LiveTvFilter.FAVORITES -> group.canonicalName in favoriteIds
-                                    LiveTvFilter.RECENTS -> group.canonicalName in recentIds
+                                    LiveTvFilter.FAVORITES -> presentation.channelId in favoriteIds
+                                    LiveTvFilter.RECENTS -> presentation.channelId in recentIds
                                 }
                             }
-                            .let { visible ->
+                            .let { rows ->
                                 if (filter == LiveTvFilter.RECENTS) {
-                                    visible.sortedBy { group ->
-                                        recentIds.indexOf(group.canonicalName).let { index ->
-                                            if (index < 0) Int.MAX_VALUE else index
-                                        }
-                                    }
-                                } else visible
+                                    rows.sortedBy { recentIds.indexOf(it.channelId).let { index -> if (index < 0) Int.MAX_VALUE else index } }
+                                } else rows
                             }
 
-                        if (groups.isEmpty()) {
+                        if (visible.isEmpty()) {
                             AstraWaveEmptyState(
                                 title = "No channels match",
                                 message = when (filter) {
                                     LiveTvFilter.FAVORITES -> "Favorite channels with the star, or switch back to All."
                                     LiveTvFilter.RECENTS -> "Channels you watch will appear here automatically."
-                                    LiveTvFilter.ALL -> "Try another search or add an authorized M3U/Xtream source."
+                                    LiveTvFilter.ALL -> "Try another search, unhide channels in Channel Editor, or add an authorized provider."
                                 },
                             )
                         } else {
-                            groups.take(500).forEach { group ->
+                            visible.take(600).forEach { presentation ->
+                                val group = presentation.group
                                 val candidate = group.bestCandidate
-                                val isFavorite = group.canonicalName in favoriteIds
-                                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                val isFavorite = presentation.channelId in favoriteIds
+                                val health = candidate?.let {
+                                    fusion.score("live:${it.source}:${it.normalizedName}")
+                                }
+                                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                     Column {
-                                        Row(
-                                            Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                        ) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                             Column(Modifier.weight(1f)) {
                                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     Text(
                                                         if (isFavorite) "★" else "☆",
                                                         color = if (isFavorite) AstraWaveColors.Accent else AstraWaveColors.TertiaryText,
-                                                        modifier = Modifier.clickable {
-                                                            favoriteIds = preferences.toggleFavorite(group.canonicalName)
-                                                        },
+                                                        modifier = Modifier.clickable { favoriteIds = preferences.toggleFavorite(presentation.channelId) },
                                                         style = MaterialTheme.typography.titleMedium,
                                                     )
                                                     Text(
-                                                        group.displayName,
+                                                        listOfNotNull(presentation.channelNumber?.let { "$it" }, presentation.displayName).joinToString("  "),
                                                         color = AstraWaveColors.PrimaryText,
                                                         style = MaterialTheme.typography.titleMedium,
                                                         maxLines = 2,
@@ -301,29 +282,35 @@ fun LiveTvHubScreen(
                                                 }
                                                 Spacer(Modifier.height(3.dp))
                                                 Text(
-                                                    candidate?.source ?: "Source unavailable",
+                                                    listOfNotNull(presentation.displayGroup, candidate?.source).joinToString(" • ").ifBlank { "Source unavailable" },
                                                     color = AstraWaveColors.Accent,
                                                     style = MaterialTheme.typography.labelMedium,
                                                 )
                                             }
                                             if (candidate != null) {
-                                                val multiviewEligible = PlayerActivity.isDirectMediaUrl(candidate.url)
-                                                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                    if (health != null && health.samples > 0) {
+                                                        Text(
+                                                            "SMART ${health.score}",
+                                                            color = if (health.score >= 70) AstraWaveColors.Success else AstraWaveColors.Warning,
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                        )
+                                                    }
                                                     Text(
                                                         "Watch",
                                                         color = AstraWaveColors.Success,
-                                                        modifier = Modifier.clickable { play(group) },
+                                                        modifier = Modifier.clickable { play(group, presentation.displayName) },
                                                         style = MaterialTheme.typography.labelLarge,
                                                     )
-                                                    if (multiviewEligible) {
+                                                    if (PlayerActivity.isDirectMediaUrl(candidate.url)) {
                                                         Text(
                                                             if (multiviewCount >= 6) "Mosaic full" else "+ Multiview",
                                                             color = if (multiviewCount >= 6) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
                                                             modifier = Modifier.clickable(enabled = multiviewCount < 6) {
                                                                 onAddToMultiview(
                                                                     MultiviewPane(
-                                                                        id = "live:${group.canonicalName}",
-                                                                        title = group.displayName,
+                                                                        id = "live:${presentation.channelId}",
+                                                                        title = presentation.displayName,
                                                                         streamUrl = candidate.url,
                                                                         sourceName = candidate.source,
                                                                         channelId = candidate.id,
@@ -338,18 +325,17 @@ fun LiveTvHubScreen(
                                                 Text("Unavailable", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
                                             }
                                         }
+                                        Spacer(Modifier.height(4.dp))
                                         Text(
-                                            "${group.candidates.size} source${if (group.candidates.size == 1) "" else "s"} • best source learned at playback",
+                                            "${group.candidates.size} source${if (group.candidates.size == 1) "" else "s"}${if (presentation.customized) " • CUSTOM" else ""}${if (presentation.epgIdOverride != null) " • EPG OVERRIDE" else ""}",
                                             color = AstraWaveColors.TertiaryText,
                                             style = MaterialTheme.typography.labelSmall,
                                         )
                                         group.currentProgram?.title?.let { now ->
-                                            Spacer(Modifier.height(8.dp))
+                                            Spacer(Modifier.height(7.dp))
                                             Text("Now • $now", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                                         }
-                                        group.nextProgram?.title?.let { next ->
-                                            Text("Next • $next", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                                        }
+                                        group.nextProgram?.title?.let { next -> Text("Next • $next", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1) }
                                     }
                                 }
                             }
@@ -359,7 +345,7 @@ fun LiveTvHubScreen(
                             Spacer(Modifier.height(24.dp))
                             AstraWaveSectionHeader(
                                 title = "Official Free Watch Options",
-                                subtitle = "Provider destinations open in their official app or site when direct in-app playback is not authorized.",
+                                subtitle = "Official provider destinations stay separate when native playback is not authorized.",
                             )
                             Spacer(Modifier.height(10.dp))
                             snapshot.handoffs.take(40).forEach { handoff ->
@@ -367,18 +353,9 @@ fun LiveTvHubScreen(
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
                                             Text(handoff.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                                            Text(
-                                                handoff.provider ?: handoff.group,
-                                                color = AstraWaveColors.SecondaryText,
-                                                style = MaterialTheme.typography.labelMedium,
-                                            )
+                                            Text(handoff.provider ?: handoff.group, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
                                         }
-                                        Text(
-                                            "Open Official",
-                                            color = AstraWaveColors.Accent,
-                                            modifier = Modifier.clickable { openOfficial(handoff.actionUrl) },
-                                            style = MaterialTheme.typography.labelLarge,
-                                        )
+                                        Text("Open Official", color = AstraWaveColors.Accent, modifier = Modifier.clickable { openOfficial(handoff.actionUrl) }, style = MaterialTheme.typography.labelLarge)
                                     }
                                 }
                             }
@@ -393,11 +370,7 @@ fun LiveTvHubScreen(
 
 @Composable
 private fun LiveMetric(label: String, value: String) {
-    Column(
-        Modifier
-            .background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large)
-            .padding(horizontal = 17.dp, vertical = 11.dp),
-    ) {
+    Column(Modifier.background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large).padding(horizontal = 17.dp, vertical = 11.dp)) {
         Text(label, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
         Text(value, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
     }
@@ -412,9 +385,7 @@ private fun LiveModeButton(label: String, selected: Boolean, onClick: () -> Unit
             contentColor = AstraWaveColors.PrimaryText,
         ),
         shape = MaterialTheme.shapes.large,
-    ) {
-        Text(label, maxLines = 1)
-    }
+    ) { Text(label, maxLines = 1) }
 }
 
 @Composable
@@ -426,7 +397,5 @@ private fun LiveFilterButton(label: String, selected: Boolean, onClick: () -> Un
             contentColor = AstraWaveColors.PrimaryText,
         ),
         shape = MaterialTheme.shapes.large,
-    ) {
-        Text(label)
-    }
+    ) { Text(label, maxLines = 1) }
 }
