@@ -11,11 +11,14 @@ import java.time.format.DateTimeFormatter
  *
  * Broadcaster names are resolved against the combined Live TV lineup, which
  * includes AstraWave Free TV plus the user's enabled M3U/Xtream sources.
+ * Hardcoded Stremio channel catalogs may contribute metadata matches only;
+ * they never bypass playback authorization.
  */
 data class SportsGuideItem(
     val event: SportsEvent,
     val broadcasterNames: List<String>,
     val resolution: SportsResolution?,
+    val addonCatalogMatches: List<String> = emptyList(),
 ) {
     val watchCandidate: SportsWatchCandidate? get() = resolution?.best
 }
@@ -24,6 +27,7 @@ data class SportsGuideSnapshot(
     val date: String,
     val events: List<SportsGuideItem>,
     val combinedChannelGroups: Int,
+    val addonSportsChannelCount: Int = 0,
 )
 
 fun interface SportsBroadcasterProvider {
@@ -40,6 +44,7 @@ class SportsGuideRepository(
         date: LocalDate = LocalDate.now(ZoneOffset.UTC),
         sources: List<IptvSource> = emptyList(),
         sport: String? = null,
+        addonSportsChannelNames: List<String> = emptyList(),
     ): SportsGuideSnapshot {
         val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val live = combinedLiveTv.load(sources)
@@ -75,12 +80,28 @@ class SportsGuideRepository(
                 val matched = resolver.resolve(guideEvent, live.groups)
                 matched.copy(candidates = matched.candidates.filter { reachable(it.streamUrl) })
             }
-            SportsGuideItem(event, broadcasters, resolution)
+
+            val addonMatches = if (broadcasters.isEmpty()) emptyList() else addonSportsChannelNames.filter { addonName ->
+                broadcasters.any { broadcaster -> channelNamesLikelyMatch(addonName, broadcaster) }
+            }.distinct().take(8)
+
+            SportsGuideItem(event, broadcasters, resolution, addonMatches)
         }
         return SportsGuideSnapshot(
             date = dateText,
             events = events,
             combinedChannelGroups = live.totalChannelGroups,
+            addonSportsChannelCount = addonSportsChannelNames.distinct().size,
         )
+    }
+
+    private fun channelNamesLikelyMatch(left: String, right: String): Boolean {
+        fun normalized(value: String) = value.lowercase()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+        val a = normalized(left)
+        val b = normalized(right)
+        if (a.isBlank() || b.isBlank()) return false
+        return a == b || a.contains(b) || b.contains(a)
     }
 }
