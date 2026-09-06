@@ -40,7 +40,10 @@ import com.astrawave.app.data.TmdbSeriesEpisodeRepository
 import com.astrawave.app.data.TmdbTitleDetails
 import com.astrawave.app.data.TvDetailContextRepository
 import com.astrawave.app.data.UnifiedVodSourceRepository
+import com.astrawave.app.data.VodPlaybackCoordinator
+import com.astrawave.app.data.VodPlaybackRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val DetailsBg = Color(0xFF080A0F)
@@ -136,6 +139,8 @@ private fun TitleDetailsScreen(
 ) {
     val context = LocalContext.current
     val sourceRepository = remember { UnifiedVodSourceRepository(context) }
+    val quickPlayCoordinator = remember { VodPlaybackCoordinator(context) }
+    val quickPlayScope = rememberCoroutineScope()
     val stremioEpisodeRepository = remember { StremioSeriesEpisodeRepository() }
     val nativeEpisodeRepository = remember { TmdbSeriesEpisodeRepository() }
     val movieContextRepository = remember { MovieDetailContextRepository() }
@@ -151,6 +156,8 @@ private fun TitleDetailsScreen(
     var sourcesMode by remember { mutableStateOf(false) }
     var refreshToken by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
+    var quickPlayLoading by remember { mutableStateOf(false) }
+    var quickPlayError by remember { mutableStateOf<String?>(null) }
     var episodeLoading by remember { mutableStateOf(false) }
     var detailsLoading by remember { mutableStateOf(tmdbId != null && tmdbRepository.isConfigured()) }
     var movieContextLoading by remember { mutableStateOf(!seriesMode && tmdbId != null) }
@@ -255,6 +262,57 @@ private fun TitleDetailsScreen(
             ?: ordered.firstOrNull { progressByEpisode[it.id]?.completed != true }
     }
 
+    fun playBest(episode: StremioEpisode? = null) {
+        if (quickPlayLoading) return
+        quickPlayLoading = true
+        quickPlayError = null
+        quickPlayScope.launch {
+            val episodeIsStremio = episode?.id?.startsWith("tmdbtv:", ignoreCase = true) == false
+            val exactId = episode?.id?.takeIf { episodeIsStremio } ?: stremioId?.takeIf { episode == null }
+            val exactType = when {
+                episode != null && episodeIsStremio -> "series"
+                episode == null -> stremioType
+                else -> null
+            }
+            val request = VodPlaybackRequest(
+                title = title,
+                year = year ?: details?.releaseDate?.take(4)?.toIntOrNull(),
+                mediaType = if (episode != null) "episode" else if (seriesMode) "series" else "movie",
+                profileId = profileId,
+                season = episode?.season,
+                episode = episode?.episode,
+                episodeTitle = episode?.title,
+                stremioType = exactType,
+                stremioId = exactId,
+                libraryId = episode?.id,
+                sourceId = episode?.id ?: stremioId,
+            )
+            val result = runCatching {
+                withContext(Dispatchers.IO) { quickPlayCoordinator.prepareIntent(request) }
+            }
+            quickPlayLoading = false
+            result.onSuccess { (_, playbackIntent) ->
+                if (playbackIntent != null) {
+                    context.startActivity(playbackIntent)
+                } else {
+                    if (episode != null) {
+                        selectedSeason = episode.season
+                        selectedEpisode = episode
+                    }
+                    quickPlayError = "No automatic source was eligible. Opening Sources so you can review available options."
+                    sourcesMode = true
+                }
+            }.onFailure { throwable ->
+                if (episode != null) {
+                    selectedSeason = episode.season
+                    selectedEpisode = episode
+                }
+                quickPlayError = throwable.message ?: "Automatic playback resolution failed."
+                sourcesMode = true
+            }
+        }
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -326,32 +384,45 @@ private fun TitleDetailsScreen(
                     ) { Text("▶ Watch Trailer") }
                 }
 
+            if (!seriesMode) {
+                Button(
+                    onClick = { playBest() },
+                    enabled = !quickPlayLoading,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text(if (quickPlayLoading) "Finding Best Source…" else "▶ Play Best", fontWeight = FontWeight.Bold)
+                }
+            }
+
             if (hasEpisodeCatalog && firstUnwatched != null) {
                 Button(
-                    onClick = {
-                        selectedSeason = firstUnwatched.season
-                        selectedEpisode = firstUnwatched
-                        sourcesMode = true
-                    },
+                    onClick = { playBest(firstUnwatched) },
+                    enabled = !quickPlayLoading,
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(16.dp),
                 ) {
                     val saved = progressByEpisode[firstUnwatched.id]
                     val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
-                    Text("$prefix Series • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (quickPlayLoading) "Finding Best Episode Source…"
+                        else "$prefix Series • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}",
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
 
-            Button(
+            OutlinedButton(
                 onClick = { sourcesMode = true },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp),
-            ) { Text(if (hasEpisodeCatalog) "Browse All Episodes & Sources" else "Find Watch Options", fontWeight = FontWeight.Bold) }
+            ) { Text(if (hasEpisodeCatalog) "Browse All Episodes & Sources" else "Choose Sources", fontWeight = FontWeight.Bold) }
+            quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }
             Text(
                 if (hasEpisodeCatalog) {
-                    "AstraWave picks the first unfinished episode, tracks each season separately, and uses watch state to choose a smarter Up Next episode."
+                    "AstraWave picks the first unfinished episode, searches owned media and authorized providers, selects the strongest source automatically, and keeps manual Sources available as an override."
                 } else {
-                    "Playback discovery starts only when you ask for watch options. AstraWave ranks eligible healthy sources and automatically keeps backups ready."
+                    "Play Best searches owned media and eligible providers in parallel, ranks healthy sources by quality and latency, and keeps backups ready for automatic failover."
                 },
                 color = DetailsMuted,
                 fontSize = 12.sp,
@@ -363,7 +434,7 @@ private fun TitleDetailsScreen(
             if (hasEpisodeCatalog) {
                 "Choose an episode, then AstraWave resolves that episode and ranks healthy eligible sources. Completed episodes are skipped when a later unwatched episode is available."
             } else {
-                "AstraWave checks approved sources and enabled addons, removes duplicates, verifies stream health, and ranks the best playable source first."
+                "AstraWave checks reviewed public sources and explicitly authorized providers, removes duplicates, verifies stream health, and ranks the best playable source first."
             },
             color = DetailsMuted,
             fontSize = 14.sp,
@@ -389,7 +460,7 @@ private fun TitleDetailsScreen(
                 error != null -> Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
                 sources.isEmpty() -> EmptyPanel(
                     "No verified source found",
-                    "AstraWave checked its approved resolver and enabled addon sources but did not find a healthy eligible direct stream for this ${if (selectedEpisode != null) "episode" else "title"}.",
+                    "AstraWave checked reviewed and customer-authorized sources but did not find a healthy eligible direct stream for this ${if (selectedEpisode != null) "episode" else "title"}.",
                 )
                 else -> {
                     val allUrls = sources.map { it.link.url }.distinct()
@@ -643,8 +714,8 @@ private fun InfoPanel(title: String, year: Int?, seriesMode: Boolean) {
         Text(title, color = DetailsPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         year?.let { Text(it.toString(), color = DetailsMuted, fontSize = 14.sp) }
         Text(
-            if (seriesMode) "Browse the title first, then open Episodes & Sources when you are ready to choose an episode and playback source."
-            else "Review the title first, then open watch options to let AstraWave find and rank available playback choices.",
+            if (seriesMode) "Browse the title first, then let AstraWave pick the next episode and strongest eligible source, or open Sources for manual control."
+            else "Use Play Best for automatic source selection, or open Sources to choose a verified option manually.",
             color = DetailsMuted,
             fontSize = 14.sp,
             lineHeight = 20.sp,
