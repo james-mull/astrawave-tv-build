@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/android-unified-app
+      - feature/nuvio-core-rebuild
     paths:
       - "web-app/**"
       - ".github/workflows/build-web.yml"
