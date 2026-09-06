@@ -87,7 +87,7 @@ fun AstraWaveChannelEditorScreen(
                 subtitle = "Rename, number, regroup, hide, repair logos, and override EPG IDs per profile.",
                 modifier = Modifier.weight(1f),
             )
-            AstraWaveSecondaryButton("← Sources", onBack)
+            AstraWaveSecondaryButton(label = "← Sources", onClick = onBack)
         }
 
         AstraWaveStatePanel(
@@ -176,7 +176,7 @@ private fun ChannelEditDetail(
                 subtitle = listOfNotNull(row.group, row.preferredSource).joinToString(" • "),
                 modifier = Modifier.weight(1f),
             )
-            AstraWaveSecondaryButton("← Back", onBack)
+            AstraWaveSecondaryButton(label = "← Back", onClick = onBack)
         }
 
         OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Custom channel name") }, singleLine = true)
@@ -195,27 +195,33 @@ private fun ChannelEditDetail(
 
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AstraWavePrimaryButton("Save channel") {
-                store.save(
-                    profileId,
-                    ChannelCustomization(
-                        channelId = row.id,
-                        customName = name.trim().takeIf(String::isNotBlank),
-                        customNumber = number.toIntOrNull(),
-                        customGroup = group.trim().takeIf(String::isNotBlank),
-                        hidden = hidden,
-                        sortOrder = sortOrder.toIntOrNull() ?: 0,
-                        epgIdOverride = epgId.trim().takeIf(String::isNotBlank),
-                        logoUrlOverride = logo.trim().takeIf(String::isNotBlank),
-                    ),
-                )
-                onSaved()
-            }
-            if (existing != null) {
-                AstraWaveSecondaryButton("Reset") {
-                    store.remove(profileId, row.id)
+            AstraWavePrimaryButton(
+                label = "Save channel",
+                onClick = {
+                    store.save(
+                        profileId,
+                        ChannelCustomization(
+                            channelId = row.id,
+                            customName = name.trim().takeIf(String::isNotBlank),
+                            customNumber = number.toIntOrNull(),
+                            customGroup = group.trim().takeIf(String::isNotBlank),
+                            hidden = hidden,
+                            sortOrder = sortOrder.toIntOrNull() ?: 0,
+                            epgIdOverride = epgId.trim().takeIf(String::isNotBlank),
+                            logoUrlOverride = logo.trim().takeIf(String::isNotBlank),
+                        ),
+                    )
                     onSaved()
-                }
+                },
+            )
+            if (existing != null) {
+                AstraWaveSecondaryButton(
+                    label = "Reset",
+                    onClick = {
+                        store.remove(profileId, row.id)
+                        onSaved()
+                    },
+                )
             }
         }
 
