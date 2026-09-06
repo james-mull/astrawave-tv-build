@@ -42,7 +42,7 @@ import com.astrawave.app.data.LiveChannelGroup
 import com.astrawave.app.data.LivePlaybackStore
 import com.astrawave.app.data.LiveTvPreferenceStore
 import com.astrawave.app.data.ProfileSafetyStore
-import com.astrawave.app.data.StreamHealthChecker
+import com.astrawave.app.data.SourceFusionPlaybackPlanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,11 +70,14 @@ fun LiveTvHubScreen(
     val safety = remember(profileId) { ProfileSafetyStore(context).load(profileId) }
     if (!ProfileSafetyPolicy.liveTvAllowed(safety)) {
         Column(Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp)) {
-            AstraWavePageHeader("Live TV", "Live TV is disabled for this kids profile.")
+            AstraWavePageHeader(
+                title = "Live TV",
+                subtitle = "Live TV is disabled for this kids profile.",
+            )
             Spacer(Modifier.height(18.dp))
             AstraWaveStatePanel(
-                "Restricted by profile settings",
-                "A household administrator can enable Live TV for this profile from Privacy & Parental Controls.",
+                title = "Restricted by profile settings",
+                message = "A household administrator can enable Live TV for this profile from Privacy & Parental Controls.",
             )
         }
         return
@@ -83,6 +86,7 @@ fun LiveTvHubScreen(
     val scope = rememberCoroutineScope()
     val preferences = remember { LiveTvPreferenceStore(context) }
     val playbackStore = remember { LivePlaybackStore(context) }
+    val playbackPlanner = remember { SourceFusionPlaybackPlanner(context) }
     var mode by remember { mutableStateOf(LiveTvMode.CHANNELS) }
     var filter by remember { mutableStateOf(LiveTvFilter.ALL) }
     var query by remember { mutableStateOf("") }
@@ -113,21 +117,17 @@ fun LiveTvHubScreen(
 
     fun play(group: LiveChannelGroup) {
         scope.launch {
-            val healthyCandidates = withContext(Dispatchers.IO) {
-                group.candidates.filter { candidate ->
-                    runCatching { StreamHealthChecker.check(candidate.url).reachable }.getOrDefault(false)
-                }
-            }
-            if (healthyCandidates.isEmpty()) {
-                Toast.makeText(context, "No working stream is available for this channel right now.", Toast.LENGTH_LONG).show()
+            val plan = withContext(Dispatchers.IO) { playbackPlanner.live(group) }
+            if (plan.urls.isEmpty()) {
+                Toast.makeText(context, "No healthy stream is available for this channel right now.", Toast.LENGTH_LONG).show()
                 return@launch
             }
             recentIds = preferences.markWatched(group.canonicalName)
             val channel = LastLiveChannel(
                 id = group.canonicalName,
                 name = group.displayName,
-                source = healthyCandidates.first().source,
-                urls = healthyCandidates.map { it.url }.distinct(),
+                source = plan.bestProvider ?: group.bestCandidate?.source.orEmpty(),
+                urls = plan.urls,
                 watchedAtEpochMs = System.currentTimeMillis(),
             )
             playbackStore.save(channel)
@@ -139,16 +139,18 @@ fun LiveTvHubScreen(
     fun resumeLast() {
         val channel = lastChannel ?: return
         scope.launch {
-            val healthyUrls = withContext(Dispatchers.IO) {
-                channel.urls.filter { url ->
-                    runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
-                }
+            val plan = withContext(Dispatchers.IO) {
+                playbackPlanner.urls(channel.urls, channel.source.ifBlank { "Live TV" })
             }
-            if (healthyUrls.isEmpty()) {
+            if (plan.urls.isEmpty()) {
                 Toast.makeText(context, "Your last channel is unavailable right now.", Toast.LENGTH_LONG).show()
                 return@launch
             }
-            val refreshed = channel.copy(urls = healthyUrls, watchedAtEpochMs = System.currentTimeMillis())
+            val refreshed = channel.copy(
+                source = plan.bestProvider ?: channel.source,
+                urls = plan.urls,
+                watchedAtEpochMs = System.currentTimeMillis(),
+            )
             playbackStore.save(refreshed)
             lastChannel = refreshed
             launchPlayer(refreshed)
@@ -156,18 +158,17 @@ fun LiveTvHubScreen(
     }
 
     fun openOfficial(url: String) {
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }.onFailure {
-            Toast.makeText(context, "No app is available to open this official provider.", Toast.LENGTH_LONG).show()
-        }
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .onFailure {
+                Toast.makeText(context, "No app is available to open this official provider.", Toast.LENGTH_LONG).show()
+            }
     }
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp)) {
             AstraWavePageHeader(
                 title = "Live TV",
-                subtitle = "Free channels, official provider options, and your IPTV are merged with automatic stream failover.",
+                subtitle = "Merged channels with Smart Source Fusion, learned reliability, automatic failover and your own providers.",
             )
             Spacer(Modifier.height(16.dp))
             Row(
@@ -180,7 +181,7 @@ fun LiveTvHubScreen(
                     LiveModeButton("▶ Resume ${channel.name}", false, ::resumeLast)
                 }
                 if (multiviewCount > 0) {
-                    LiveModeButton("Multiview ($multiviewCount)", false, onOpenMultiview)
+                    LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)
                 }
             }
         }
@@ -194,19 +195,27 @@ fun LiveTvHubScreen(
                     .padding(horizontal = 24.dp, vertical = 4.dp),
             ) {
                 when (val current = state) {
-                    LiveTvLoadState.Loading -> AstraWaveStatePanel(
-                        "Getting Live TV ready…",
-                        "Loading free TV, official watch options, and your enabled sources.",
-                        loading = true,
+                    LiveTvLoadState.Loading -> AstraWaveLoadingState(
+                        title = "Getting Live TV ready",
+                        message = "Loading merged channels, guide data and provider candidates.",
                     )
-                    is LiveTvLoadState.Error -> AstraWaveStatePanel("Live TV unavailable", current.message)
+                    is LiveTvLoadState.Error -> AstraWaveErrorState(
+                        title = "Live TV unavailable",
+                        message = current.message,
+                        retryLabel = null,
+                    )
                     is LiveTvLoadState.Ready -> {
                         val snapshot = current.snapshot
                         val totalChannels = snapshot.freeChannelCount + snapshot.userChannelCount
-                        AstraWaveStatePanel(
-                            "$totalChannels channel candidates loaded",
-                            "${snapshot.groups.size} merged channels • ${snapshot.handoffCount} official free-provider options • alternates verified before playback",
-                        )
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            LiveMetric("CHANNELS", snapshot.groups.size.toString())
+                            LiveMetric("CANDIDATES", totalChannels.toString())
+                            LiveMetric("MY SOURCES", sources.count { it.enabled }.toString())
+                            LiveMetric("OFFICIAL", snapshot.handoffCount.toString())
+                        }
                         Spacer(Modifier.height(16.dp))
 
                         OutlinedTextField(
@@ -214,7 +223,7 @@ fun LiveTvHubScreen(
                             onValueChange = { query = it },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            label = { Text("Search channels") },
+                            label = { Text("Search channels, groups or sources") },
                         )
                         Spacer(Modifier.height(10.dp))
                         Row(
@@ -246,17 +255,21 @@ fun LiveTvHubScreen(
                             }
                             .let { visible ->
                                 if (filter == LiveTvFilter.RECENTS) {
-                                    visible.sortedBy { group -> recentIds.indexOf(group.canonicalName).let { if (it < 0) Int.MAX_VALUE else it } }
+                                    visible.sortedBy { group ->
+                                        recentIds.indexOf(group.canonicalName).let { index ->
+                                            if (index < 0) Int.MAX_VALUE else index
+                                        }
+                                    }
                                 } else visible
                             }
 
                         if (groups.isEmpty()) {
-                            AstraWaveStatePanel(
-                                "No channels match",
-                                when (filter) {
-                                    LiveTvFilter.FAVORITES -> "Favorite channels with the star icon, or switch back to All."
+                            AstraWaveEmptyState(
+                                title = "No channels match",
+                                message = when (filter) {
+                                    LiveTvFilter.FAVORITES -> "Favorite channels with the star, or switch back to All."
                                     LiveTvFilter.RECENTS -> "Channels you watch will appear here automatically."
-                                    LiveTvFilter.ALL -> "Try a different search, retry later, or add your own M3U/Xtream source."
+                                    LiveTvFilter.ALL -> "Try another search or add an authorized M3U/Xtream source."
                                 },
                             )
                         } else {
@@ -304,9 +317,9 @@ fun LiveTvHubScreen(
                                                     )
                                                     if (multiviewEligible) {
                                                         Text(
-                                                            if (multiviewCount >= 4) "Multiview full" else "+ Multiview",
-                                                            color = if (multiviewCount >= 4) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
-                                                            modifier = Modifier.clickable(enabled = multiviewCount < 4) {
+                                                            if (multiviewCount >= 6) "Mosaic full" else "+ Multiview",
+                                                            color = if (multiviewCount >= 6) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
+                                                            modifier = Modifier.clickable(enabled = multiviewCount < 6) {
                                                                 onAddToMultiview(
                                                                     MultiviewPane(
                                                                         id = "live:${group.canonicalName}",
@@ -326,7 +339,7 @@ fun LiveTvHubScreen(
                                             }
                                         }
                                         Text(
-                                            "${group.candidates.size} stream candidate${if (group.candidates.size == 1) "" else "s"}",
+                                            "${group.candidates.size} source${if (group.candidates.size == 1) "" else "s"} • best source learned at playback",
                                             color = AstraWaveColors.TertiaryText,
                                             style = MaterialTheme.typography.labelSmall,
                                         )
@@ -344,12 +357,9 @@ fun LiveTvHubScreen(
 
                         if (snapshot.handoffs.isNotEmpty() && filter == LiveTvFilter.ALL && normalizedQuery.isBlank()) {
                             Spacer(Modifier.height(24.dp))
-                            Text("Official Free Watch Options", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "Free provider destinations that open in their official app or website when a direct in-app stream is not authorized.",
-                                color = AstraWaveColors.SecondaryText,
-                                style = MaterialTheme.typography.bodyMedium,
+                            AstraWaveSectionHeader(
+                                title = "Official Free Watch Options",
+                                subtitle = "Provider destinations open in their official app or site when direct in-app playback is not authorized.",
                             )
                             Spacer(Modifier.height(10.dp))
                             snapshot.handoffs.take(40).forEach { handoff ->
@@ -357,7 +367,6 @@ fun LiveTvHubScreen(
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
                                             Text(handoff.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                                            Spacer(Modifier.height(2.dp))
                                             Text(
                                                 handoff.provider ?: handoff.group,
                                                 color = AstraWaveColors.SecondaryText,
@@ -379,6 +388,18 @@ fun LiveTvHubScreen(
                 Spacer(Modifier.height(28.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun LiveMetric(label: String, value: String) {
+    Column(
+        Modifier
+            .background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large)
+            .padding(horizontal = 17.dp, vertical = 11.dp),
+    ) {
+        Text(label, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+        Text(value, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
     }
 }
 
