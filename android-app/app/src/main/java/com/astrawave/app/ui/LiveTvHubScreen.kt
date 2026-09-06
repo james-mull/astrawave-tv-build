@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -22,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,12 +98,20 @@ fun LiveTvHubScreen(
     var mode by remember { mutableStateOf(LiveTvMode.CHANNELS) }
     var filter by remember { mutableStateOf(LiveTvFilter.ALL) }
     var query by remember { mutableStateOf("") }
+    var selectedGroup by remember { mutableStateOf<String?>(null) }
+    var selectedChannelId by remember { mutableStateOf<String?>(null) }
     var favoriteIds by remember { mutableStateOf(preferences.favoriteIds()) }
     var recentIds by remember { mutableStateOf(preferences.recentIds()) }
     var lastChannel by remember { mutableStateOf(playbackStore.last()) }
+    var refreshKey by remember { mutableStateOf(0) }
     var state by remember(sources, profileId) { mutableStateOf<LiveTvLoadState>(LiveTvLoadState.Loading) }
 
-    LaunchedEffect(sources, profileId) {
+    DisposableEffect(channelStore, profileId) {
+        val registration = channelStore.addChangeListener(profileId) { refreshKey += 1 }
+        onDispose { registration.close() }
+    }
+
+    LaunchedEffect(sources, profileId, refreshKey) {
         state = LiveTvLoadState.Loading
         state = try {
             val edits = channelStore.load(profileId)
@@ -176,204 +187,260 @@ fun LiveTvHubScreen(
     }
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp)) {
-            AstraWavePageHeader(
-                title = "Live TV",
-                subtitle = "TiviMate-style control with AstraWave Smart Source Fusion, personalized channels and automatic backup streams.",
-            )
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("ASTRAWAVE LIVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+                Text("Live TV", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+                Text(
+                    "Fast TV-first browsing with Smart Source Fusion, profile channel maps, catch-up-ready guide data and six-screen Multiview.",
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                )
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LiveModeButton("Watch", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
-                LiveModeButton("My Sources & Editor", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
-                lastChannel?.let { channel -> LiveModeButton("▶ Resume ${channel.name}", false, ::resumeLast) }
-                if (multiviewCount > 0) LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)
+                LiveModeButton("Sources & Editor", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+                lastChannel?.let { channel -> LiveModeButton("▶ ${channel.name}", false, ::resumeLast) }
+                if (multiviewCount > 0) LiveModeButton("Mosaic $multiviewCount/6", false, onOpenMultiview)
             }
         }
 
         when (mode) {
             LiveTvMode.SOURCES -> MyIptvScreen(sources = sources, onSourcesChanged = onSourcesChanged)
-            LiveTvMode.CHANNELS -> Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 4.dp),
-            ) {
-                when (val current = state) {
-                    LiveTvLoadState.Loading -> AstraWaveLoadingState("Getting Live TV ready", "Loading merged channels, guide mappings, profile edits and provider candidates.")
-                    is LiveTvLoadState.Error -> AstraWaveErrorState("Live TV unavailable", current.message, retryLabel = null)
-                    is LiveTvLoadState.Ready -> {
-                        val snapshot = current.snapshot
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            LiveMetric("CHANNELS", current.presentations.size.toString())
-                            LiveMetric("MY SOURCES", sources.count { it.enabled }.toString())
-                            LiveMetric("CUSTOM", current.customizedCount.toString())
-                            LiveMetric("EPG MAPS", current.epgOverrideCount.toString())
-                            LiveMetric("OFFICIAL", snapshot.handoffCount.toString())
+            LiveTvMode.CHANNELS -> when (val current = state) {
+                LiveTvLoadState.Loading -> Box(Modifier.fillMaxSize().padding(24.dp)) {
+                    AstraWaveLoadingState("Getting Live TV ready", "Loading merged channels, guide mappings, profile edits and source candidates.")
+                }
+                is LiveTvLoadState.Error -> Box(Modifier.fillMaxSize().padding(24.dp)) {
+                    AstraWaveErrorState("Live TV unavailable", current.message, retryLabel = "Refresh", onRetry = { refreshKey += 1 })
+                }
+                is LiveTvLoadState.Ready -> {
+                    val normalizedQuery = query.trim().lowercase()
+                    val groups = current.presentations.mapNotNull { it.displayGroup }.distinct().sorted()
+                    val filtered = current.presentations
+                        .filter { p -> selectedGroup == null || p.displayGroup == selectedGroup }
+                        .filter { p ->
+                            normalizedQuery.isBlank() || p.displayName.lowercase().contains(normalizedQuery) ||
+                                p.displayGroup.orEmpty().lowercase().contains(normalizedQuery) ||
+                                p.group.candidates.any { it.source.lowercase().contains(normalizedQuery) }
                         }
-                        Spacer(Modifier.height(16.dp))
-
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            label = { Text("Search channels, groups or sources") },
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            LiveFilterButton("All", filter == LiveTvFilter.ALL) { filter = LiveTvFilter.ALL }
-                            LiveFilterButton("★ Favorites ${favoriteIds.size}", filter == LiveTvFilter.FAVORITES) { filter = LiveTvFilter.FAVORITES }
-                            LiveFilterButton("Recent ${recentIds.size}", filter == LiveTvFilter.RECENTS) { filter = LiveTvFilter.RECENTS }
-                        }
-                        Spacer(Modifier.height(16.dp))
-
-                        val normalizedQuery = query.trim().lowercase()
-                        val visible = current.presentations
-                            .filter { presentation ->
-                                normalizedQuery.isBlank() ||
-                                    presentation.displayName.lowercase().contains(normalizedQuery) ||
-                                    presentation.displayGroup.orEmpty().lowercase().contains(normalizedQuery) ||
-                                    presentation.group.candidates.any { it.source.lowercase().contains(normalizedQuery) }
+                        .filter { p ->
+                            when (filter) {
+                                LiveTvFilter.ALL -> true
+                                LiveTvFilter.FAVORITES -> p.channelId in favoriteIds
+                                LiveTvFilter.RECENTS -> p.channelId in recentIds
                             }
-                            .filter { presentation ->
-                                when (filter) {
-                                    LiveTvFilter.ALL -> true
-                                    LiveTvFilter.FAVORITES -> presentation.channelId in favoriteIds
-                                    LiveTvFilter.RECENTS -> presentation.channelId in recentIds
+                        }
+                        .let { rows ->
+                            if (filter == LiveTvFilter.RECENTS) rows.sortedBy { recentIds.indexOf(it.channelId).let { i -> if (i < 0) Int.MAX_VALUE else i } } else rows
+                        }
+
+                    LaunchedEffect(filtered, selectedChannelId) {
+                        if (selectedChannelId == null || filtered.none { it.channelId == selectedChannelId }) {
+                            selectedChannelId = filtered.firstOrNull()?.channelId
+                        }
+                    }
+                    val selected = filtered.firstOrNull { it.channelId == selectedChannelId } ?: filtered.firstOrNull()
+
+                    Row(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(
+                            Modifier.width(205.dp).fillMaxSize().background(AstraWaveColors.BackgroundRaised, MaterialTheme.shapes.large).padding(10.dp),
+                        ) {
+                            Text("GROUPS", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                            Spacer(Modifier.height(8.dp))
+                            LiveGroupRow("All Channels", selectedGroup == null && filter == LiveTvFilter.ALL) {
+                                selectedGroup = null; filter = LiveTvFilter.ALL
+                            }
+                            LiveGroupRow("★ Favorites", filter == LiveTvFilter.FAVORITES) {
+                                selectedGroup = null; filter = LiveTvFilter.FAVORITES
+                            }
+                            LiveGroupRow("Recent", filter == LiveTvFilter.RECENTS) {
+                                selectedGroup = null; filter = LiveTvFilter.RECENTS
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                groups.take(80).forEach { group ->
+                                    LiveGroupRow(group, selectedGroup == group && filter == LiveTvFilter.ALL) {
+                                        selectedGroup = group; filter = LiveTvFilter.ALL
+                                    }
                                 }
                             }
-                            .let { rows ->
-                                if (filter == LiveTvFilter.RECENTS) {
-                                    rows.sortedBy { recentIds.indexOf(it.channelId).let { index -> if (index < 0) Int.MAX_VALUE else index } }
-                                } else rows
-                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text("${current.presentations.size} channels", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+                            Text("${current.customizedCount} customized • ${current.epgOverrideCount} EPG maps", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                        }
 
-                        if (visible.isEmpty()) {
-                            AstraWaveEmptyState(
-                                title = "No channels match",
-                                message = when (filter) {
-                                    LiveTvFilter.FAVORITES -> "Favorite channels with the star, or switch back to All."
-                                    LiveTvFilter.RECENTS -> "Channels you watch will appear here automatically."
-                                    LiveTvFilter.ALL -> "Try another search, unhide channels in Channel Editor, or add an authorized provider."
-                                },
+                        Column(
+                            Modifier.width(430.dp).fillMaxSize().background(AstraWaveColors.Surface, MaterialTheme.shapes.large).padding(10.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("Search channels") },
                             )
-                        } else {
-                            visible.take(600).forEach { presentation ->
-                                val group = presentation.group
-                                val candidate = group.bestCandidate
-                                val isFavorite = presentation.channelId in favoriteIds
-                                val health = candidate?.let {
-                                    fusion.score("live:${it.source}:${it.normalizedName}")
-                                }
-                                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                                    Column {
-                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Column(Modifier.weight(1f)) {
-                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Text(
-                                                        if (isFavorite) "★" else "☆",
-                                                        color = if (isFavorite) AstraWaveColors.Accent else AstraWaveColors.TertiaryText,
-                                                        modifier = Modifier.clickable { favoriteIds = preferences.toggleFavorite(presentation.channelId) },
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                    )
-                                                    Text(
-                                                        listOfNotNull(presentation.channelNumber?.let { "$it" }, presentation.displayName).joinToString("  "),
-                                                        color = AstraWaveColors.PrimaryText,
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        maxLines = 2,
-                                                    )
-                                                }
-                                                Spacer(Modifier.height(3.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                when (filter) {
+                                    LiveTvFilter.FAVORITES -> "Favorites"
+                                    LiveTvFilter.RECENTS -> "Recently watched"
+                                    LiveTvFilter.ALL -> selectedGroup ?: "All Channels"
+                                },
+                                color = AstraWaveColors.PrimaryText,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text("${filtered.size} visible", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                            Spacer(Modifier.height(8.dp))
+                            if (filtered.isEmpty()) {
+                                AstraWaveEmptyState("No channels match", "Change the group/search or unhide channels in Channel Editor.")
+                            } else {
+                                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                    filtered.take(700).forEach { presentation ->
+                                        val isSelected = presentation.channelId == selected?.channelId
+                                        val isFavorite = presentation.channelId in favoriteIds
+                                        Column(
+                                            Modifier.fillMaxWidth()
+                                                .background(if (isSelected) AstraWaveColors.SurfaceRaised else AstraWaveColors.Surface, MaterialTheme.shapes.medium)
+                                                .clickable { selectedChannelId = presentation.channelId }
+                                                .padding(horizontal = 10.dp, vertical = 9.dp),
+                                        ) {
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                                 Text(
-                                                    listOfNotNull(presentation.displayGroup, candidate?.source).joinToString(" • ").ifBlank { "Source unavailable" },
-                                                    color = AstraWaveColors.Accent,
-                                                    style = MaterialTheme.typography.labelMedium,
+                                                    listOfNotNull(presentation.channelNumber?.toString(), presentation.displayName).joinToString("  "),
+                                                    color = AstraWaveColors.PrimaryText,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    maxLines = 1,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                                Text(
+                                                    if (isFavorite) "★" else "☆",
+                                                    color = if (isFavorite) AstraWaveColors.Accent else AstraWaveColors.TertiaryText,
+                                                    modifier = Modifier.clickable { favoriteIds = preferences.toggleFavorite(presentation.channelId) },
                                                 )
                                             }
-                                            if (candidate != null) {
-                                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                                    if (health != null && health.samples > 0) {
-                                                        Text(
-                                                            "SMART ${health.score}",
-                                                            color = if (health.score >= 70) AstraWaveColors.Success else AstraWaveColors.Warning,
-                                                            style = MaterialTheme.typography.labelLarge,
-                                                        )
-                                                    }
-                                                    Text(
-                                                        "Watch",
-                                                        color = AstraWaveColors.Success,
-                                                        modifier = Modifier.clickable { play(group, presentation.displayName) },
-                                                        style = MaterialTheme.typography.labelLarge,
-                                                    )
-                                                    if (PlayerActivity.isDirectMediaUrl(candidate.url)) {
-                                                        Text(
-                                                            if (multiviewCount >= 6) "Mosaic full" else "+ Multiview",
-                                                            color = if (multiviewCount >= 6) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText,
-                                                            modifier = Modifier.clickable(enabled = multiviewCount < 6) {
-                                                                onAddToMultiview(
-                                                                    MultiviewPane(
-                                                                        id = "live:${presentation.channelId}",
-                                                                        title = presentation.displayName,
-                                                                        streamUrl = candidate.url,
-                                                                        sourceName = candidate.source,
-                                                                        channelId = candidate.id,
-                                                                    ),
-                                                                )
-                                                            },
-                                                            style = MaterialTheme.typography.labelLarge,
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                Text("Unavailable", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
+                                            presentation.group.currentProgram?.title?.let {
+                                                Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                                             }
+                                            Text(
+                                                presentation.group.bestCandidate?.source ?: "Source unavailable",
+                                                color = if (isSelected) AstraWaveColors.Accent else AstraWaveColors.TertiaryText,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                maxLines = 1,
+                                            )
                                         }
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(
-                                            "${group.candidates.size} source${if (group.candidates.size == 1) "" else "s"}${if (presentation.customized) " • CUSTOM" else ""}${if (presentation.epgIdOverride != null) " • EPG OVERRIDE" else ""}",
-                                            color = AstraWaveColors.TertiaryText,
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
-                                        group.currentProgram?.title?.let { now ->
-                                            Spacer(Modifier.height(7.dp))
-                                            Text("Now • $now", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                                        }
-                                        group.nextProgram?.title?.let { next -> Text("Next • $next", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1) }
+                                        Spacer(Modifier.height(3.dp))
                                     }
                                 }
                             }
                         }
 
-                        if (snapshot.handoffs.isNotEmpty() && filter == LiveTvFilter.ALL && normalizedQuery.isBlank()) {
-                            Spacer(Modifier.height(24.dp))
-                            AstraWaveSectionHeader(
-                                title = "Official Free Watch Options",
-                                subtitle = "Official provider destinations stay separate when native playback is not authorized.",
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            snapshot.handoffs.take(40).forEach { handoff ->
-                                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(handoff.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                                            Text(handoff.provider ?: handoff.group, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+                        Column(
+                            Modifier.weight(1f).fillMaxSize().background(AstraWaveColors.BackgroundRaised, MaterialTheme.shapes.large).padding(18.dp),
+                        ) {
+                            if (selected == null) {
+                                AstraWaveEmptyState("Select a channel", "Choose a channel to see program details, source health and quick actions.")
+                            } else {
+                                val group = selected.group
+                                val candidate = group.bestCandidate
+                                val health = candidate?.let { fusion.score("live:${it.source}:${it.normalizedName}") }
+                                Text(selected.displayGroup ?: "LIVE TV", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+                                Spacer(Modifier.height(5.dp))
+                                Text(
+                                    listOfNotNull(selected.channelNumber?.toString(), selected.displayName).joinToString("  "),
+                                    color = AstraWaveColors.PrimaryText,
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    maxLines = 2,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                group.currentProgram?.let { now ->
+                                    Text("NOW", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                                    Text(now.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 3)
+                                } ?: Text("No current guide data", color = AstraWaveColors.SecondaryText)
+                                group.nextProgram?.let { next ->
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("NEXT • ${next.title}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                                }
+                                Spacer(Modifier.height(18.dp))
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (candidate != null) {
+                                        AstraWavePrimaryButton("Watch") { play(group, selected.displayName) }
+                                        if (PlayerActivity.isDirectMediaUrl(candidate.url)) {
+                                            AstraWaveSecondaryButton(
+                                                label = if (multiviewCount >= 6) "Mosaic Full" else "+ Mosaic",
+                                                enabled = multiviewCount < 6,
+                                                onClick = {
+                                                    onAddToMultiview(
+                                                        MultiviewPane(
+                                                            id = "live:${selected.channelId}",
+                                                            title = selected.displayName,
+                                                            streamUrl = candidate.url,
+                                                            sourceName = candidate.source,
+                                                            channelId = candidate.id,
+                                                        ),
+                                                    )
+                                                },
+                                            )
                                         }
-                                        Text("Open Official", color = AstraWaveColors.Accent, modifier = Modifier.clickable { openOfficial(handoff.actionUrl) }, style = MaterialTheme.typography.labelLarge)
+                                    }
+                                    AstraWaveSecondaryButton(
+                                        label = if (selected.channelId in favoriteIds) "★ Favorite" else "☆ Favorite",
+                                        onClick = { favoriteIds = preferences.toggleFavorite(selected.channelId) },
+                                    )
+                                }
+                                Spacer(Modifier.height(18.dp))
+                                AstraWaveStatePanel(
+                                    title = if (health != null && health.samples > 0) "Smart Source ${health.score}/100" else "Smart Source learning",
+                                    message = buildString {
+                                        append(candidate?.source ?: "No active source")
+                                        append(" • ${group.candidates.size} source${if (group.candidates.size == 1) "" else "s"}")
+                                        if (selected.customized) append(" • Custom channel")
+                                        if (selected.epgIdOverride != null) append(" • Manual EPG map")
+                                        if (health != null && health.samples > 0) append(" • ${health.uptimePercent}% uptime")
+                                    },
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text("QUICK ACTIONS", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                                Spacer(Modifier.height(6.dp))
+                                Text("Hold OK / use Sources & Editor for rename, number, group, hide, logo and EPG mapping controls.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                                if (current.snapshot.handoffs.isNotEmpty()) {
+                                    Spacer(Modifier.height(18.dp))
+                                    Text("OFFICIAL OPTIONS", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                                    current.snapshot.handoffs.take(4).forEach { handoff ->
+                                        Text(
+                                            handoff.name,
+                                            color = AstraWaveColors.Accent,
+                                            modifier = Modifier.clickable { openOfficial(handoff.actionUrl) }.padding(vertical = 5.dp),
+                                            style = MaterialTheme.typography.labelLarge,
+                                        )
                                     }
                                 }
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(28.dp))
             }
         }
     }
 }
 
 @Composable
-private fun LiveMetric(label: String, value: String) {
-    Column(Modifier.background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.large).padding(horizontal = 17.dp, vertical = 11.dp)) {
-        Text(label, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
-        Text(value, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-    }
+private fun LiveGroupRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        color = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
+        modifier = Modifier.fillMaxWidth()
+            .background(if (selected) AstraWaveColors.Accent else AstraWaveColors.BackgroundRaised, MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        style = MaterialTheme.typography.labelLarge,
+        maxLines = 1,
+    )
+    Spacer(Modifier.height(3.dp))
 }
 
 @Composable
@@ -382,18 +449,6 @@ private fun LiveModeButton(label: String, selected: Boolean, onClick: () -> Unit
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (selected) AstraWaveColors.Accent else AstraWaveColors.SurfaceRaised,
-            contentColor = AstraWaveColors.PrimaryText,
-        ),
-        shape = MaterialTheme.shapes.large,
-    ) { Text(label, maxLines = 1) }
-}
-
-@Composable
-private fun LiveFilterButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) AstraWaveColors.Accent else AstraWaveColors.Surface,
             contentColor = AstraWaveColors.PrimaryText,
         ),
         shape = MaterialTheme.shapes.large,
