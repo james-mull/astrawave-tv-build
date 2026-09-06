@@ -368,7 +368,7 @@ fun LiveTvHubScreen(
                                 Spacer(Modifier.height(18.dp))
                                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     if (candidate != null) {
-                                        AstraWavePrimaryButton("Watch") { play(group, selected.displayName) }
+                                        AstraWavePrimaryButton(label = "Watch", onClick = { play(group, selected.displayName) })
                                         if (PlayerActivity.isDirectMediaUrl(candidate.url)) {
                                             AstraWaveSecondaryButton(
                                                 label = if (multiviewCount >= 6) "Mosaic Full" else "+ Mosaic",
