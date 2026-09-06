@@ -142,7 +142,10 @@ class CombinedLiveTvRepository(
             .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
     }
 
-    fun load(userSourcesConfig: List<IptvSource>): CombinedLiveTvSnapshot {
+    fun load(
+        userSourcesConfig: List<IptvSource>,
+        epgOverrides: Map<String, String> = emptyMap(),
+    ): CombinedLiveTvSnapshot {
         val free = runCatching { freeTv.loadChannels() }.getOrDefault(emptyList())
         val handoffs = runCatching { handoffRepository.load() }.getOrDefault(emptyList())
         val enabled = userSourcesConfig.filter { it.enabled }
@@ -154,10 +157,11 @@ class CombinedLiveTvRepository(
         }
         val programmes = (publicProgrammes + userProgrammes)
             .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
-        val groups = liveTv.merge(
+        val baseGroups = liveTv.merge(
             channelLists = listOf(free, userChannels),
             programmes = programmes,
         )
+        val groups = applyEpgOverrides(baseGroups, programmes, epgOverrides)
         return CombinedLiveTvSnapshot(
             groups = groups,
             handoffs = handoffs,
@@ -166,5 +170,32 @@ class CombinedLiveTvRepository(
             userChannelCount = userChannels.size,
             totalChannelGroups = groups.size + handoffs.size,
         )
+    }
+
+    private fun applyEpgOverrides(
+        groups: List<LiveChannelGroup>,
+        programmes: List<XmlTvProgramme>,
+        overrides: Map<String, String>,
+    ): List<LiveChannelGroup> {
+        if (overrides.isEmpty()) return groups
+        val byChannel = programmes.groupBy { it.channelId }
+        val now = System.currentTimeMillis()
+        return groups.map { group ->
+            val overrideId = overrides[group.canonicalName]?.trim().takeUnless { it.isNullOrBlank() } ?: return@map group
+            val schedule = byChannel[overrideId].orEmpty()
+                .distinctBy { "${it.start}:${it.stop}:${it.title}" }
+                .sortedBy { LiveTvRepository.parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
+            if (schedule.isEmpty()) return@map group
+            val current = schedule.firstOrNull { programme ->
+                val start = LiveTvRepository.parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                val stop = LiveTvRepository.parseXmlTvEpochMs(programme.stop) ?: return@firstOrNull false
+                now in start until stop
+            }
+            val next = schedule.firstOrNull { programme ->
+                val start = LiveTvRepository.parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                start > now && programme != current
+            }
+            group.copy(schedule = schedule, currentProgram = current, nextProgram = next)
+        }
     }
 }
