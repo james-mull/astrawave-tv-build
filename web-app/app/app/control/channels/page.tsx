@@ -144,7 +144,7 @@ export default function ChannelStudioPage(){
               return <button key={channel.id} onClick={()=>choose(channel)} style={{width:'100%',textAlign:'left',padding:'13px 14px',marginBottom:7,borderRadius:14,border:active?'1px solid #c38bff':'1px solid #28212f',background:active?'#241a31':'#0e0e14',color:'#f6f3f9',cursor:'pointer'}}>
                 <div style={{display:'flex',justifyContent:'space-between',gap:10}}><strong>{edit?.customNumber?`${edit.customNumber}  `:''}{edit?.customName||channel.name}</strong><span style={{fontSize:12,color:edit?.hidden?'#ff6f83':edit?'#c38bff':'#746d79'}}>{edit?.hidden?'HIDDEN':edit?'CUSTOM':'EDIT'}</span></div>
                 <div style={{fontSize:13,color:'#a39caa',marginTop:4}}>{edit?.customGroup||channel.group||'Uncategorized'} • {(channel.sources||[]).join(', ')||'Source pending'}</div>
-                <div style={{fontSize:12,color:'#746d79',marginTop:3}}>{channel.now?.title?`Now: ${channel.now.title}`:'No current EPG'}{edit?.epgIdOverride?' • EPG override':''}</div>
+                <div style={{fontSize:12,color:'#746d79',marginTop:3}}>{channel.now?`Now: ${channel.now}`:'No current EPG'}{edit?.epgIdOverride?' • EPG override':''}</div>
               </button>;
             })}
           </div>
