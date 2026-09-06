@@ -36,6 +36,7 @@ import com.astrawave.app.data.SportsGuideItem
 import com.astrawave.app.data.SportsGuideRepository
 import com.astrawave.app.data.SportsGuideSnapshot
 import com.astrawave.app.data.SportsPreferenceStore
+import com.astrawave.app.data.StremioLiveCatalogDiscovery
 import com.astrawave.app.data.StreamHealthChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -74,7 +75,8 @@ fun AstraWaveSportsScreen(
 
     val scope = rememberCoroutineScope()
     val preferences = remember { SportsPreferenceStore(context) }
-    var state by remember(sources) { mutableStateOf<SportsLoadState>(SportsLoadState.Loading) }
+    val addonLiveDiscovery = remember { StremioLiveCatalogDiscovery(context) }
+    var state by remember(sources, profileId) { mutableStateOf<SportsLoadState>(SportsLoadState.Loading) }
     var selectedDate by remember { mutableStateOf(LocalDate.now(ZoneOffset.UTC)) }
     var selectedLeague by remember { mutableStateOf<String?>(null) }
     var selectedSection by remember { mutableStateOf(SportsSection.FOR_YOU) }
@@ -82,10 +84,19 @@ fun AstraWaveSportsScreen(
     var favoriteTeams by remember(profileId) { mutableStateOf(preferences.teams(profileId)) }
     var reminders by remember(profileId) { mutableStateOf(preferences.reminders(profileId)) }
 
-    LaunchedEffect(sources, selectedDate) {
+    LaunchedEffect(sources, selectedDate, profileId) {
         state = SportsLoadState.Loading
         state = try {
-            SportsLoadState.Ready(withContext(Dispatchers.IO) { repository.load(date = selectedDate, sources = sources) })
+            SportsLoadState.Ready(
+                withContext(Dispatchers.IO) {
+                    val addonSportsChannels = runCatching { addonLiveDiscovery.sportsChannelNames(profileId) }.getOrDefault(emptyList())
+                    repository.load(
+                        date = selectedDate,
+                        sources = sources,
+                        addonSportsChannelNames = addonSportsChannels,
+                    )
+                },
+            )
         } catch (error: Exception) {
             SportsLoadState.Error(error.message ?: "Unable to load sports schedule")
         }
@@ -164,7 +175,7 @@ fun AstraWaveSportsScreen(
                 Text("ASTRAWAVE SPORTS", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
                 Text("Game Day", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
                 Text(
-                    "Events first: favorite teams, live scores, reminders, matched broadcasters and six-screen Sports Mosaic.",
+                    "Events first: favorite teams, live scores, reminders, matched broadcasters, hardcoded channel catalogs and six-screen Sports Mosaic.",
                     color = AstraWaveColors.SecondaryText,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
@@ -180,7 +191,7 @@ fun AstraWaveSportsScreen(
 
         when (val current = state) {
             SportsLoadState.Loading -> Column(Modifier.fillMaxSize().padding(24.dp)) {
-                AstraWaveLoadingState("Building Game Day", "Loading events, broadcasters and matched channels.")
+                AstraWaveLoadingState("Building Game Day", "Loading events, broadcasters, hardcoded addon channel metadata and matched sources.")
             }
             is SportsLoadState.Error -> Column(Modifier.fillMaxSize().padding(24.dp)) {
                 AstraWaveErrorState("Sports unavailable", current.message, retryLabel = "Try again", onRetry = { selectedDate = selectedDate.plusDays(0) })
@@ -235,22 +246,19 @@ fun AstraWaveSportsScreen(
                                 SportsSection.FINAL -> final.size
                                 SportsSection.ALL -> snapshot.events.size
                             }
-                            SportsSideRow("${sectionLabel(section)}  $count", selectedSection == section) {
-                                selectedSection = section
-                            }
+                            SportsSideRow("${sectionLabel(section)}  $count", selectedSection == section) { selectedSection = section }
                         }
                         Spacer(Modifier.height(8.dp))
                         Text("LEAGUES", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
                         Spacer(Modifier.height(6.dp))
                         SportsSideRow("All leagues", selectedLeague == null) { selectedLeague = null }
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                            leagues.take(40).forEach { league ->
-                                SportsSideRow(league, selectedLeague == league) { selectedLeague = league }
-                            }
+                            leagues.take(40).forEach { league -> SportsSideRow(league, selectedLeague == league) { selectedLeague = league } }
                         }
                         Spacer(Modifier.height(8.dp))
                         Text("${favoriteTeams.size} favorite teams", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
                         Text("${reminders.size} reminders", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                        Text("${snapshot.addonSportsChannelCount} addon sports channels", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
                     }
 
                     Column(
@@ -262,7 +270,7 @@ fun AstraWaveSportsScreen(
                                 Text("${visible.size} events", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
                             }
                             Text(
-                                "${snapshot.combinedChannelGroups} channel groups",
+                                "${snapshot.combinedChannelGroups} playable groups • ${snapshot.addonSportsChannelCount} addon catalog channels",
                                 color = AstraWaveColors.TertiaryText,
                                 style = MaterialTheme.typography.labelSmall,
                             )
@@ -298,6 +306,9 @@ fun AstraWaveSportsScreen(
                                             style = MaterialTheme.typography.bodySmall,
                                             maxLines = 1,
                                         )
+                                        if (item.addonCatalogMatches.isNotEmpty()) {
+                                            Text("Addon match • ${item.addonCatalogMatches.joinToString()}", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                        }
                                     }
                                     Spacer(Modifier.height(3.dp))
                                 }
@@ -336,10 +347,7 @@ fun AstraWaveSportsScreen(
                             Spacer(Modifier.height(16.dp))
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (selected.watchCandidate != null) AstraWavePrimaryButton("▶ Watch", { play(selected) })
-                                AstraWaveSecondaryButton(
-                                    label = if (reminderActive) "✓ Reminded" else "＋ Reminder",
-                                    onClick = { toggleReminder(selected) },
-                                )
+                                AstraWaveSecondaryButton(label = if (reminderActive) "✓ Reminded" else "＋ Reminder", onClick = { toggleReminder(selected) })
                                 if (selected.watchCandidate != null) {
                                     AstraWaveSecondaryButton(
                                         label = if (multiviewCount >= 6) "Mosaic Full" else "＋ Mosaic",
@@ -350,27 +358,23 @@ fun AstraWaveSportsScreen(
                             }
                             Spacer(Modifier.height(14.dp))
                             selected.event.homeTeam?.let { team ->
-                                AstraWaveSecondaryButton(
-                                    label = if (isFavoriteHome) "★ $team" else "☆ $team",
-                                    onClick = { toggleTeam(team, selected.event.league) },
-                                )
+                                AstraWaveSecondaryButton(label = if (isFavoriteHome) "★ $team" else "☆ $team", onClick = { toggleTeam(team, selected.event.league) })
                                 Spacer(Modifier.height(6.dp))
                             }
                             selected.event.awayTeam?.let { team ->
-                                AstraWaveSecondaryButton(
-                                    label = if (isFavoriteAway) "★ $team" else "☆ $team",
-                                    onClick = { toggleTeam(team, selected.event.league) },
-                                )
+                                AstraWaveSecondaryButton(label = if (isFavoriteAway) "★ $team" else "☆ $team", onClick = { toggleTeam(team, selected.event.league) })
                             }
                             Spacer(Modifier.height(16.dp))
                             AstraWaveStatePanel(
-                                title = if (selected.watchCandidate != null) "Watch Ready" else "Broadcaster match pending",
+                                title = if (selected.watchCandidate != null) "Watch Ready" else if (selected.addonCatalogMatches.isNotEmpty()) "Catalog broadcaster match" else "Broadcaster match pending",
                                 message = buildString {
                                     if (selected.watchCandidate != null) {
                                         append(selected.watchCandidate.channelName)
                                         append(" • ${selected.watchCandidate.source}")
                                         val backups = (selected.resolution?.candidates?.size ?: 1) - 1
                                         if (backups > 0) append(" • $backups backup${if (backups == 1) "" else "s"}")
+                                    } else if (selected.addonCatalogMatches.isNotEmpty()) {
+                                        append("Hardcoded addon catalog match: ${selected.addonCatalogMatches.joinToString()}. Metadata match only; playback still requires an eligible authorized source.")
                                     } else if (selected.broadcasterNames.isNotEmpty()) {
                                         append("Broadcast: ${selected.broadcasterNames.joinToString()}")
                                     } else append("Broadcast data pending")
@@ -431,7 +435,16 @@ private fun SourceLine(item: SportsGuideItem) {
                 color = AstraWaveColors.Success,
                 style = MaterialTheme.typography.labelLarge,
             )
+            if (item.addonCatalogMatches.isNotEmpty()) {
+                Text("Also found in addon catalog: ${item.addonCatalogMatches.joinToString()}", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelSmall, maxLines = 2)
+            }
         }
+        item.addonCatalogMatches.isNotEmpty() -> Text(
+            "Addon catalog match: ${item.addonCatalogMatches.joinToString()} • metadata only until an authorized source is matched",
+            color = AstraWaveColors.Accent,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 2,
+        )
         item.broadcasterNames.isNotEmpty() -> Text(
             "Broadcast: ${item.broadcasterNames.joinToString()} • no matched playable channel yet",
             color = AstraWaveColors.SecondaryText,
@@ -456,5 +469,6 @@ private fun eventBadge(item: SportsGuideItem): String = when {
     item.event.isLive -> "● LIVE"
     item.event.isFinal -> "FINAL"
     item.watchCandidate != null -> "WATCH READY"
+    item.addonCatalogMatches.isNotEmpty() -> "CATALOG MATCH"
     else -> "UPCOMING"
 }
