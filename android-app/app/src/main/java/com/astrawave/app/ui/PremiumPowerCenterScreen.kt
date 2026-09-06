@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.LiveProviderType
-import com.astrawave.app.core.TravelModePolicy
 import com.astrawave.app.data.AstraIntentEngine
 import com.astrawave.app.data.DownloadTravelStore
 import com.astrawave.app.data.HouseholdWatchStore
@@ -50,8 +49,8 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
     ) {
         Text("ASTRAWAVE PREMIUM", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
         AstraWavePageHeader(
-            "Power Center",
-            "DVR, catch-up capability, predictive source health, downloads, Travel Mode, household viewing and Astra intelligence.",
+            title = "Power Center",
+            subtitle = "DVR, catch-up capability, predictive source health, downloads, Travel Mode, household viewing and Astra intelligence.",
         )
 
         PremiumMetricRail(
@@ -69,10 +68,13 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
                 label = { Text("Try: Find a funny movie under 2 hours") },
             )
             Spacer(Modifier.height(8.dp))
-            AstraWavePrimaryButton("Ask Astra") {
-                val intent = AstraIntentEngine.parse(astraQuery)
-                astraResult = "${intent.type.name.replace('_', ' ')} • runtime ${intent.maxRuntimeMinutes ?: "any"} min • rating ${intent.minRating ?: "any"}${intent.titleHint?.let { " • like $it" }.orEmpty()}${intent.teamHint?.let { " • team $it" }.orEmpty()}"
-            }
+            AstraWavePrimaryButton(
+                label = "Ask Astra",
+                onClick = {
+                    val intent = AstraIntentEngine.parse(astraQuery)
+                    astraResult = "${intent.type.name.replace('_', ' ')} • runtime ${intent.maxRuntimeMinutes ?: "any"} min • rating ${intent.minRating ?: "any"}${intent.titleHint?.let { " • like $it" }.orEmpty()}${intent.teamHint?.let { " • team $it" }.orEmpty()}"
+                },
+            )
             Spacer(Modifier.height(8.dp))
             Text(astraResult, color = AstraWaveColors.SecondaryText)
         }
@@ -104,10 +106,13 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
                     Text("Automatic travel preparation", color = AstraWaveColors.PrimaryText)
                     Text("Wi-Fi only by default; queues only already-authorized direct media.", color = AstraWaveColors.SecondaryText)
                 }
-                Switch(checked = travel.enabled, onCheckedChange = {
-                    travel = travel.copy(enabled = it)
-                    downloads.saveTravelPolicy(profileId, travel)
-                })
+                Switch(
+                    checked = travel.enabled,
+                    onCheckedChange = {
+                        travel = travel.copy(enabled = it)
+                        downloads.saveTravelPolicy(profileId, travel)
+                    },
+                )
             }
             Spacer(Modifier.height(10.dp))
             Text("Queue: ${downloads.downloads(profileId).count { it.state.name != "COMPLETE" }} pending • ${downloads.downloads(profileId).count { it.state.name == "COMPLETE" }} ready offline", color = AstraWaveColors.SecondaryText)
@@ -115,16 +120,26 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
 
         PremiumPanel("Household Watch", "Movie Night voting and shared decisions") {
             val latest = household.sessions().firstOrNull()
-            if (latest == null) Text("No active Watch Night yet. Create one from the web Control Center or household tools.", color = AstraWaveColors.SecondaryText)
-            else Text("${latest.name} • ${latest.candidates.size} choices • leader: ${latest.winner()?.title ?: "waiting for votes"}", color = AstraWaveColors.PrimaryText)
+            if (latest == null) {
+                Text("No active Watch Night yet. Create one from the web Control Center or household tools.", color = AstraWaveColors.SecondaryText)
+            } else {
+                Text("${latest.name} • ${latest.candidates.size} choices • leader: ${latest.winner()?.title ?: "waiting for votes"}", color = AstraWaveColors.PrimaryText)
+            }
         }
 
         PremiumPanel("Provider Compatibility", "One entertainment OS") {
             val providers = listOf(
-                LiveProviderType.M3U, LiveProviderType.XTREAM, LiveProviderType.STALKER,
-                LiveProviderType.JELLYFIN_LIVE_TV, LiveProviderType.PLEX_LIVE_TV, LiveProviderType.HDHOMERUN,
-                LiveProviderType.TVHEADEND, LiveProviderType.ENIGMA2, LiveProviderType.WEBDAV,
-                LiveProviderType.SMB, LiveProviderType.LOCAL,
+                LiveProviderType.M3U,
+                LiveProviderType.XTREAM,
+                LiveProviderType.STALKER,
+                LiveProviderType.JELLYFIN_LIVE_TV,
+                LiveProviderType.PLEX_LIVE_TV,
+                LiveProviderType.HDHOMERUN,
+                LiveProviderType.TVHEADEND,
+                LiveProviderType.ENIGMA2,
+                LiveProviderType.WEBDAV,
+                LiveProviderType.SMB,
+                LiveProviderType.LOCAL,
             )
             Text(providers.joinToString(" • ") { it.name.replace('_', ' ') }, color = AstraWaveColors.SecondaryText)
             Spacer(Modifier.height(6.dp))
