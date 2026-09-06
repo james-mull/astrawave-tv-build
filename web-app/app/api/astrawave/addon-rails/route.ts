@@ -8,6 +8,13 @@ const reviewedManifests = [
   'https://opensubtitles-v3.strem.io/manifest.json',
 ];
 
+const customerHardcodedManifests = [
+  'https://848b3516657c-usatv.baby-beamup.club/manifest.json',
+  'https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/bmZ4LGRucCxhbXAsYXRwLGhibSxwbXAscGNwLGhsdSxjcnUsbmZrLGN0cyxkcGUsc2hhLGlxaSxiYm86OlVTOjE3ODg3MzE0NjkxNzQ6MDowOlVT/manifest.json',
+];
+
+const defaultManifests = [...reviewedManifests, ...customerHardcodedManifests].filter((url,index,all)=>all.indexOf(url)===index);
+
 function baseUrl(manifestUrl: string) {
   return manifestUrl.replace(/\/manifest\.json$/i, '').replace(/\/$/, '');
 }
@@ -37,19 +44,21 @@ async function loadAddon(manifestUrl: string) {
     if (!['movie', 'series', 'tv', 'channel'].includes(type)) return false;
     const extras = Array.isArray(catalog.extra) ? catalog.extra : [];
     return !extras.some((extra: any) => typeof extra === 'object' && extra?.isRequired === true);
-  }).slice(0, 10);
+  }).slice(0, 18);
 
   const rows = await Promise.allSettled(catalogs.map(async (catalog: any) => {
     const url = `${base}/catalog/${encodeURIComponent(catalog.type)}/${encodeURIComponent(catalog.id)}.json`;
     const response = await fetch(url, { next: { revalidate: 900 } });
     if (!response.ok) throw new Error(`Catalog ${response.status}`);
     const body = await response.json();
-    const items = (body.metas || []).slice(0, 30).map((meta: any) => mapMeta(meta, catalog.type));
+    const items = (body.metas || []).slice(0, 40).map((meta: any) => mapMeta(meta, catalog.type));
     return {
       title: `${manifest.name || 'Addon'} • ${catalog.name || catalog.id}`,
       source: manifest.name || 'Stremio addon',
       addonId: manifest.id,
       manifestUrl,
+      trustedDefault: reviewedManifests.includes(manifestUrl),
+      customerHardcoded: customerHardcodedManifests.includes(manifestUrl),
       items,
     };
   }));
@@ -59,18 +68,23 @@ async function loadAddon(manifestUrl: string) {
     name: manifest.name,
     version: manifest.version,
     manifestUrl,
+    trustedDefault: reviewedManifests.includes(manifestUrl),
+    customerHardcoded: customerHardcodedManifests.includes(manifestUrl),
     resources: manifest.resources || [],
     rows: rows.flatMap((row) => row.status === 'fulfilled' && row.value.items.length ? [row.value] : []),
   };
 }
 
 export async function GET() {
-  const settled = await Promise.allSettled(reviewedManifests.map(loadAddon));
+  const settled = await Promise.allSettled(defaultManifests.map(loadAddon));
   const addons = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
   return NextResponse.json({
-    reviewedOnly: true,
-    manifests: reviewedManifests,
+    reviewedOnly: false,
+    reviewedManifests,
+    customerHardcodedManifests,
+    manifests: defaultManifests,
     addons,
     rails: addons.flatMap((addon) => addon.rows),
+    policy: 'Catalog metadata from customer-hardcoded manifests may be displayed by default. Stream playback remains separately authorization gated.',
   });
 }
