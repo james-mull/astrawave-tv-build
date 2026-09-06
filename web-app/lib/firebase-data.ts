@@ -6,6 +6,11 @@ export type CloudProgress = { mediaId: string; kind: string; title: string; posi
 export type CloudAddon = { id:string; name:string; kind:'stremio'|'cloudstream'|'provider-catalog'; url?:string|null; enabled:boolean; reviewed?:boolean; custom?:boolean };
 export type CloudSource = { id:string; name:string; type:'M3U'|'XTREAM'|'XMLTV'|'PUBLIC'|'STALKER'|'JELLYFIN'|'PLEX'|'HDHOMERUN'|'TVHEADEND'|'ENIGMA2'; enabled:boolean; priority?:number; config?:Record<string,unknown> };
 export type CloudAppConfig = { version:number; activeLiveSource?:string; theme?:'dark'|'system'; homeDensity?:'comfortable'|'compact'; autoplayTrailers?:boolean; aiDiscovery?:boolean; preferredLanguage?:string; preferredRegion?:string; addons?:CloudAddon[]; updatedAt?:unknown };
+export type CloudChannelCustomization = {
+  id:string; profileId:string; channelId:string; customName?:string|null; customNumber?:number|null;
+  customGroup?:string|null; hidden:boolean; sortOrder?:number; epgIdOverride?:string|null;
+  logoUrlOverride?:string|null; updatedAt?:unknown;
+};
 
 export type CloudDevice = {
   id:string; name:string; type:'web'|'phone'|'tablet'|'android-tv'|'fire-tv'|'cast';
@@ -39,6 +44,10 @@ export const FirebaseData={
   async listSources(uid:string):Promise<CloudSource[]>{const snaps=await getDocs(userCollection(uid,'sources'));return snaps.docs.map(x=>({id:x.id,...(x.data() as Omit<CloudSource,'id'>)}))},
   async saveSource(uid:string,source:CloudSource){const{id,...payload}=source;await setDoc(doc(requireDb(),'users',uid,'sources',id),{...payload,updatedAt:serverTimestamp()},{merge:true})},
   async deleteSource(uid:string,sourceId:string){await deleteDoc(doc(requireDb(),'users',uid,'sources',sourceId))},
+
+  async listChannelCustomizations(uid:string):Promise<CloudChannelCustomization[]>{const snaps=await getDocs(userCollection(uid,'channelCustomizations'));return snaps.docs.map(x=>({id:x.id,...(x.data() as Omit<CloudChannelCustomization,'id'>)}))},
+  async saveChannelCustomization(uid:string,item:CloudChannelCustomization){const{id,...payload}=item;await setDoc(doc(requireDb(),'users',uid,'channelCustomizations',id),{...payload,updatedAt:serverTimestamp()},{merge:true})},
+  async deleteChannelCustomization(uid:string,id:string){await deleteDoc(doc(requireDb(),'users',uid,'channelCustomizations',id))},
 
   async listDevices(uid:string):Promise<CloudDevice[]>{const snaps=await getDocs(userCollection(uid,'devices'));return snaps.docs.map(x=>({id:x.id,...(x.data() as Omit<CloudDevice,'id'>)}))},
   async saveDevice(uid:string,device:CloudDevice){const{id,...payload}=device;await setDoc(doc(requireDb(),'users',uid,'devices',id),{...payload,lastSeenAt:serverTimestamp()},{merge:true})},
