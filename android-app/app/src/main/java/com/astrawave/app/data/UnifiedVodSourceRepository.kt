@@ -13,11 +13,13 @@ import kotlinx.coroutines.coroutineScope
  *
  * The repository intentionally separates catalog discovery from playback eligibility. Enabled
  * addons may enrich metadata, but only sources that pass AstraWave's explicit authorization policy
- * and health checks are returned as playable candidates.
+ * and health checks are returned as playable candidates. User-provided Xtream accounts are treated
+ * as customer-authorized sources and are read from the device's Keystore-backed IPTV source store.
  */
 class UnifiedVodSourceRepository(context: Context) {
     private val appContext = context.applicationContext
     private val publicSources = SourceDiscoveryRepository()
+    private val xtreamSources = XtreamVodSourceResolver(appContext)
     private val addonStore = StremioAddonStore(appContext)
     private val authorizationStore = VodProviderAuthorizationStore(appContext)
     private val catalogGateway = StremioHttpGateway()
@@ -34,6 +36,7 @@ class UnifiedVodSourceRepository(context: Context) {
      */
     suspend fun plan(request: ScrapeRequest, profileId: String = "default"): VodPlaybackPlan = coroutineScope {
         val publicDeferred = async { runCatching { publicSources.discover(request) }.getOrDefault(emptyList()) }
+        val xtreamDeferred = async { runCatching { xtreamSources.discover(request, profileId) }.getOrDefault(emptyList()) }
         val stremioDeferred = async {
             runCatching {
                 val exactId = request.externalIds["stremio_id"]
@@ -46,7 +49,7 @@ class UnifiedVodSourceRepository(context: Context) {
             }.getOrDefault(emptyList())
         }
 
-        val ranked = (publicDeferred.await() + stremioDeferred.await())
+        val ranked = (publicDeferred.await() + xtreamDeferred.await() + stremioDeferred.await())
             .groupBy { normalizeUrl(it.link.url) }
             .mapNotNull { (_, duplicates) -> duplicates.maxByOrNull { it.score } }
             .sortedWith(
