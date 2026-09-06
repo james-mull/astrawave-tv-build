@@ -9,6 +9,7 @@ data class GuideChannelRow(
     val group: String?,
     val now: XmlTvProgramme?,
     val next: XmlTvProgramme?,
+    val programmes: List<XmlTvProgramme> = emptyList(),
     val playableCandidateCount: Int,
     val preferredSource: String?,
     val playableUrl: String?,
@@ -25,9 +26,7 @@ data class GuideSnapshot(
 )
 
 /** Guide-facing projection over direct Live TV plus reviewed official-provider handoffs. */
-class GuideRepository(
-    private val combined: CombinedLiveTvRepository = CombinedLiveTvRepository(),
-) {
+class GuideRepository(private val combined: CombinedLiveTvRepository = CombinedLiveTvRepository()) {
     fun load(sources: List<IptvSource>): GuideSnapshot {
         val live = combined.load(sources)
         val directRows = live.groups.map { group ->
@@ -39,6 +38,7 @@ class GuideRepository(
                 group = preferred?.group,
                 now = group.currentProgram,
                 next = group.nextProgram,
+                programmes = group.schedule,
                 playableCandidateCount = group.candidates.size,
                 preferredSource = preferred?.source,
                 playableUrl = preferred?.url,
@@ -47,23 +47,13 @@ class GuideRepository(
         }
         val handoffRows = live.handoffs.map { handoff ->
             GuideChannelRow(
-                id = "handoff:${handoff.id}",
-                name = handoff.name,
-                logo = null,
-                group = handoff.group,
-                now = null,
-                next = null,
-                playableCandidateCount = 0,
-                preferredSource = handoff.provider ?: "Official provider",
-                playableUrl = null,
-                playableUrls = emptyList(),
-                externalUrl = handoff.actionUrl,
+                id = "handoff:${handoff.id}", name = handoff.name, logo = null, group = handoff.group,
+                now = null, next = null, programmes = emptyList(), playableCandidateCount = 0,
+                preferredSource = handoff.provider ?: "Official provider", playableUrl = null, playableUrls = emptyList(), externalUrl = handoff.actionUrl,
             )
         }
         return GuideSnapshot(
-            rows = (directRows + handoffRows).sortedWith(
-                compareBy<GuideChannelRow> { it.group ?: "ZZZ" }.thenBy { it.name },
-            ),
+            rows = (directRows + handoffRows).sortedWith(compareBy<GuideChannelRow> { it.group ?: "ZZZ" }.thenBy { it.name }),
             sourceGroups = live.totalChannelGroups,
             freeChannelCount = live.freeChannelCount,
             handoffCount = live.handoffCount,
