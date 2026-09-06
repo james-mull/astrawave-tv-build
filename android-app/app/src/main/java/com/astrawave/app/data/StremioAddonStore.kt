@@ -13,14 +13,14 @@ class StremioAddonStore(context: Context) {
     private val prefs = context.getSharedPreferences("astrawave_stremio_addons_v1", Context.MODE_PRIVATE)
 
     fun load(profileId: String): List<InstalledAddon> {
-        ensureReviewedDefaults()
+        ensureHardcodedDefaults()
         return decodeAll()
             .filter { addon -> addon.enabledProfileIds.isEmpty() || profileId in addon.enabledProfileIds }
             .sortedBy { it.sortOrder }
     }
 
     fun loadAll(): List<InstalledAddon> {
-        ensureReviewedDefaults()
+        ensureHardcodedDefaults()
         return decodeAll().sortedBy { it.sortOrder }
     }
 
@@ -56,13 +56,17 @@ class StremioAddonStore(context: Context) {
         return installed
     }
 
-    private fun ensureReviewedDefaults() {
-        if (prefs.getBoolean(KEY_REVIEWED_DEFAULTS_SEEDED, false)) return
+    /**
+     * Seed both reviewed AstraWave defaults and customer-supplied hardcoded catalog manifests.
+     * Stream resolution remains separately authorization-gated by StremioHttpGateway.
+     */
+    private fun ensureHardcodedDefaults() {
+        if (prefs.getBoolean(KEY_HARDCODED_DEFAULTS_SEEDED, false)) return
         val gateway = StremioHttpGateway()
-        REVIEWED_DEFAULT_MANIFESTS.forEach { manifestUrl ->
+        HARDCODED_DEFAULT_MANIFESTS.distinct().forEach { manifestUrl ->
             runCatching { install(manifestUrl, gateway) }
         }
-        prefs.edit().putBoolean(KEY_REVIEWED_DEFAULTS_SEEDED, true).apply()
+        prefs.edit().putBoolean(KEY_HARDCODED_DEFAULTS_SEEDED, true).apply()
     }
 
     private fun decodeAll(): List<InstalledAddon> {
@@ -171,7 +175,10 @@ class StremioAddonStore(context: Context) {
 
     companion object {
         private const val KEY_ADDONS = "installed"
-        private const val KEY_REVIEWED_DEFAULTS_SEEDED = "reviewed_defaults_seeded_v1"
+        private const val KEY_HARDCODED_DEFAULTS_SEEDED = "hardcoded_defaults_seeded_v2"
+
+        const val USA_TV_MANIFEST = "https://848b3516657c-usatv.baby-beamup.club/manifest.json"
+        const val NETFLIX_CATALOG_MANIFEST = "https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/bmZ4LGRucCxhbXAsYXRwLGhibSxwbXAscGNwLGhsdSxjcnUsbmZrLGN0cyxkcGUsc2hhLGlxaSxiYm86OlVTOjE3ODg3MzE0NjkxNzQ6MDowOlVT/manifest.json"
 
         val REVIEWED_DEFAULT_MANIFESTS = listOf(
             "https://v3-cinemeta.strem.io/manifest.json",
@@ -180,5 +187,12 @@ class StremioAddonStore(context: Context) {
             "https://caching.stremio.net/publicdomainmovies.now.sh/manifest.json",
             "https://opensubtitles-v3.strem.io/manifest.json",
         )
+
+        val CUSTOMER_HARDCODED_MANIFESTS = listOf(
+            USA_TV_MANIFEST,
+            NETFLIX_CATALOG_MANIFEST,
+        )
+
+        val HARDCODED_DEFAULT_MANIFESTS = REVIEWED_DEFAULT_MANIFESTS + CUSTOMER_HARDCODED_MANIFESTS
     }
 }
