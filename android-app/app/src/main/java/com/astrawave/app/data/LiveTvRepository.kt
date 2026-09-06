@@ -26,6 +26,7 @@ data class LiveChannelGroup(
     val candidates: List<LiveChannel>,
     val currentProgram: XmlTvProgramme? = null,
     val nextProgram: XmlTvProgramme? = null,
+    val schedule: List<XmlTvProgramme> = emptyList(),
 ) {
     val bestCandidate: LiveChannel? get() = candidates.minByOrNull { it.priority }
 }
@@ -72,7 +73,6 @@ class LiveTvRepository {
             .groupBy(::channelIdentityKey)
             .map { (identityKey, candidates) ->
                 val ordered = candidates.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.source })
-                val first = ordered.first()
                 val schedule = ordered.asSequence()
                     .mapNotNull { it.tvgId?.takeIf(String::isNotBlank) }
                     .flatMap { byTvg[it].orEmpty().asSequence() }
@@ -94,6 +94,7 @@ class LiveTvRepository {
                     candidates = ordered,
                     currentProgram = current,
                     nextProgram = next,
+                    schedule = schedule,
                 )
             }
             .sortedWith(compareBy<LiveChannelGroup> { it.candidates.firstOrNull()?.group ?: "ZZZ" }.thenBy { it.displayName })
@@ -103,62 +104,31 @@ class LiveTvRepository {
         runCatching { StreamHealthChecker.check(candidate.url).reachable }.getOrDefault(false)
     }
 
-    /** Returns only a health-verified candidate. A dead/unverified fallback is never called playable. */
     fun choosePlayable(group: LiveChannelGroup): LiveChannel? = healthyCandidates(group).firstOrNull()
 
     companion object {
-        private val xmlTvFormats = listOf(
-            "yyyyMMddHHmmss Z",
-            "yyyyMMddHHmm Z",
-            "yyyyMMddHHmmss",
-            "yyyyMMddHHmm",
-        )
-
+        private val xmlTvFormats = listOf("yyyyMMddHHmmss Z", "yyyyMMddHHmm Z", "yyyyMMddHHmmss", "yyyyMMddHHmm")
         fun parseXmlTvEpochMs(raw: String): Long? {
-            val value = raw.trim()
-            if (value.isBlank()) return null
-            xmlTvFormats.forEach { pattern ->
-                runCatching {
-                    val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
-                    val date: Date = parser.parse(value) ?: return@runCatching null
-                    return date.time
-                }
-            }
+            val value = raw.trim(); if (value.isBlank()) return null
+            xmlTvFormats.forEach { pattern -> runCatching {
+                val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
+                val date: Date = parser.parse(value) ?: return@runCatching null
+                return date.time
+            } }
             return null
         }
 
-        /**
-         * Channel names are the cross-provider identity because public playlists frequently use
-         * incompatible tvg-id schemes for the same station. Keeping tvg-id on each candidate still
-         * lets the merged group consume guide data from every known identifier.
-         */
-        fun channelIdentityKey(channel: LiveChannel): String =
-            channel.normalizedName
-                .takeIf { it.isNotBlank() }
-                ?.let { "name:$it" }
-                ?: channel.tvgId
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
-                    ?.lowercase(Locale.US)
-                    ?.let { "tvg:$it" }
-                ?: "url:${channel.url}"
+        fun channelIdentityKey(channel: LiveChannel): String = channel.normalizedName.takeIf { it.isNotBlank() }?.let { "name:$it" }
+            ?: channel.tvgId?.trim()?.takeIf { it.isNotBlank() }?.lowercase(Locale.US)?.let { "tvg:$it" }
+            ?: "url:${channel.url}"
 
         fun normalizeChannelName(raw: String): String = raw.lowercase(Locale.US)
-            .replace("+", " plus ")
-            .replace("&", " and ")
+            .replace("+", " plus ").replace("&", " and ")
             .replace(Regex("\\b(uhd|4k|fhd|hd|sd|hevc|h265|h264|60fps|50fps)\\b"), " ")
             .replace(Regex("\\b(us|usa|east|west|central|backup|alt|alternative|feed)\\b"), " ")
-            .replace(Regex("\\[[^]]*]"), " ")
-            .replace(Regex("\\([^)]*(?:hd|sd|uhd|4k|feed|backup)[^)]*\\)"), " ")
-            .replace(Regex("[^a-z0-9]+"), " ")
-            .trim()
-            .replace(Regex("\\s+"), " ")
+            .replace(Regex("\\[[^]]*]"), " ").replace(Regex("\\([^)]*(?:hd|sd|uhd|4k|feed|backup)[^)]*\\)"), " ")
+            .replace(Regex("[^a-z0-9]+"), " ").trim().replace(Regex("\\s+"), " ")
 
-        private fun preferredDisplayName(channels: List<LiveChannel>): String =
-            channels
-                .sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.name.length })
-                .firstOrNull()
-                ?.name
-                ?: channels.first().name
+        private fun preferredDisplayName(channels: List<LiveChannel>): String = channels.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.name.length }).firstOrNull()?.name ?: channels.first().name
     }
 }
