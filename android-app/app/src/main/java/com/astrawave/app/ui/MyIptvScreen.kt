@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Icon
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.IptvSource
 import com.astrawave.app.core.IptvSourceStatus
 import com.astrawave.app.core.IptvSourceType
+import com.astrawave.app.data.ChannelCustomizationStore
 import com.astrawave.app.data.IptvSourceStore
 
 @Composable
@@ -44,9 +46,11 @@ fun MyIptvScreen(
 ) {
     val context = LocalContext.current
     val store = remember { IptvSourceStore(context) }
+    val channelStore = remember { ChannelCustomizationStore(context) }
     val profileId = sources.firstOrNull()?.profileId ?: "default"
     var managedSources by remember(sources) { mutableStateOf(sources) }
     var editingSource by remember { mutableStateOf<IptvSource?>(null) }
+    var showChannelEditor by remember { mutableStateOf(false) }
 
     fun refresh(profile: String) {
         val refreshed = store.load(profile)
@@ -54,35 +58,65 @@ fun MyIptvScreen(
         onSourcesChanged(refreshed)
     }
 
+    if (showChannelEditor) {
+        AstraWaveChannelEditorScreen(
+            sources = managedSources,
+            profileId = profileId,
+            onBack = { showChannelEditor = false },
+        )
+        return
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .background(AstraWaveColors.Background).padding(24.dp),
     ) {
-        Text("Live TV", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+        Text("Live TV Sources", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(6.dp))
         Text(
-            "AstraWave Free TV, your IPTV services, and Combined mode in one place.",
+            "Connect providers, merge lineups, and customize exactly how Live TV and the Guide look for this profile.",
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.bodyLarge,
         )
 
-        Spacer(Modifier.height(24.dp))
-        Text("MY IPTV", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(22.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AddSourceButton("Add M3U") { editingSource = newIptvSource(profileId, IptvSourceType.M3U) }
             AddSourceButton("Add Xtream") { editingSource = newIptvSource(profileId, IptvSourceType.XTREAM) }
+            Row(
+                Modifier.background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(12.dp))
+                    .clickable { showChannelEditor = true }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.Edit, null, tint = AstraWaveColors.AccentStrong)
+                Spacer(Modifier.width(6.dp))
+                Text("Channel Editor", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.labelLarge)
+            }
         }
 
-        Spacer(Modifier.height(18.dp))
+        val customizedCount = channelStore.load(profileId).size
+        if (customizedCount > 0) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "$customizedCount channel customization${if (customizedCount == 1) "" else "s"} active for this profile",
+                color = AstraWaveColors.Accent,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text("MY IPTV", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.height(10.dp))
+
         if (managedSources.isEmpty()) {
             Column(
                 Modifier.fillMaxWidth().background(AstraWaveColors.Surface, RoundedCornerShape(18.dp)).padding(18.dp),
             ) {
-                Text("No IPTV sources yet", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                Text("No personal IPTV sources yet", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Add an M3U playlist or Xtream account. You can connect multiple providers and merge them later in Combined mode.",
+                    "Add an M3U playlist or Xtream account. AstraWave can merge multiple authorized providers and rank backup sources automatically.",
                     color = AstraWaveColors.SecondaryText,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -99,9 +133,9 @@ fun MyIptvScreen(
         Column(
             Modifier.fillMaxWidth().background(AstraWaveColors.Surface, RoundedCornerShape(18.dp)).padding(18.dp),
         ) {
-            Text("Built-in free channels", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+            Text("Built-in public/reviewed channels", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
             Text(
-                "Published channels are generated from the daily rights/health-checked AstraWave Free TV pipeline.",
+                "Published lineups are fed through AstraWave's health and rights-review pipeline. The Channel Editor can rename, regroup, hide, renumber, repair logos, and override guide IDs without changing stream authorization.",
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -157,7 +191,7 @@ private fun SourceRow(source: IptvSource, onOpenSource: (IptvSource) -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(source.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${source.type.displayName()} • ${source.channelCount} channels • ${source.guideProgramCount} guide items",
+                    "${source.type.displayName()} • ${source.channelCount} channels • ${source.guideProgramCount} guide items • priority ${source.priority}",
                     color = AstraWaveColors.SecondaryText,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -165,6 +199,7 @@ private fun SourceRow(source: IptvSource, onOpenSource: (IptvSource) -> Unit) {
                     Text(it, color = AstraWaveColors.Error, style = MaterialTheme.typography.labelMedium)
                 }
             }
+            Text("Edit", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
