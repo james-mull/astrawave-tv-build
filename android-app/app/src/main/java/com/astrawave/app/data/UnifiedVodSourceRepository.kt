@@ -7,7 +7,6 @@ import com.astrawave.app.core.StremioEligibility
 import com.astrawave.app.core.StremioResource
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import org.json.JSONObject
 
 /**
  * Unified VOD resolver used by movie, series and episode detail surfaces.
@@ -85,7 +84,13 @@ class UnifiedVodSourceRepository(context: Context) {
             .sortedByDescending { (_, score) -> score }
 
         val preferred = hits.firstOrNull()?.first ?: return emptyList()
-        return discoverApprovedStremioById(preferred.item.type, preferred.item.id, profileId)
+        val streamId = if (request.season != null && request.episode != null) {
+            "${preferred.item.id}:${request.season}:${request.episode}"
+        } else {
+            preferred.item.id
+        }
+        val streamType = if (request.season != null && request.episode != null) "series" else preferred.item.type
+        return discoverApprovedStremioById(streamType, streamId, profileId)
     }
 
     private fun discoverApprovedStremioById(type: String, id: String, profileId: String): List<ResolvedSource> {
