@@ -4,8 +4,8 @@ package com.astrawave.app.data
  * CloudStream repository definitions exposed by AstraWave.
  *
  * Only the upstream reCloudStream repository is enabled automatically. Community
- * repositories remain opt-in and every extension still has to pass AstraWave's
- * health/source eligibility checks before it can contribute playback.
+ * repositories are hardcoded for discovery but remain opt-in. Extension names are
+ * catalog hints only; no third-party extension is automatically executed or trusted.
  */
 data class CloudStreamRepositoryDefinition(
     val id: String,
@@ -14,6 +14,7 @@ data class CloudStreamRepositoryDefinition(
     val enabledByDefault: Boolean,
     val reviewed: Boolean,
     val note: String,
+    val extensionHints: List<String> = emptyList(),
 )
 
 object CloudStreamRepositoryRegistry {
@@ -24,7 +25,17 @@ object CloudStreamRepositoryRegistry {
             repositoryUrl = "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
             enabledByDefault = true,
             reviewed = true,
-            note = "Upstream CloudStream extension repository. Extensions still pass AstraWave eligibility checks before contributing playback.",
+            note = "Upstream CloudStream repository. Extensions still pass AstraWave eligibility checks before contributing playback.",
+            extensionHints = listOf("Upstream providers"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "self-similarity-mega",
+            name = "Mega Repository",
+            repositoryUrl = "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community aggregator. Opt-in only.",
+            extensionHints = listOf("Dailymotion", "Invidious", "Twitch", "Repository aggregator"),
         ),
         CloudStreamRepositoryDefinition(
             id = "cloudstream-community-aggregator",
@@ -32,7 +43,7 @@ object CloudStreamRepositoryRegistry {
             repositoryUrl = "https://raw.githubusercontent.com/crxnkzziszxmbi3-sys/cloudstream-custom-repo/main/repo.json",
             enabledByDefault = false,
             reviewed = false,
-            note = "Community-maintained aggregator that tracks multiple CloudStream repositories. Opt-in only; individual plugins are not automatically trusted.",
+            note = "Community-maintained aggregator. Opt-in only; individual plugins are not automatically trusted.",
         ),
         CloudStreamRepositoryDefinition(
             id = "hexated",
@@ -40,23 +51,124 @@ object CloudStreamRepositoryRegistry {
             repositoryUrl = "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json",
             enabledByDefault = false,
             reviewed = false,
-            note = "Community repository. Opt-in and health-checked before use.",
+            note = "Community repository. Opt-in and health-checked before eligible playback.",
         ),
         CloudStreamRepositoryDefinition(
             id = "phisher98",
             name = "Phisher98 Extensions",
-            repositoryUrl = "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/builds/repo.json",
+            repositoryUrl = "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json",
             enabledByDefault = false,
             reviewed = false,
-            note = "Community repository. Opt-in and health-checked before use.",
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("AllWish", "DoraBash", "Animesalt", "AnimeCloud", "Jellyfin", "Ringz", "ShowFlix", "StremioAddon", "StremioX", "XDMovies", "Yflix", "YTS"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "dogior",
+            name = "doGior’s Had Enough",
+            repositoryUrl = "https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Opt-in only; stream-capable extensions remain authorization gated.",
+            extensionHints = listOf("Arte", "CB01", "DaddyLive", "IPTV", "Nebula", "Simkl", "StreamingCommunity", "Torrentio", "TV"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "cakestwix",
+            name = "CakesTwix",
+            repositoryUrl = "https://raw.githubusercontent.com/CakesTwix/cloudstream-extensions-uk/master/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("AnimeON", "KlonTV", "Teleportal", "UAFlix", "UASerial", "UFDub"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "saimuel",
+            name = "Saimuel Repo",
+            repositoryUrl = "https://raw.githubusercontent.com/saimuelbr/saimuelrepo/refs/heads/main/builds/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("MegaFlix", "GoFlix", "UltraCine", "Streamberry", "TopFilmes", "Anroll", "Doramas", "FilmesOn"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "netmirror",
+            name = "NetMirror Repo",
+            repositoryUrl = "https://raw.githubusercontent.com/Sushan64/NetMirror-Extension/refs/heads/builds/Netflix.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Provider branding does not imply authorization; opt-in only.",
+            extensionHints = listOf("Hotstar", "Disney+", "Netflix", "Prime Video"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "king-xtream",
+            name = "King Xtream IPTV",
+            repositoryUrl = "https://pastebin.com/raw/Cd2g2tfz",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded Xtream-oriented repository. Customer credentials and authorization are required.",
+            extensionHints = listOf("XtreamIPTV"),
         ),
         CloudStreamRepositoryDefinition(
             id = "cs-karma",
             name = "CS-Karma Extensions",
-            repositoryUrl = "https://raw.githubusercontent.com/Kraptor123/Cs-Karma/builds/repo.json",
+            repositoryUrl = "https://raw.githubusercontent.com/Kraptor123/cs-Karma/refs/heads/master/repo.json",
             enabledByDefault = false,
             reviewed = false,
-            note = "Community repository. Opt-in and health-checked before use.",
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("CinemaCity", "DocumentaryArea", "AnimeAV", "BasketballReplays", "F1FullRaces", "Filmatek", "Footballia", "Gnulahd", "Iwatchtheoffice", "KissKH", "Streamed", "Supercartoons", "TVGarden", "WatchWrestling"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "reflex",
+            name = "Reflex Repo",
+            repositoryUrl = "https://raw.githubusercontent.com/Reflex755/ReflexRepo/refs/heads/builds/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Normalized from cloudstreamrepo:// form. Opt-in only.",
+            extensionHints = listOf("DiviCast", "LibraryOfLadev"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "luna712",
+            name = "Luna712",
+            repositoryUrl = "https://raw.githubusercontent.com/Luna712/Luna712-CloudStream-Extensions/28885d17ceb7f24782b732b6056085c14c1fd027/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("Internet Archive"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "cnc-verse",
+            name = "CNC Verse Repository",
+            repositoryUrl = "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("CastleTV", "Cricify", "DoFlix", "MovieBox", "HDO", "StreamFlix", "Watch32", "GoldenAudiobook", "Tamilian"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "megix",
+            name = "Megix Repo",
+            repositoryUrl = "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("Bollyflix", "VegaMovies", "World4uFree", "CineStream", "Extractors", "MoviesDrive", "Moviesmod"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "indostream",
+            name = "IndoStream Repo",
+            repositoryUrl = "https://raw.githubusercontent.com/TeKuma25/IndoStream/builds/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Normalized from cloudstreamrepo:// form. Opt-in only.",
+            extensionHints = listOf("Dutamovie", "Funmovieslix", "IndoTV", "LayarKaca", "Nekopoi", "Neonime", "Nimegami", "Rebahin"),
+        ),
+        CloudStreamRepositoryDefinition(
+            id = "cloudx",
+            name = "CloudX Repository",
+            repositoryUrl = "https://raw.githubusercontent.com/Asm0d3usX/CloudX/builds/repo.json",
+            enabledByDefault = false,
+            reviewed = false,
+            note = "Hardcoded community repository. Opt-in only.",
+            extensionHints = listOf("Dutamovie", "Filmlokal", "Funmovieslix", "Indomax", "Moviebox", "Ngefilm", "Nomat", "Pusatfilm", "Pusatmovie", "Savefilm", "WGFilm21"),
         ),
         CloudStreamRepositoryDefinition(
             id = "adam-knight-mega",
@@ -64,7 +176,7 @@ object CloudStreamRepositoryRegistry {
             repositoryUrl = "https://raw.githubusercontent.com/admknight/CloudstreamExtensions/builds/repo.json",
             enabledByDefault = false,
             reviewed = false,
-            note = "Large community repository. Opt-in only; plugins must be individually validated before playback.",
+            note = "Large community repository. Opt-in only; plugins must be individually validated before eligible playback.",
         ),
         CloudStreamRepositoryDefinition(
             id = "codegeasse",
@@ -72,7 +184,7 @@ object CloudStreamRepositoryRegistry {
             repositoryUrl = "https://raw.githubusercontent.com/codegeasse1/codegeasse-cloudstream-repos/builds/repo.json",
             enabledByDefault = false,
             reviewed = false,
-            note = "Community repository. Opt-in and health-checked before use.",
+            note = "Community repository. Opt-in and health-checked before eligible playback.",
         ),
     )
 }
