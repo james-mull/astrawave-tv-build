@@ -12,14 +12,32 @@ enum class AstraWavePlan(
 
 enum class AstraWaveEntitlement {
     CLOUD_SYNC,
-    MULTIVIEW,
+    WEB_CONTROL_CENTER,
+    LIVE_DEVICE_SYNC,
+    REMOTE_CONTROL,
     DEVICE_HANDOFF,
+    MULTIVIEW,
+    SIX_PANE_MULTIVIEW,
     DVR,
+    SERIES_RECORDING,
+    CATCH_UP,
+    TIMESHIFT,
+    DOWNLOADS,
+    TRAVEL_MODE,
     ADVANCED_RECOMMENDATIONS,
+    ASTRA_CONCIERGE,
     PREMIUM_THEMES,
     EXTRA_PROFILES,
+    HOUSEHOLD_VOTING,
     PRIORITY_SOURCE_FAILOVER,
+    SOURCE_HEALTH_HISTORY,
+    ADVANCED_EPG,
+    CHANNEL_EDITOR,
+    UNLIMITED_PROVIDERS,
     PREMIUM_SPORTS_HUB,
+    SPORTS_REMINDERS,
+    PERSONAL_MEDIA_AGGREGATION,
+    AUDIO_PREMIUM,
 }
 
 data class EntitlementSnapshot(
@@ -57,21 +75,38 @@ data class EntitlementSnapshot(
 object AstraWaveEntitlementPolicy {
     val freeDefaults: Set<AstraWaveEntitlement> = emptySet()
 
-    /** Existing Plus contract remains intact for backward compatibility. */
     val plusDefaults: Set<AstraWaveEntitlement> = setOf(
         AstraWaveEntitlement.CLOUD_SYNC,
-        AstraWaveEntitlement.MULTIVIEW,
+        AstraWaveEntitlement.WEB_CONTROL_CENTER,
         AstraWaveEntitlement.DEVICE_HANDOFF,
+        AstraWaveEntitlement.MULTIVIEW,
         AstraWaveEntitlement.DVR,
         AstraWaveEntitlement.ADVANCED_RECOMMENDATIONS,
         AstraWaveEntitlement.PREMIUM_THEMES,
         AstraWaveEntitlement.EXTRA_PROFILES,
     )
 
-    /** Commercial $19.99 tier adds reliability and sports-specific premium capability. */
+    /** $19.99 plan: recurring intelligence, reliability, household and power-TV value. */
     val premiumDefaults: Set<AstraWaveEntitlement> = plusDefaults + setOf(
+        AstraWaveEntitlement.LIVE_DEVICE_SYNC,
+        AstraWaveEntitlement.REMOTE_CONTROL,
+        AstraWaveEntitlement.SIX_PANE_MULTIVIEW,
+        AstraWaveEntitlement.SERIES_RECORDING,
+        AstraWaveEntitlement.CATCH_UP,
+        AstraWaveEntitlement.TIMESHIFT,
+        AstraWaveEntitlement.DOWNLOADS,
+        AstraWaveEntitlement.TRAVEL_MODE,
+        AstraWaveEntitlement.ASTRA_CONCIERGE,
+        AstraWaveEntitlement.HOUSEHOLD_VOTING,
         AstraWaveEntitlement.PRIORITY_SOURCE_FAILOVER,
+        AstraWaveEntitlement.SOURCE_HEALTH_HISTORY,
+        AstraWaveEntitlement.ADVANCED_EPG,
+        AstraWaveEntitlement.CHANNEL_EDITOR,
+        AstraWaveEntitlement.UNLIMITED_PROVIDERS,
         AstraWaveEntitlement.PREMIUM_SPORTS_HUB,
+        AstraWaveEntitlement.SPORTS_REMINDERS,
+        AstraWaveEntitlement.PERSONAL_MEDIA_AGGREGATION,
+        AstraWaveEntitlement.AUDIO_PREMIUM,
     )
 
     fun snapshot(
