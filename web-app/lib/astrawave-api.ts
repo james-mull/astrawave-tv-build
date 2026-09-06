@@ -1,167 +1,41 @@
 export type MediaKind = 'movie' | 'series' | 'episode' | 'live' | 'sport' | 'song' | 'podcast';
+export type LiveStreamSource = { id:string; provider:string; sourceId?:string; streamUrl:string; group?:string };
+export type CatalogItem = { id:string; kind:MediaKind; title:string; subtitle?:string; posterUrl?:string; backdropUrl?:string; overview?:string; score?:number; popularity?:number; genreIds?:number[]; streamUrl?:string; sources?:LiveStreamSource[]; progressPercent?:number };
+export type CatalogRail = { title:string; source?:string; addonId?:string; manifestUrl?:string; items:CatalogItem[] };
+export type SourceCandidate = { id:string; provider:string; url?:string; quality?:string; codec?:string; hdr?:string; bitrateKbps?:number; latencyMs?:number; uptimePercent?:number; direct?:boolean; licenseLabel?:string };
+export type GuideProgram = { title:string; start:number; stop:number; category?:string };
+export type LiveChannel = { id:string; tvgId?:string; name:string; group?:string; logoUrl?:string; streamUrl?:string; sources?:LiveStreamSource[]; now?:string; next?:string; programs?:GuideProgram[]; sourceCount:number };
+export type LiveData = { activeSource:string; sourceOptions:{id:string;name:string}[]; channels:LiveChannel[]; stats:{channels:number;epgLinked:number;epgGeneratedAt?:string|null;epgScheduledChannels?:number}; failures?:{source:string;error:string}[] };
+export type SportsEvent = { id:string; league:string; sport?:string; title:string; startTime:string; status:string; broadcaster?:string; homeTeam?:string; awayTeam?:string; badge?:string; date?:string };
+export type RegistryEntry = { id:string; name:string; url?:string|null; kind:string; enabledByDefault:boolean; reviewed:boolean; note:string };
+export type SourceRegistry = { stremio:RegistryEntry[]; cloudstream:RegistryEntry[]; live:RegistryEntry[]; providerCatalogs:RegistryEntry[]; policy:string };
+export type TitlePerson = { id:string; name:string; role?:string; profileUrl?:string };
+export type TitleTrailer = { key:string; name:string; type:string; official:boolean; url:string };
+export type TitleDetails = { id:string; kind:'movie'|'series'; title:string; overview:string; tagline?:string; posterUrl?:string; backdropUrl?:string; releaseDate?:string; runtimeMinutes?:number|null; rating?:string|null; score:number; voteCount:number; genres:string[]; status?:string; seasons?:number; episodes?:number; homepage?:string; cast:TitlePerson[]; crew:TitlePerson[]; trailers:TitleTrailer[]; related:CatalogItem[] };
 
-export type LiveStreamSource = {
-  id: string;
-  provider: string;
-  sourceId?: string;
-  streamUrl: string;
-  group?: string;
-};
+const base=process.env.NEXT_PUBLIC_ASTRA_API_BASE?.replace(/\/$/,'')||'/api/astrawave';
+const tmdbImage=(p?:string|null,size='w500')=>p?`https://image.tmdb.org/t/p/${size}${p}`:undefined;
 
-export type CatalogItem = {
-  id: string;
-  kind: MediaKind;
-  title: string;
-  subtitle?: string;
-  posterUrl?: string;
-  backdropUrl?: string;
-  overview?: string;
-  score?: number;
-  popularity?: number;
-  genreIds?: number[];
-  streamUrl?: string;
-  sources?: LiveStreamSource[];
-  progressPercent?: number;
-};
-
-export type CatalogRail = {
-  title: string;
-  source?: string;
-  addonId?: string;
-  manifestUrl?: string;
-  items: CatalogItem[];
-};
-
-export type SourceCandidate = {
-  id: string;
-  provider: string;
-  url?: string;
-  quality?: string;
-  codec?: string;
-  hdr?: string;
-  bitrateKbps?: number;
-  latencyMs?: number;
-  uptimePercent?: number;
-  direct?: boolean;
-  licenseLabel?: string;
-};
-
-export type GuideProgram = { title: string; start: number; stop: number; category?: string };
-
-export type LiveChannel = {
-  id: string;
-  tvgId?: string;
-  name: string;
-  group?: string;
-  logoUrl?: string;
-  streamUrl?: string;
-  sources?: LiveStreamSource[];
-  now?: string;
-  next?: string;
-  programs?: GuideProgram[];
-  sourceCount: number;
-};
-
-export type LiveData = {
-  activeSource: string;
-  sourceOptions: { id: string; name: string }[];
-  channels: LiveChannel[];
-  stats: { channels: number; epgLinked: number; epgGeneratedAt?: string | null; epgScheduledChannels?: number };
-  failures?: { source: string; error: string }[];
-};
-
-export type SportsEvent = {
-  id: string;
-  league: string;
-  sport?: string;
-  title: string;
-  startTime: string;
-  status: string;
-  broadcaster?: string;
-  homeTeam?: string;
-  awayTeam?: string;
-  badge?: string;
-  date?: string;
-};
-
-export type RegistryEntry = {
-  id: string;
-  name: string;
-  url?: string | null;
-  kind: string;
-  enabledByDefault: boolean;
-  reviewed: boolean;
-  note: string;
-};
-
-export type SourceRegistry = {
-  stremio: RegistryEntry[];
-  cloudstream: RegistryEntry[];
-  live: RegistryEntry[];
-  providerCatalogs: RegistryEntry[];
-  policy: string;
-};
-
-export type TitlePerson = { id: string; name: string; role?: string; profileUrl?: string };
-export type TitleTrailer = { key: string; name: string; type: string; official: boolean; url: string };
-export type TitleDetails = {
-  id: string;
-  kind: 'movie' | 'series';
-  title: string;
-  overview: string;
-  tagline?: string;
-  posterUrl?: string;
-  backdropUrl?: string;
-  releaseDate?: string;
-  runtimeMinutes?: number | null;
-  rating?: string | null;
-  score: number;
-  voteCount: number;
-  genres: string[];
-  status?: string;
-  seasons?: number;
-  episodes?: number;
-  homepage?: string;
-  cast: TitlePerson[];
-  crew: TitlePerson[];
-  trailers: TitleTrailer[];
-  related: CatalogItem[];
-};
-
-const base = process.env.NEXT_PUBLIC_ASTRA_API_BASE?.replace(/\/$/, '') || '/api/astrawave';
-
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${base}${path}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`AstraWave API ${response.status}`);
-  return response.json() as Promise<T>;
+async function getJson<T>(path:string):Promise<T>{const response=await fetch(`${base}${path}`,{cache:'no-store'});if(!response.ok)throw new Error(`AstraWave API ${response.status}`);return response.json() as Promise<T>}
+function browserTmdbToken(){try{return typeof window!=='undefined'?localStorage.getItem('astrawave:tmdb-token')?.trim()||'':''}catch{return''}}
+async function browserTmdb(path:string){
+  const token=browserTmdbToken();if(!token)throw new Error('TMDB browser token is not configured');
+  const bearer=token.startsWith('eyJ');
+  const separator=path.includes('?')?'&':'?';
+  const url=`https://api.themoviedb.org/3${path}${bearer?'':`${separator}api_key=${encodeURIComponent(token)}`}`;
+  const response=await fetch(url,{headers:bearer?{Authorization:`Bearer ${token}`,accept:'application/json'}:{accept:'application/json'}});
+  if(!response.ok)throw new Error(`TMDB ${response.status}`);return response.json();
 }
+function mapTmdb(items:any[],kind:'movie'|'series'):CatalogItem[]{return(items||[]).slice(0,30).map(x=>({id:String(x.id),kind,title:x.title||x.name||'Untitled',subtitle:x.release_date||x.first_air_date||undefined,posterUrl:tmdbImage(x.poster_path),backdropUrl:tmdbImage(x.backdrop_path,'w1280'),overview:x.overview||undefined,score:Number(x.vote_average||0),popularity:Number(x.popularity||0),genreIds:Array.isArray(x.genre_ids)?x.genre_ids:[]}))}
+const movieDefs:[string,string][]=[['Trending Movies','/trending/movie/day?language=en-US'],['Popular Movies','/movie/popular?language=en-US'],['New Releases','/movie/now_playing?language=en-US&region=US'],['Top Rated Movies','/movie/top_rated?language=en-US'],['Coming Soon','/movie/upcoming?language=en-US&region=US'],['Action','/discover/movie?with_genres=28&sort_by=popularity.desc&include_adult=false&language=en-US'],['Comedy','/discover/movie?with_genres=35&sort_by=popularity.desc&include_adult=false&language=en-US'],['Thrillers','/discover/movie?with_genres=53&sort_by=popularity.desc&include_adult=false&language=en-US'],['Horror','/discover/movie?with_genres=27&sort_by=popularity.desc&include_adult=false&language=en-US'],['Sci-Fi','/discover/movie?with_genres=878&sort_by=popularity.desc&include_adult=false&language=en-US'],['Animation','/discover/movie?with_genres=16&sort_by=popularity.desc&include_adult=false&language=en-US'],['Family Night','/discover/movie?with_genres=10751&sort_by=popularity.desc&include_adult=false&language=en-US'],['Documentaries','/discover/movie?with_genres=99&sort_by=vote_average.desc&vote_count.gte=100&include_adult=false&language=en-US']];
+const tvDefs:[string,string][]=[['Trending TV','/trending/tv/day?language=en-US'],['Popular TV','/tv/popular?language=en-US'],['Airing Today','/tv/airing_today?language=en-US'],['New Episodes','/tv/on_the_air?language=en-US'],['Top Rated TV','/tv/top_rated?language=en-US'],['Drama','/discover/tv?with_genres=18&sort_by=popularity.desc&language=en-US'],['Comedy','/discover/tv?with_genres=35&sort_by=popularity.desc&language=en-US'],['Crime','/discover/tv?with_genres=80&sort_by=popularity.desc&language=en-US'],['Sci-Fi & Fantasy','/discover/tv?with_genres=10765&sort_by=popularity.desc&language=en-US'],['Animation','/discover/tv?with_genres=16&sort_by=popularity.desc&language=en-US'],['Documentary','/discover/tv?with_genres=99&sort_by=vote_average.desc&vote_count.gte=50&language=en-US'],['Kids','/discover/tv?with_genres=10762&sort_by=popularity.desc&language=en-US']];
+async function browserRails(kind:'movie'|'series'){const defs=kind==='movie'?movieDefs:tvDefs;const settled=await Promise.allSettled(defs.map(async([title,path])=>({title,source:'TMDB • Browser connection',items:mapTmdb((await browserTmdb(path)).results||[],kind)})));return{configured:true,source:'TMDB • Browser connection',rails:settled.flatMap(x=>x.status==='fulfilled'&&x.value.items.length?[x.value]:[])}}
+async function catalogRails(kind:'movie'|'series'){const server=await getJson<{configured:boolean;source:string;rails:CatalogRail[]}>(`/catalog-rails?kind=${kind}`);if(server.configured&&server.rails.length)return server;if(browserTmdbToken())return browserRails(kind);return server}
+async function search(query:string){const server=await getJson<CatalogItem[]>(`/v1/search?q=${encodeURIComponent(query)}`);if(server.length||!browserTmdbToken())return server;const data=await browserTmdb(`/search/multi?query=${encodeURIComponent(query)}&include_adult=false&language=en-US`);return(data.results||[]).filter((x:any)=>x.media_type==='movie'||x.media_type==='tv').slice(0,30).map((x:any)=>mapTmdb([x],x.media_type==='movie'?'movie':'series')[0])}
+async function titleDetails(kind:'movie'|'series',id:string){const server=await getJson<{configured:boolean;details?:TitleDetails}>(`/title/${kind}/${encodeURIComponent(id)}`);if(server.configured||!browserTmdbToken())return server;const isMovie=kind==='movie';const data=await browserTmdb(isMovie?`/movie/${id}?language=en-US&append_to_response=credits,videos,recommendations,similar,release_dates`:`/tv/${id}?language=en-US&append_to_response=credits,videos,recommendations,similar,content_ratings`);let rating:string|null=null;if(isMovie){const us=data.release_dates?.results?.find((x:any)=>x.iso_3166_1==='US');rating=(us?.release_dates||[]).map((x:any)=>String(x.certification||'').trim()).find(Boolean)||null}else rating=data.content_ratings?.results?.find((x:any)=>x.iso_3166_1==='US')?.rating||null;const trailers=(data.videos?.results||[]).filter((v:any)=>v.site==='YouTube'&&['Trailer','Teaser','Clip','Featurette'].includes(v.type)).slice(0,8).map((v:any)=>({key:v.key,name:v.name,type:v.type,official:Boolean(v.official),url:`https://www.youtube.com/watch?v=${encodeURIComponent(v.key)}`}));const related=mapTmdb([...(data.recommendations?.results||[]),...(data.similar?.results||[])],kind).filter(x=>x.id!==id).slice(0,24);return{configured:true,details:{id,kind,title:data.title||data.name||'Untitled',overview:data.overview||'',tagline:data.tagline||'',posterUrl:tmdbImage(data.poster_path),backdropUrl:tmdbImage(data.backdrop_path,'original'),releaseDate:data.release_date||data.first_air_date||undefined,runtimeMinutes:isMovie?Number(data.runtime||0)||null:Number(data.episode_run_time?.[0]||0)||null,rating,score:Number(data.vote_average||0),voteCount:Number(data.vote_count||0),genres:(data.genres||[]).map((g:any)=>g.name),status:data.status||undefined,seasons:Number(data.number_of_seasons||0)||undefined,episodes:Number(data.number_of_episodes||0)||undefined,homepage:data.homepage||undefined,cast:(data.credits?.cast||[]).slice(0,12).map((p:any)=>({id:String(p.id),name:p.name,role:p.character||undefined,profileUrl:tmdbImage(p.profile_path,'w185')})),crew:(data.credits?.crew||[]).filter((p:any)=>['Director','Creator','Writer','Screenplay','Executive Producer'].includes(p.job)).slice(0,10).map((p:any)=>({id:String(p.id),name:p.name,role:p.job})),trailers,related}}}
 
-export const AstraWaveApi = {
-  home: () => getJson<{ rows: CatalogRail[] }>('/v1/home'),
-  catalogRails: (kind: 'movie' | 'series') => getJson<{ configured: boolean; source: string; rails: CatalogRail[] }>(`/catalog-rails?kind=${kind}`),
-  addonRails: () => getJson<{ reviewedOnly: boolean; manifests: string[]; addons: any[]; rails: CatalogRail[] }>('/addon-rails'),
-  sourceRegistry: () => getJson<SourceRegistry>('/source-registry'),
-  liveData: (source = 'all-free') => getJson<LiveData>(`/live-data?source=${encodeURIComponent(source)}`),
-  sportsData: () => getJson<{ dates: string[]; events: SportsEvent[]; leagues: string[]; count: number }>('/sports-data'),
-  titleDetails: (kind: 'movie' | 'series', id: string) => getJson<{ configured: boolean; details?: TitleDetails }>(`/title/${kind}/${encodeURIComponent(id)}`),
-  trendingMovies: () => getJson<CatalogItem[]>('/v1/catalog/movies/trending'),
-  trendingShows: () => getJson<CatalogItem[]>('/v1/catalog/series/trending'),
-  sources: (kind: string, id: string) => getJson<SourceCandidate[]>(`/v1/sources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`),
-  liveChannels: async () => (await getJson<LiveData>('/live-data?source=all-free')).channels,
-  guide: () => getJson<LiveData>('/live-data?source=all-free'),
-  sportsToday: async () => (await getJson<{ events: SportsEvent[] }>('/sports-data')).events,
-  audioTrending: async () => {
-    const response = await fetch('https://de1.api.radio-browser.info/json/stations/topvote/36?hidebroken=true', { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Radio directory ${response.status}`);
-    const stations = await response.json() as any[];
-    return stations.slice(0, 36).filter((station) => station.url_resolved || station.url).map((station) => ({
-      id: String(station.stationuuid || station.changeuuid || station.name),
-      kind: 'podcast' as const,
-      title: String(station.name || 'Public radio'),
-      subtitle: [station.country, station.tags?.split(',')?.[0]].filter(Boolean).join(' • '),
-      posterUrl: station.favicon || undefined,
-      streamUrl: station.url_resolved || station.url,
-    }));
-  },
-  search: (query: string) => getJson<CatalogItem[]>(`/v1/search?q=${encodeURIComponent(query)}`),
+export const AstraWaveApi={
+  home:()=>getJson<{rows:CatalogRail[]}>('/v1/home'),catalogRails,addonRails:()=>getJson<{reviewedOnly:boolean;manifests:string[];addons:any[];rails:CatalogRail[]}>('/addon-rails'),sourceRegistry:()=>getJson<SourceRegistry>('/source-registry'),liveData:(source='all-free')=>getJson<LiveData>(`/live-data?source=${encodeURIComponent(source)}`),sportsData:()=>getJson<{dates:string[];events:SportsEvent[];leagues:string[];count:number}>('/sports-data'),titleDetails,
+  trendingMovies:async()=>{const r=await catalogRails('movie');return r.rails[0]?.items||[]},trendingShows:async()=>{const r=await catalogRails('series');return r.rails[0]?.items||[]},sources:(kind:string,id:string)=>getJson<SourceCandidate[]>(`/v1/sources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`),liveChannels:async()=>(await getJson<LiveData>('/live-data?source=all-free')).channels,guide:()=>getJson<LiveData>('/live-data?source=all-free'),sportsToday:async()=>(await getJson<{events:SportsEvent[]}>('/sports-data')).events,
+  audioTrending:async()=>{const response=await fetch('https://de1.api.radio-browser.info/json/stations/topvote/36?hidebroken=true',{cache:'no-store'});if(!response.ok)throw new Error(`Radio directory ${response.status}`);const stations=await response.json() as any[];return stations.slice(0,36).filter(s=>s.url_resolved||s.url).map(s=>({id:String(s.stationuuid||s.changeuuid||s.name),kind:'podcast' as const,title:String(s.name||'Public radio'),subtitle:[s.country,s.tags?.split(',')?.[0]].filter(Boolean).join(' • '),posterUrl:s.favicon||undefined,streamUrl:s.url_resolved||s.url}))},search
 };
