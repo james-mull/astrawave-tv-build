@@ -50,9 +50,18 @@ fun StremioAddonScreen(profileId: String = "default") {
     var repositories by remember(profileId) { mutableStateOf(repoStore.load(profileId)) }
     var catalogRows by remember(profileId) { mutableStateOf<List<StremioCatalogRow>>(emptyList()) }
     var installDialog by remember { mutableStateOf(false) }
+    var showVodAuthorization by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
     var loadingCatalogs by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    if (showVodAuthorization) {
+        VodProviderAuthorizationScreen(
+            profileId = profileId,
+            onBack = { showVodAuthorization = false },
+        )
+        return
+    }
 
     fun refresh() {
         addons = store.loadAll()
@@ -73,11 +82,12 @@ fun StremioAddonScreen(profileId: String = "default") {
     ) {
         AstraWavePageHeader(
             title = "Extensions, Addons & Repositories",
-            subtitle = "Web-synced configuration and local controls in one place. Stream-capable community extensions remain authorization-gated.",
+            subtitle = "Web-synced configuration, hardcoded catalog defaults and local controls in one place. Stream-capable community extensions remain authorization-gated.",
         )
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { installDialog = true }) { Text("Install Stremio Addon") }
+            AstraWaveSecondaryButton("Authorized VOD Providers", { showVodAuthorization = true })
             Text(
                 "Manage more from AstraWave Web Control Center",
                 color = AstraWaveColors.Accent,
@@ -118,7 +128,7 @@ fun StremioAddonScreen(profileId: String = "default") {
         Spacer(Modifier.height(28.dp))
         Text("CloudStream repository registry", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
         Text(
-            "Repository choices sync from the web Control Center. Enabling a repo does not automatically trust every plugin inside it.",
+            "Repository choices sync from the web Control Center. Enabling a repo exposes its configuration but does not automatically trust or execute every plugin inside it.",
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -178,7 +188,7 @@ private fun RepositoryCard(repo: CloudStreamRepositoryPreference, onToggle: () -
                 Column(Modifier.weight(1f)) {
                     Text(repo.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (repo.custom) "Custom web-synced repository" else "AstraWave repository registry",
+                        if (repo.custom) "Custom web-synced repository" else "AstraWave hardcoded repository registry",
                         color = AstraWaveColors.SecondaryText,
                         style = MaterialTheme.typography.labelMedium,
                     )
@@ -191,6 +201,15 @@ private fun RepositoryCard(repo: CloudStreamRepositoryPreference, onToggle: () -
             }
             Spacer(Modifier.height(6.dp))
             Text(repo.url, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+            if (repo.extensionHints.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Extensions (${repo.extensionHints.size}): ${repo.extensionHints.joinToString(" • ")}",
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 4,
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 if (repo.enabled) "Disable repo" else "Enable repo",
