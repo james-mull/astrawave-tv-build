@@ -144,7 +144,11 @@ private fun RebuildRoot() {
     val profileStore = remember { HouseholdProfileStore(context) }
     val cloudConfigSync = remember { DeviceConfigCloudSync(context) }
     var activeProfileId by remember { mutableStateOf(profileStore.activeProfileId()) }
-    var activeProfile by remember(activeProfileId) { mutableStateOf(profileStore.profiles().firstOrNull { it.id == activeProfileId } ?: profileStore.activeProfile()) }
+    var activeProfile by remember(activeProfileId) {
+        mutableStateOf(
+            profileStore.profiles().firstOrNull { it.id == activeProfileId } ?: profileStore.activeProfile(),
+        )
+    }
     var showProfileGate by remember { mutableStateOf(profileStore.shouldPromptAtLaunch()) }
 
     if (showProfileGate) {
@@ -214,7 +218,9 @@ private fun RebuildRoot() {
         if (!isTv) return
         tvRailCollapseJob?.cancel()
         tvRailCollapseJob = null
-        if (hasFocus) tvRailExpanded = true else {
+        if (hasFocus) {
+            tvRailExpanded = true
+        } else {
             tvRailCollapseJob = tvRailFocusScope.launch {
                 delay(120)
                 tvRailExpanded = false
@@ -231,8 +237,8 @@ private fun RebuildRoot() {
             Toast.makeText(context, "Already in Multiview.", Toast.LENGTH_SHORT).show()
             return
         }
-        if (multiviewPanes.size >= 4) {
-            Toast.makeText(context, "Multiview supports up to four streams.", Toast.LENGTH_SHORT).show()
+        if (multiviewPanes.size >= 6) {
+            Toast.makeText(context, "Sports Mosaic supports up to six streams.", Toast.LENGTH_SHORT).show()
             return
         }
         multiviewPanes = multiviewPanes + pane.copy(muted = multiviewPanes.isNotEmpty())
@@ -252,7 +258,12 @@ private fun RebuildRoot() {
             }
             NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(railWidth)) {
                 Spacer(Modifier.height(14.dp))
-                Text(if (isTv && !tvRailExpanded) activeProfile.avatar else "ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.headlineMedium, maxLines = 1)
+                Text(
+                    if (isTv && !tvRailExpanded) activeProfile.avatar else "ASTRAWAVE",
+                    color = AstraWaveColors.Accent,
+                    style = MaterialTheme.typography.headlineMedium,
+                    maxLines = 1,
+                )
                 Spacer(Modifier.height(10.dp))
                 primaryDestinations.forEach { item ->
                     val showRailLabel = !isTv || tvRailExpanded
@@ -280,21 +291,32 @@ private fun RebuildRoot() {
                     multiviewCount = multiviewPanes.size,
                     onAddToMultiview = ::addToMultiview,
                     onOpenMultiview = ::openMultiview,
+                    profileId = activeProfileId,
                 )
-                RebuildDestination.Guide -> AstraWaveGuideScreen(sources = iptvSources)
+                RebuildDestination.Guide -> AstraWaveGuideScreen(
+                    sources = iptvSources,
+                    profileId = activeProfileId,
+                )
                 RebuildDestination.Sports -> AstraWaveSportsScreen(
                     sources = iptvSources,
                     multiviewCount = multiviewPanes.size,
                     onAddToMultiview = ::addToMultiview,
                     onOpenMultiview = ::openMultiview,
+                    profileId = activeProfileId,
                 )
                 RebuildDestination.Multiview -> {
-                    if (multiviewPanes.isEmpty()) ConfigurationCard("Multiview is empty", "Add live channels or matched sports streams from Live TV or Sports.")
-                    else {
+                    if (multiviewPanes.isEmpty()) {
+                        ConfigurationCard(
+                            "Multiview is empty",
+                            "Add live channels or matched sports streams from Live TV or Sports.",
+                        )
+                    } else {
+                        val allSports = multiviewPanes.all { it.eventId != null }
                         val layout = when (multiviewPanes.size) {
                             1, 2 -> MultiviewLayout.TWO_UP
                             3 -> MultiviewLayout.THREE_UP
-                            else -> MultiviewLayout.FOUR_UP
+                            4 -> MultiviewLayout.FOUR_UP
+                            else -> if (allSports) MultiviewLayout.SPORTS_MOSAIC else MultiviewLayout.SIX_UP
                         }
                         MultiviewScreen(
                             session = MultiviewSession(
@@ -304,10 +326,17 @@ private fun RebuildRoot() {
                                 activeAudioPaneId = multiviewAudioPaneId ?: multiviewPanes.first().id,
                             ),
                             onActivateAudio = { multiviewAudioPaneId = it },
-                            onOpenPane = { pane -> context.startActivity(Intent(context, PlayerActivity::class.java).putExtra(PlayerActivity.EXTRA_URL, pane.streamUrl)) },
+                            onOpenPane = { pane ->
+                                context.startActivity(
+                                    Intent(context, PlayerActivity::class.java)
+                                        .putExtra(PlayerActivity.EXTRA_URL, pane.streamUrl),
+                                )
+                            },
                             onReplacePane = { pane ->
                                 multiviewPanes = multiviewPanes.filterNot { it.id == pane.id }
-                                if (multiviewAudioPaneId == pane.id) multiviewAudioPaneId = multiviewPanes.firstOrNull()?.id
+                                if (multiviewAudioPaneId == pane.id) {
+                                    multiviewAudioPaneId = multiviewPanes.firstOrNull()?.id
+                                }
                                 current = RebuildDestination.Live
                             },
                         )
@@ -347,10 +376,20 @@ private fun RebuildRoot() {
 
             if (!useRail && current != RebuildDestination.Profiles) {
                 NavigationBar(containerColor = AstraWaveColors.BackgroundRaised) {
-                    val mobileItems = listOf(RebuildDestination.Home, RebuildDestination.Movies, RebuildDestination.Live, RebuildDestination.Sports, RebuildDestination.My)
-                        .filter { !activeProfile.kidsMode || it !in setOf(RebuildDestination.Live, RebuildDestination.Sports) }
+                    val mobileItems = listOf(
+                        RebuildDestination.Home,
+                        RebuildDestination.Movies,
+                        RebuildDestination.Live,
+                        RebuildDestination.Sports,
+                        RebuildDestination.My,
+                    ).filter { !activeProfile.kidsMode || it !in setOf(RebuildDestination.Live, RebuildDestination.Sports) }
                     mobileItems.forEach { item ->
-                        NavigationBarItem(selected = current == item, onClick = { current = item }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label, maxLines = 1) })
+                        NavigationBarItem(
+                            selected = current == item,
+                            onClick = { current = item },
+                            icon = { Icon(item.icon, item.label) },
+                            label = { Text(item.label, maxLines = 1) },
+                        )
                     }
                 }
             }
@@ -358,13 +397,43 @@ private fun RebuildRoot() {
     }
 }
 
-private val movieCatalogs = listOf(AstraWaveCatalog.TRENDING_MOVIES, AstraWaveCatalog.POPULAR_MOVIES, AstraWaveCatalog.NOW_PLAYING_MOVIES, AstraWaveCatalog.TOP_RATED_MOVIES, AstraWaveCatalog.UPCOMING_MOVIES)
-private val tvCatalogs = listOf(AstraWaveCatalog.TRENDING_TV, AstraWaveCatalog.POPULAR_TV, AstraWaveCatalog.AIRING_TODAY, AstraWaveCatalog.ON_THE_AIR, AstraWaveCatalog.TOP_RATED_TV)
+private val movieCatalogs = listOf(
+    AstraWaveCatalog.TRENDING_MOVIES,
+    AstraWaveCatalog.POPULAR_MOVIES,
+    AstraWaveCatalog.NOW_PLAYING_MOVIES,
+    AstraWaveCatalog.TOP_RATED_MOVIES,
+    AstraWaveCatalog.UPCOMING_MOVIES,
+)
+private val tvCatalogs = listOf(
+    AstraWaveCatalog.TRENDING_TV,
+    AstraWaveCatalog.POPULAR_TV,
+    AstraWaveCatalog.AIRING_TODAY,
+    AstraWaveCatalog.ON_THE_AIR,
+    AstraWaveCatalog.TOP_RATED_TV,
+)
 
 @Composable
-private fun SectionStrip(current: RebuildDestination, items: List<RebuildDestination>, onSelect: (RebuildDestination) -> Unit) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).background(AstraWaveColors.BackgroundRaised).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.forEach { item -> FilterChip(selected = current == item, onClick = { onSelect(item) }, label = { Text(item.label) }, leadingIcon = { Icon(item.icon, null) }) }
+private fun SectionStrip(
+    current: RebuildDestination,
+    items: List<RebuildDestination>,
+    onSelect: (RebuildDestination) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .background(AstraWaveColors.BackgroundRaised)
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items.forEach { item ->
+            FilterChip(
+                selected = current == item,
+                onClick = { onSelect(item) },
+                label = { Text(item.label) },
+                leadingIcon = { Icon(item.icon, null) },
+            )
+        }
     }
 }
 
@@ -373,11 +442,19 @@ private fun CatalogLanding(title: String, catalogs: List<AstraWaveCatalog>, show
     val context = LocalContext.current
     val token = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val repository = remember(token) { TmdbCatalogRepository(token) }
-    val states = remember(catalogs, token) { mutableStateMapOf<AstraWaveCatalog, CatalogLoadState>().apply { catalogs.forEach { put(it, CatalogLoadState.Loading) } } }
+    val states = remember(catalogs, token) {
+        mutableStateMapOf<AstraWaveCatalog, CatalogLoadState>().apply {
+            catalogs.forEach { put(it, CatalogLoadState.Loading) }
+        }
+    }
     LaunchedEffect(catalogs, token) {
         if (!repository.isConfigured()) return@LaunchedEffect
         catalogs.forEach { catalog ->
-            states[catalog] = try { CatalogLoadState.Ready(withContext(Dispatchers.IO) { repository.load(catalog) }) } catch (error: Exception) { CatalogLoadState.Error(error.message ?: "Unable to load catalog") }
+            states[catalog] = try {
+                CatalogLoadState.Ready(withContext(Dispatchers.IO) { repository.load(catalog) })
+            } catch (error: Exception) {
+                CatalogLoadState.Error(error.message ?: "Unable to load catalog")
+            }
         }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
@@ -387,11 +464,13 @@ private fun CatalogLanding(title: String, catalogs: List<AstraWaveCatalog>, show
             ConfigurationCard("TMDB setup needed", "Connect a TMDB bearer token to populate this legacy catalog surface.")
             return@Column
         }
-        catalogs.forEach { catalog -> when (val state = states[catalog] ?: CatalogLoadState.Loading) {
-            CatalogLoadState.Loading -> LoadingCatalogRow(catalog)
-            is CatalogLoadState.Ready -> RealCatalogRow(state.page)
-            is CatalogLoadState.Error -> ErrorCatalogRow(catalog, state.message)
-        } }
+        catalogs.forEach { catalog ->
+            when (val state = states[catalog] ?: CatalogLoadState.Loading) {
+                CatalogLoadState.Loading -> LoadingCatalogRow(catalog)
+                is CatalogLoadState.Ready -> RealCatalogRow(state.page)
+                is CatalogLoadState.Error -> ErrorCatalogRow(catalog, state.message)
+            }
+        }
     }
 }
 
@@ -402,22 +481,45 @@ private fun CombinedDiscoverScreen(profileId: String) {
     val tmdb = remember(token) { TmdbCatalogRepository(token) }
     val addonAggregator = remember { StremioCatalogAggregator(context) }
     val catalogs = movieCatalogs + tvCatalogs
-    val tmdbStates = remember(catalogs, token) { mutableStateMapOf<AstraWaveCatalog, CatalogLoadState>().apply { catalogs.forEach { put(it, CatalogLoadState.Loading) } } }
+    val tmdbStates = remember(catalogs, token) {
+        mutableStateMapOf<AstraWaveCatalog, CatalogLoadState>().apply {
+            catalogs.forEach { put(it, CatalogLoadState.Loading) }
+        }
+    }
     var addonState by remember(profileId) { mutableStateOf<AddonCatalogLoadState>(AddonCatalogLoadState.Loading) }
     LaunchedEffect(catalogs, token, profileId) {
-        if (tmdb.isConfigured()) catalogs.forEach { catalog -> tmdbStates[catalog] = try { CatalogLoadState.Ready(withContext(Dispatchers.IO) { tmdb.load(catalog) }) } catch (error: Exception) { CatalogLoadState.Error(error.message ?: "Unable to load catalog") } }
-        addonState = AddonCatalogLoadState.Ready(withContext(Dispatchers.IO) { addonAggregator.load(profileId = profileId, maxItemsPerCatalog = 16) })
+        if (tmdb.isConfigured()) {
+            catalogs.forEach { catalog ->
+                tmdbStates[catalog] = try {
+                    CatalogLoadState.Ready(withContext(Dispatchers.IO) { tmdb.load(catalog) })
+                } catch (error: Exception) {
+                    CatalogLoadState.Error(error.message ?: "Unable to load catalog")
+                }
+            }
+        }
+        addonState = AddonCatalogLoadState.Ready(
+            withContext(Dispatchers.IO) {
+                addonAggregator.load(profileId = profileId, maxItemsPerCatalog = 16)
+            },
+        )
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Text("Discover", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(22.dp))
-        if (tmdb.isConfigured()) catalogs.forEach { catalog -> when (val state = tmdbStates[catalog] ?: CatalogLoadState.Loading) {
-            CatalogLoadState.Loading -> LoadingCatalogRow(catalog)
-            is CatalogLoadState.Ready -> RealCatalogRow(state.page)
-            is CatalogLoadState.Error -> ErrorCatalogRow(catalog, state.message)
-        } }
+        if (tmdb.isConfigured()) {
+            catalogs.forEach { catalog ->
+                when (val state = tmdbStates[catalog] ?: CatalogLoadState.Loading) {
+                    CatalogLoadState.Loading -> LoadingCatalogRow(catalog)
+                    is CatalogLoadState.Ready -> RealCatalogRow(state.page)
+                    is CatalogLoadState.Error -> ErrorCatalogRow(catalog, state.message)
+                }
+            }
+        }
         when (val state = addonState) {
-            AddonCatalogLoadState.Loading -> ConfigurationCard("Loading addon catalogs…", "Refreshing metadata from enabled addons.")
+            AddonCatalogLoadState.Loading -> ConfigurationCard(
+                "Loading addon catalogs…",
+                "Refreshing metadata from enabled addons.",
+            )
             is AddonCatalogLoadState.Ready -> state.rows.forEach { row -> AddonDiscoverRow(row, profileId) }
         }
     }
@@ -428,19 +530,32 @@ private fun AddonDiscoverRow(row: StremioCatalogRow, profileId: String) {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
         Text(row.catalog.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-        if (row.error != null) ConfigurationCard("${row.catalog.name} unavailable", row.error)
-        else Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            row.items.forEach { item ->
-                val libraryItem = item.toLibraryItemRef(row.addonId)
-                AstraWaveFocusableCard(Modifier.width(184.dp).clickable {
-                    context.startActivity(Intent(context, TitleDetailsActivity::class.java).putExtra(TitleDetailsActivity.EXTRA_TITLE, libraryItem.title).putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, libraryItem.type.name).putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, libraryItem.sourceId))
-                }) {
-                    Column {
-                        AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(10.dp))
-                        Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                        Spacer(Modifier.height(10.dp))
-                        LibraryActionRow(item = libraryItem, profileId = profileId)
+        if (row.error != null) {
+            ConfigurationCard("${row.catalog.name} unavailable", row.error)
+        } else {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                row.items.forEach { item ->
+                    val libraryItem = item.toLibraryItemRef(row.addonId)
+                    AstraWaveFocusableCard(
+                        Modifier.width(184.dp).clickable {
+                            context.startActivity(
+                                Intent(context, TitleDetailsActivity::class.java)
+                                    .putExtra(TitleDetailsActivity.EXTRA_TITLE, libraryItem.title)
+                                    .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, libraryItem.type.name)
+                                    .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, libraryItem.sourceId),
+                            )
+                        },
+                    ) {
+                        Column {
+                            AstraWaveArtwork(title = item.name, modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(10.dp))
+                            Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                            Spacer(Modifier.height(10.dp))
+                            LibraryActionRow(item = libraryItem, profileId = profileId)
+                        }
                     }
                 }
             }
@@ -452,20 +567,50 @@ private fun AddonDiscoverRow(row: StremioCatalogRow, profileId: String) {
 private fun RealCatalogRow(page: TmdbCatalogPage) {
     Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
         Text(page.catalog.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            page.items.take(12).forEach { item -> AstraWaveFocusableCard(Modifier.width(184.dp)) {
-                Column {
-                    AstraWaveArtwork(title = item.title, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(10.dp))
-                    Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                    Spacer(Modifier.height(10.dp))
-                    LibraryActionRow(item = item.toLibraryItemRef(), profileId = "default")
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            page.items.take(12).forEach { item ->
+                AstraWaveFocusableCard(Modifier.width(184.dp)) {
+                    Column {
+                        AstraWaveArtwork(title = item.title, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(10.dp))
+                        Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                        Spacer(Modifier.height(10.dp))
+                        LibraryActionRow(item = item.toLibraryItemRef(), profileId = "default")
+                    }
                 }
-            } }
+            }
         }
     }
 }
 
-@Composable private fun LoadingCatalogRow(catalog: AstraWaveCatalog) { Row(Modifier.fillMaxWidth().padding(18.dp)) { CircularProgressIndicator(modifier = Modifier.width(22.dp)); Spacer(Modifier.width(12.dp)); Text("Loading ${catalog.title}…") } }
-@Composable private fun ErrorCatalogRow(catalog: AstraWaveCatalog, message: String) { ConfigurationCard(catalog.title, message) }
-@Composable private fun ConfigurationCard(title: String, message: String) { Column(Modifier.fillMaxWidth().padding(vertical = 7.dp).background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) { Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(5.dp)); Text(message, color = AstraWaveColors.SecondaryText) } }
+@Composable
+private fun LoadingCatalogRow(catalog: AstraWaveCatalog) {
+    Row(Modifier.fillMaxWidth().padding(18.dp)) {
+        CircularProgressIndicator(modifier = Modifier.width(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text("Loading ${catalog.title}…")
+    }
+}
+
+@Composable
+private fun ErrorCatalogRow(catalog: AstraWaveCatalog, message: String) {
+    ConfigurationCard(catalog.title, message)
+}
+
+@Composable
+private fun ConfigurationCard(title: String, message: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp)
+            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
+            .padding(18.dp),
+    ) {
+        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(5.dp))
+        Text(message, color = AstraWaveColors.SecondaryText)
+    }
+}
