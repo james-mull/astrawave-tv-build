@@ -18,6 +18,9 @@ import java.nio.charset.StandardCharsets
 /** Local DVR/catch-up orchestration for explicitly capable authorized providers. */
 class LocalDvrGateway(private val context: Context) : DvrGateway {
     private val prefs = context.getSharedPreferences("astrawave_dvr_v1", Context.MODE_PRIVATE)
+    private val dvrAuthorization = DvrAuthorizationStore(context)
+    private val sourceStore = IptvSourceStore(context)
+    private val sourceRepository = IptvSourceRepository()
 
     fun registerCapabilities(capabilities: LiveSourceCapabilities) {
         val all = loadCapabilities().toMutableMap(); all[capabilities.sourceId] = capabilities
@@ -36,23 +39,51 @@ class LocalDvrGateway(private val context: Context) : DvrGateway {
         prefs.edit().putString(KEY_CATCHUP,a.toString()).apply()
     }
 
-    override fun capabilities(sourceId:String):LiveSourceCapabilities=loadCapabilities()[sourceId]?:LiveSourceCapabilities(sourceId=sourceId)
+    override fun capabilities(sourceId:String):LiveSourceCapabilities {
+        loadCapabilities()[sourceId]?.let { return it }
+        val profileId = HouseholdProfileStore(context).activeProfileId()
+        val source = sourceStore.load(profileId).firstOrNull { it.enabled && it.name == sourceId }
+        val authorized = source != null && dvrAuthorization.allowed(profileId, source.id)
+        return LiveSourceCapabilities(
+            sourceId = sourceId,
+            supportsDvr = authorized,
+            maxRecordingHours = if (authorized) 12 else null,
+            supportsSeriesRecording = false,
+            recordingStorageLabel = if (authorized) "This device" else null,
+        )
+    }
 
     override fun schedule(request:RecordingRequest):Recording {
-        val cap=capabilities(request.sourceId)
-        val errors=DvrEligibility.validateRequest(request,cap)
+        val enriched = if (request.authorizedStreamUrls.isNotEmpty()) request else request.copy(
+            authorizedStreamUrls = resolveAuthorizedUrls(request),
+        )
+        val cap=capabilities(enriched.sourceId)
+        val errors=DvrEligibility.validateRequest(enriched,cap)
         require(errors.isEmpty()){errors.joinToString(" • ")}
         val conflict=loadRecordings().firstOrNull { existing ->
-            existing.request.id != request.id &&
-                existing.request.sourceId == request.sourceId &&
+            existing.request.id != enriched.id &&
+                existing.request.sourceId == enriched.sourceId &&
                 existing.state !in setOf(RecordingState.COMPLETE,RecordingState.FAILED,RecordingState.CANCELED) &&
-                DvrEligibility.overlaps(existing.request,request)
+                DvrEligibility.overlaps(existing.request,enriched)
         }
         require(conflict==null){"Recording conflicts with ${conflict?.request?.title ?: "another recording"} on this source"}
-        val recording=Recording(request,RecordingState.SCHEDULED)
+        val recording=Recording(enriched,RecordingState.SCHEDULED)
         upsert(recording)
         DvrRecordingScheduler.schedule(context,recording)
         return recording
+    }
+
+    private fun resolveAuthorizedUrls(request: RecordingRequest): List<String> {
+        val source = sourceStore.load(request.profileId).firstOrNull { candidate ->
+            candidate.enabled && candidate.name == request.sourceId && dvrAuthorization.allowed(request.profileId, candidate.id)
+        } ?: return emptyList()
+        val channels = runCatching { sourceRepository.loadChannels(source) }.getOrDefault(emptyList())
+        val targetIdentity = request.channelId
+        return channels.filter { channel ->
+            targetIdentity == LiveTvRepository.channelIdentityKey(channel) ||
+                targetIdentity == channel.id ||
+                targetIdentity == channel.tvgId
+        }.sortedBy { it.priority }.map { it.url }.filter { it.startsWith("http://") || it.startsWith("https://") }.distinct()
     }
 
     override fun cancel(recordingId:String):Boolean {
