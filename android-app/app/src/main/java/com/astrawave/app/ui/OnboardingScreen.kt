@@ -30,6 +30,33 @@ import com.astrawave.app.data.SetupHealthRepository
 import com.astrawave.app.data.SetupRepairRepository
 import kotlinx.coroutines.launch
 
+private enum class QuickStartPreset(
+    val title: String,
+    val description: String,
+    val target: OnboardingStep?,
+) {
+    JUST_WATCH(
+        "Just Watch",
+        "Movies, TV, discovery and built-in eligible sources. Skip advanced setup for now.",
+        OnboardingStep.TMDB,
+    ),
+    LIVE_TV(
+        "Live TV",
+        "Connect M3U/Xtream, build the Guide and optionally enable DVR later.",
+        OnboardingStep.LIVE_TV,
+    ),
+    PERSONAL_MEDIA(
+        "Personal Media",
+        "Connect Plex, Jellyfin, Emby, WebDAV or your own media server.",
+        OnboardingStep.PERSONAL_MEDIA,
+    ),
+    EVERYTHING(
+        "Everything",
+        "Walk through the complete AstraWave setup with profiles, sources, audio, devices and privacy.",
+        OnboardingStep.PROFILE,
+    ),
+}
+
 @Composable
 fun AstraWaveOnboardingScreen(
     profileId: String = "default",
@@ -46,7 +73,24 @@ fun AstraWaveOnboardingScreen(
     var repairing by remember { mutableStateOf(false) }
     var repairMessage by remember { mutableStateOf<String?>(null) }
 
-    fun refreshHealth() { health = healthRepository.snapshot(profileId) }
+    fun refreshHealth() {
+        health = healthRepository.snapshot(profileId)
+    }
+
+    fun routeTo(step: OnboardingStep) {
+        state = store.goTo(profileId, step)
+        onOpenStep(step)
+        refreshHealth()
+    }
+
+    fun chooseQuickStart(preset: QuickStartPreset) {
+        when (preset) {
+            QuickStartPreset.JUST_WATCH -> {
+                if (health.readyToWatch) onFinished() else routeTo(OnboardingStep.TMDB)
+            }
+            else -> preset.target?.let(::routeTo)
+        }
+    }
 
     fun completeCurrent() {
         if (state.currentStep == OnboardingStep.COMPLETE) {
@@ -70,30 +114,52 @@ fun AstraWaveOnboardingScreen(
     val doneCount = actionableSteps.count(state::isDone)
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .background(AstraWaveColors.Background).padding(24.dp),
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .background(AstraWaveColors.Background)
+            .padding(24.dp),
     ) {
         Text("ASTRAWAVE SETUP", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(8.dp))
         Text(
-            if (health.readyToWatch) "You’re ready to watch." else "Set up AstraWave your way.",
+            if (health.readyToWatch) "You’re ready to watch." else "How do you want to use AstraWave?",
             color = AstraWaveColors.PrimaryText,
             style = MaterialTheme.typography.headlineLarge,
         )
         Spacer(Modifier.height(6.dp))
         Text(
             if (health.readyToWatch) {
-                "Core setup is ready. Everything below that is marked optional can be added whenever you want."
+                "Core playback is ready. You can enter AstraWave now or add optional features below."
             } else {
-                "AstraWave checks your setup automatically. You only need to fix the items that actually need attention."
+                "Pick a Quick Start. AstraWave sends you only to the setup that matters for that experience."
             },
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.bodyLarge,
         )
+
         Spacer(Modifier.height(18.dp))
+        AstraWaveSectionHeader("Quick Start", "No technical checklist required")
+        Spacer(Modifier.height(8.dp))
+        QuickStartPreset.entries.forEach { preset ->
+            AstraWaveFocusableCard(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { chooseQuickStart(preset) },
+            ) {
+                Column {
+                    Text(preset.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(3.dp))
+                    Text(preset.description, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
         AstraWaveStatePanel(
             title = "Setup Health • ${health.score}%",
-            message = if (health.readyToWatch) "Core playback setup is ready" else "${health.readyCount} of ${health.requiredCount} required checks ready",
+            message = if (health.readyToWatch) {
+                "Core playback setup is ready"
+            } else {
+                "${health.readyCount} of ${health.requiredCount} required checks ready"
+            },
         )
         Spacer(Modifier.height(10.dp))
 
@@ -144,7 +210,7 @@ fun AstraWaveOnboardingScreen(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Safe repair only: refreshes source health/counts, removes duplicate local source records and normalizes Travel Mode limits. It never changes passwords, debrid tokens, DVR consent, parental controls or subscription state.",
+            "Safe repair only: source health/counts, duplicate local sources and Travel Mode bounds. Passwords, debrid tokens, DVR consent, parental controls and subscription state are never changed.",
             color = AstraWaveColors.TertiaryText,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -164,12 +230,14 @@ fun AstraWaveOnboardingScreen(
             )
         }
 
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(24.dp))
+        AstraWaveSectionHeader("Advanced Guided Setup", "For users who want to configure everything manually")
+        Spacer(Modifier.height(8.dp))
         AstraWaveStatePanel(
             title = "$doneCount of ${actionableSteps.size} guided steps finished",
             message = if (state.complete) "Guided setup complete" else "Current step: ${stepTitle(state.currentStep)}",
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
 
         actionableSteps.forEach { step ->
             val completed = step in state.completedSteps
@@ -196,11 +264,7 @@ fun AstraWaveOnboardingScreen(
                             else -> AstraWaveColors.SecondaryText
                         },
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.clickable {
-                            state = store.goTo(profileId, step)
-                            onOpenStep(step)
-                            refreshHealth()
-                        }.padding(8.dp),
+                        modifier = Modifier.clickable { routeTo(step) }.padding(8.dp),
                     )
                 }
             }
