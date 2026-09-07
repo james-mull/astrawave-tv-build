@@ -26,8 +26,18 @@ class RemoteCommandInbox(context: Context) {
 
     fun consume():Pending? { val pending=peek()?:return null;prefs.edit().clear().apply();return pending }
 
+    @Synchronized
+    fun consumeIf(commands:Set<String>):Pending? {
+        val pending=peek()?:return null
+        if(pending.command !in commands)return null
+        prefs.edit().clear().commit()
+        return pending
+    }
+
     companion object {
-        val SUPPORTED=setOf("PLAY","PAUSE","SEEK_FORWARD","SEEK_BACK","CHANNEL_UP","CHANNEL_DOWN","VOLUME_UP","VOLUME_DOWN","MUTE","BACK","HOME","OPEN_GUIDE","OPEN_SPORTS")
+        val PLAYER_COMMANDS=setOf("PLAY","PAUSE","SEEK_FORWARD","SEEK_BACK","VOLUME_UP","VOLUME_DOWN","MUTE")
+        val SHELL_COMMANDS=setOf("CHANNEL_UP","CHANNEL_DOWN","BACK","HOME","OPEN_GUIDE","OPEN_SPORTS")
+        val SUPPORTED=PLAYER_COMMANDS+SHELL_COMMANDS
         private const val KEY_ID="id";private const val KEY_COMMAND="command";private const val KEY_VALUE="value"
     }
 }
