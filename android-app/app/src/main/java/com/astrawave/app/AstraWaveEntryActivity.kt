@@ -8,8 +8,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 
 /**
- * One-time launcher gate for Android 13+ notification permission.
- * TV and pre-Android-13 devices pass straight through to the main AstraWave shell.
+ * Lightweight launcher gate. Notification permission is requested once, then new
+ * installs enter the simple onboarding flow while returning users open AstraWave directly.
  */
 class AstraWaveEntryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -23,17 +23,24 @@ class AstraWaveEntryActivity : ComponentActivity() {
             prefs.edit().putBoolean(KEY_PROMPTED, true).apply()
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         } else {
-            openMain()
+            openDestination()
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_NOTIFICATIONS) openMain()
+        if (requestCode == REQUEST_NOTIFICATIONS) openDestination()
     }
 
-    private fun openMain() {
-        startActivity(Intent(this, RebuildMainActivity::class.java))
+    private fun openDestination() {
+        val onboardingSeen = getSharedPreferences(OnboardingActivity.PREFS, MODE_PRIVATE)
+            .getBoolean(OnboardingActivity.KEY_ONBOARDING_SEEN, false)
+        startActivity(
+            Intent(
+                this,
+                if (onboardingSeen) RebuildMainActivity::class.java else OnboardingActivity::class.java,
+            ),
+        )
         finish()
     }
 
