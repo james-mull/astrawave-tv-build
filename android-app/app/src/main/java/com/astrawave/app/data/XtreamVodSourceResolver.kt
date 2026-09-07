@@ -28,11 +28,8 @@ class XtreamVodSourceResolver(context: Context) {
 
         return sources.flatMap { source ->
             runCatching {
-                if (request.season != null && request.episode != null) {
-                    discoverEpisode(source, request)
-                } else {
-                    discoverMovie(source, request)
-                }
+                if (request.season != null && request.episode != null) discoverEpisode(source, request)
+                else discoverMovie(source, request)
             }.getOrDefault(emptyList())
         }
             .distinctBy { it.link.url }
@@ -47,11 +44,11 @@ class XtreamVodSourceResolver(context: Context) {
                 val name = item.optString("name").trim()
                 val streamId = item.optString("stream_id").trim()
                 if (name.isBlank() || streamId.isBlank()) continue
-                val titleScore = titleScore(request.title, name)
+                val titleScore = XtreamVodMatcher.titleScore(request.title, name)
                 if (titleScore < 70) continue
                 val providerYear = item.optInt("year", 0).takeIf { it > 1800 }
                     ?: item.optString("releaseDate").take(4).toIntOrNull()
-                val yearScore = yearScore(request.year, providerYear)
+                val yearScore = XtreamVodMatcher.yearScore(request.year, providerYear)
                 if (yearScore < 0) continue
                 add(Triple(item, titleScore, yearScore))
             }
@@ -73,7 +70,7 @@ class XtreamVodSourceResolver(context: Context) {
                 val name = item.optString("name").trim()
                 val seriesId = item.optString("series_id").trim()
                 if (name.isBlank() || seriesId.isBlank()) continue
-                val score = titleScore(request.title, name)
+                val score = XtreamVodMatcher.titleScore(request.title, name)
                 if (score >= 70) add(item to score)
             }
         }.sortedByDescending { it.second }.take(MAX_SERIES_MATCHES)
@@ -88,9 +85,7 @@ class XtreamVodSourceResolver(context: Context) {
             if (episodeId.isBlank()) return@flatMap emptyList()
             val extension = safeExtension(episode.optString("container_extension"), "mp4")
             val url = streamUrl(source, "series", episodeId, extension) ?: return@flatMap emptyList()
-            val episodeTitle = episode.optString("title").ifBlank {
-                "${seriesItem.optString("name")} S${request.season}E${request.episode}"
-            }
+            val episodeTitle = episode.optString("title").ifBlank { "${seriesItem.optString("name")} S${request.season}E${request.episode}" }
             listOfNotNull(resolved(source, url, episodeTitle, titleScore + 80))
         }
     }
@@ -105,7 +100,7 @@ class XtreamVodSourceResolver(context: Context) {
             val item = candidates.optJSONObject(index) ?: continue
             val seasonNumber = item.optInt("season", season)
             val episodeNumber = item.optInt("episode_num", item.optInt("episode", 0))
-            if (seasonNumber == season && episodeNumber == episode) return item
+            if (XtreamVodMatcher.episodeMatches(season, episode, seasonNumber, episodeNumber)) return item
         }
         return null
     }
@@ -179,32 +174,6 @@ class XtreamVodSourceResolver(context: Context) {
         if (streamId.isBlank()) return null
         return "$server/$kind/${encodePath(username)}/${encodePath(password)}/${encodePath(streamId)}.$extension"
     }
-
-    private fun titleScore(expected: String, candidate: String): Int {
-        val a = normalizeTitle(expected)
-        val b = normalizeTitle(candidate)
-        if (a.isBlank() || b.isBlank()) return 0
-        return when {
-            a == b -> 120
-            a.startsWith(b) || b.startsWith(a) -> 90
-            a.contains(b) || b.contains(a) -> 70
-            else -> 0
-        }
-    }
-
-    private fun yearScore(expected: Int?, candidate: Int?): Int = when {
-        expected == null || candidate == null -> 0
-        expected == candidate -> 40
-        kotlin.math.abs(expected - candidate) <= 1 -> 10
-        else -> -1
-    }
-
-    private fun normalizeTitle(value: String): String = value.lowercase()
-        .replace(Regex("\\b(4k|uhd|2160p|1080p|720p|fhd|hd)\\b"), " ")
-        .replace(Regex("\\(?\\b(19|20)\\d{2}\\b\\)?"), " ")
-        .replace(Regex("[^a-z0-9]+"), " ")
-        .trim()
-        .replace(Regex("\\s+"), " ")
 
     private fun inferQuality(label: String): String = when {
         label.contains("2160", true) || label.contains("4k", true) || label.contains("uhd", true) -> "4K"
