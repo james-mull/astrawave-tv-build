@@ -33,6 +33,17 @@ class SetupHealthRepository(private val context: Context) {
         val devices = LocalDeviceSessionGateway(app).discover()
         val dvrAuth = DvrAuthorizationStore(app)
         val travel = DownloadTravelStore(app).travelPolicy(profileId)
+        val cloudStreamDefaults = CloudStreamRepositoryPreferenceStore(app).load(profileId)
+        val recommendedCloudStreamReady = RecommendedSourcePack.cloudStreamRepositoryIds.all { requiredId ->
+            cloudStreamDefaults.any { it.id == requiredId && it.enabled }
+        }
+        val recommendedStremioReady = RecommendedSourcePack.stremioManifestUrls.isNotEmpty()
+        val recommendedPackReady = recommendedCloudStreamReady && recommendedStremioReady
+        val recommendedPackCount = RecommendedSourcePack.stremioManifestUrls.size +
+            RecommendedSourcePack.cloudStreamRepositoryIds.size +
+            RecommendedSourcePack.liveSourceIds.size +
+            RecommendedSourcePack.audioProviders.size +
+            RecommendedSourcePack.providerCatalogs.size
 
         val items = listOf(
             SetupHealthItem(
@@ -42,22 +53,32 @@ class SetupHealthRepository(private val context: Context) {
                 ready = profileId.isNotBlank(),
             ),
             SetupHealthItem(
+                id = "recommended-pack",
+                title = "AstraWave Recommended Pack",
+                detail = if (recommendedPackReady) {
+                    "$recommendedPackCount reviewed/default integrations are available for zero-config discovery, Live TV, audio, subtitles and provider availability."
+                } else {
+                    "A reviewed default source was disabled. Restore Recommended Pack defaults from Sources or Fix Everything Safe."
+                },
+                ready = recommendedPackReady,
+            ),
+            SetupHealthItem(
                 id = "discovery",
                 title = "Movies & TV",
-                detail = if (settings.effectiveTmdbBearerToken().isNotBlank()) "Full movie and TV discovery is configured." else "Add TMDB setup for full metadata and discovery.",
-                ready = settings.effectiveTmdbBearerToken().isNotBlank(),
+                detail = if (settings.effectiveTmdbBearerToken().isNotBlank()) "Full movie and TV discovery is configured." else "Recommended catalogs work now; add TMDB setup for richer metadata and discovery.",
+                ready = true,
             ),
             SetupHealthItem(
                 id = "live",
                 title = "Live TV & Guide",
-                detail = if (sources.any { it.enabled }) "${sources.count { it.enabled }} enabled customer source${if (sources.count { it.enabled } == 1) "" else "s"}." else "AstraWave Free TV remains available; add M3U/Xtream only if you use one.",
+                detail = if (sources.any { it.enabled }) "${sources.count { it.enabled }} enabled customer source${if (sources.count { it.enabled } == 1) "" else "s"} plus AstraWave's reviewed free lineup." else "AstraWave Free TV and public guide sources are available; M3U/Xtream is optional.",
                 ready = true,
                 optional = true,
             ),
             SetupHealthItem(
                 id = "audio",
                 title = "Music & Podcasts",
-                detail = if (audio.subscriptions.isNotEmpty() || audio.stations.isNotEmpty()) "${audio.subscriptions.size} podcast feeds • ${audio.stations.size} radio stations saved." else "Built-in audio discovery works now; personal feeds/stations are optional.",
+                detail = if (audio.subscriptions.isNotEmpty() || audio.stations.isNotEmpty()) "${audio.subscriptions.size} podcast feeds • ${audio.stations.size} radio stations saved." else "Built-in radio, podcast and music discovery works now; saved feeds/stations are optional.",
                 ready = true,
                 optional = true,
             ),
