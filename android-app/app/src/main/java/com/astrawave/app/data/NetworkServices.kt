@@ -120,7 +120,13 @@ class RealDebridClient(private val accessToken: String) {
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
             connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
         }
-        val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
-        return stream.bufferedReader().use { it.readText() }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) {
+            val message = runCatching { JSONObject(response).optString("error").takeIf(String::isNotBlank) }.getOrNull()
+            error(message ?: "Real-Debrid returned HTTP $code")
+        }
+        return response
     }
 }
