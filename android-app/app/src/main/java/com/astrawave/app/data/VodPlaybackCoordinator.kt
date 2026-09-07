@@ -20,6 +20,7 @@ class VodPlaybackCoordinator(context: Context) {
     private val resolver = UnifiedVodSourceRepository(appContext)
     private val personalResolver = PersonalMediaVodResolver(appContext)
     private val diagnostics = VodPlaybackDiagnosticsStore(appContext)
+    private val cloud = FirebaseCloudRepository(appContext)
 
     suspend fun prepare(request: VodPlaybackRequest): VodPlaybackLaunch = coroutineScope {
         val scrapeRequest = ScrapeRequest(
@@ -39,7 +40,16 @@ class VodPlaybackCoordinator(context: Context) {
             plan = online.await(),
             personal = personal.await(),
         ).also { launch ->
-            if (launch.playable) runCatching { diagnostics.record(request.profileId, launch) }
+            if (launch.playable) {
+                runCatching {
+                    diagnostics.record(request.profileId, launch)
+                    if (cloud.signedIn) {
+                        diagnostics.latest(request.profileId)?.let { decision ->
+                            cloud.savePlaybackDiagnostic(request.profileId, decision)
+                        }
+                    }
+                }
+            }
         }
     }
 
