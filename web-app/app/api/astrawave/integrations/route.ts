@@ -85,10 +85,11 @@ export async function GET() {
     },
   ];
 
+  const active = integrations.filter(item => item.configured).length;
   return NextResponse.json({
-    configuredCount: integrations.count ? undefined : undefined,
-    active: integrations.filter(item => item.configured).length,
+    active,
     total: integrations.length,
+    optionalAvailable: integrations.length - active,
     integrations,
   });
 }
