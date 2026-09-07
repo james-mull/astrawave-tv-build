@@ -12,15 +12,14 @@ import com.astrawave.app.core.RecordingState
 import com.astrawave.app.core.TimeshiftSession
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 /** Local DVR/catch-up orchestration for explicitly capable authorized providers. */
 class LocalDvrGateway(private val context: Context) : DvrGateway {
     private val prefs = context.getSharedPreferences("astrawave_dvr_v1", Context.MODE_PRIVATE)
-    private val dvrAuthorization = DvrAuthorizationStore(context)
-    private val sourceStore = IptvSourceStore(context)
-    private val sourceRepository = IptvSourceRepository()
 
     fun registerCapabilities(capabilities: LiveSourceCapabilities) {
         val all = loadCapabilities().toMutableMap(); all[capabilities.sourceId] = capabilities
@@ -41,49 +40,29 @@ class LocalDvrGateway(private val context: Context) : DvrGateway {
 
     override fun capabilities(sourceId:String):LiveSourceCapabilities {
         loadCapabilities()[sourceId]?.let { return it }
-        val profileId = HouseholdProfileStore(context).activeProfileId()
-        val source = sourceStore.load(profileId).firstOrNull { it.enabled && it.name == sourceId }
-        val authorized = source != null && dvrAuthorization.allowed(profileId, source.id)
-        return LiveSourceCapabilities(
-            sourceId = sourceId,
-            supportsDvr = authorized,
-            maxRecordingHours = if (authorized) 12 else null,
-            supportsSeriesRecording = false,
-            recordingStorageLabel = if (authorized) "This device" else null,
-        )
+        val source = IptvSourceStore(context).loadAllProfiles().firstOrNull { it.name == sourceId || it.id == sourceId }
+            ?: return LiveSourceCapabilities(sourceId=sourceId)
+        if (!DvrAuthorizationStore(context).allowed(source.profileId, source.id)) return LiveSourceCapabilities(sourceId=sourceId)
+        return LiveSourceCapabilities(sourceId=sourceId, supportsDvr=true, maxRecordingHours=8, recordingStorageLabel="This device")
     }
 
     override fun schedule(request:RecordingRequest):Recording {
-        val enriched = if (request.authorizedStreamUrls.isNotEmpty()) request else request.copy(
-            authorizedStreamUrls = resolveAuthorizedUrls(request),
-        )
-        val cap=capabilities(enriched.sourceId)
-        val errors=DvrEligibility.validateRequest(enriched,cap)
+        val resolvedRequest = if (request.authorizedStreamUrls.isNotEmpty()) request else resolveAuthorizedRequest(request)
+        val cap=capabilities(resolvedRequest.sourceId)
+        val errors=DvrEligibility.validateRequest(resolvedRequest,cap)
         require(errors.isEmpty()){errors.joinToString(" • ")}
+        require(resolvedRequest.authorizedStreamUrls.isNotEmpty()){ "No DVR-authorized stream was found for this channel" }
         val conflict=loadRecordings().firstOrNull { existing ->
-            existing.request.id != enriched.id &&
-                existing.request.sourceId == enriched.sourceId &&
+            existing.request.id != resolvedRequest.id &&
+                existing.request.sourceId == resolvedRequest.sourceId &&
                 existing.state !in setOf(RecordingState.COMPLETE,RecordingState.FAILED,RecordingState.CANCELED) &&
-                DvrEligibility.overlaps(existing.request,enriched)
+                DvrEligibility.overlaps(existing.request,resolvedRequest)
         }
         require(conflict==null){"Recording conflicts with ${conflict?.request?.title ?: "another recording"} on this source"}
-        val recording=Recording(enriched,RecordingState.SCHEDULED)
+        val recording=Recording(resolvedRequest,RecordingState.SCHEDULED)
         upsert(recording)
         DvrRecordingScheduler.schedule(context,recording)
         return recording
-    }
-
-    private fun resolveAuthorizedUrls(request: RecordingRequest): List<String> {
-        val source = sourceStore.load(request.profileId).firstOrNull { candidate ->
-            candidate.enabled && candidate.name == request.sourceId && dvrAuthorization.allowed(request.profileId, candidate.id)
-        } ?: return emptyList()
-        val channels = runCatching { sourceRepository.loadChannels(source) }.getOrDefault(emptyList())
-        val targetIdentity = request.channelId
-        return channels.filter { channel ->
-            targetIdentity == LiveTvRepository.channelIdentityKey(channel) ||
-                targetIdentity == channel.id ||
-                targetIdentity == channel.tvgId
-        }.sortedBy { it.priority }.map { it.url }.filter { it.startsWith("http://") || it.startsWith("https://") }.distinct()
     }
 
     override fun cancel(recordingId:String):Boolean {
@@ -97,6 +76,28 @@ class LocalDvrGateway(private val context: Context) : DvrGateway {
     override fun recordings(profileId:String):List<Recording> = loadRecordings().filter{it.request.profileId==profileId}.sortedByDescending{it.request.startEpochMs}
 
     fun find(recordingId:String):Recording? = loadRecordings().firstOrNull{it.request.id==recordingId}
+
+    fun retry(recordingId:String):Recording? {
+        val recording = find(recordingId) ?: return null
+        if (recording.request.endEpochMs <= System.currentTimeMillis()) return null
+        if (recording.request.authorizedStreamUrls.isEmpty()) return null
+        val updated = recording.copy(state=RecordingState.SCHEDULED, playbackUrl=null, error=null)
+        upsert(updated)
+        DvrRecordingScheduler.schedule(context, updated)
+        return updated
+    }
+
+    fun delete(recordingId:String):Boolean {
+        val all=loadRecordings().toMutableList();val i=all.indexOfFirst{it.request.id==recordingId};if(i<0)return false
+        val recording = all[i]
+        DvrRecordingScheduler.cancel(context,recordingId)
+        recording.playbackUrl?.takeIf { it.startsWith("file:") }?.let { uri ->
+            runCatching { File(URI(uri)).delete() }
+        }
+        all.removeAt(i)
+        writeRecordings(all)
+        return true
+    }
 
     fun updateRecording(recordingId:String,state:RecordingState,playbackUrl:String?=null,error:String?=null):Recording? {
         val all=loadRecordings().toMutableList();val i=all.indexOfFirst{it.request.id==recordingId};if(i<0)return null
@@ -117,6 +118,21 @@ class LocalDvrGateway(private val context: Context) : DvrGateway {
     }.sortedByDescending{it.startEpochMs}
 
     override fun startTimeshift(sourceId:String,channelId:String):TimeshiftSession? { val cap=capabilities(sourceId);if(!DvrEligibility.canTimeshift(cap)||channelId.isBlank())return null;val now=System.currentTimeMillis();val windowMs=(cap.catchUpWindowHours?:2).coerceAtLeast(1)*3_600_000L;return TimeshiftSession("timeshift:$sourceId:$channelId:$now",sourceId,channelId,now,now-windowMs,now) }
+
+    private fun resolveAuthorizedRequest(request:RecordingRequest):RecordingRequest {
+        val source = IptvSourceStore(context).load(request.profileId).firstOrNull { it.name == request.sourceId || it.id == request.sourceId }
+            ?: return request
+        if (!DvrAuthorizationStore(context).allowed(request.profileId,source.id)) return request
+        val channelKey = request.channelId.removePrefix("name:").removePrefix("tvg:")
+        val urls = runCatching { IptvSourceRepository().loadChannels(source) }.getOrDefault(emptyList())
+            .filter { channel ->
+                channel.normalizedName == channelKey || channel.tvgId?.lowercase() == channelKey || channel.id.lowercase() == channelKey
+            }
+            .map { it.url }
+            .filter { it.startsWith("http://") || it.startsWith("https://") }
+            .distinct()
+        return request.copy(sourceId=source.name,authorizedStreamUrls=urls)
+    }
 
     private fun upsert(recording:Recording){val all=loadRecordings().toMutableList();val i=all.indexOfFirst{it.request.id==recording.request.id};if(i>=0)all[i]=recording else all+=recording;writeRecordings(all)}
 
