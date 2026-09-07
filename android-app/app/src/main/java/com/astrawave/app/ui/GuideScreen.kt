@@ -3,6 +3,7 @@ package com.astrawave.app.ui
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -165,22 +166,17 @@ fun AstraWaveGuideScreen(
 
     fun catchUp(row: GuideChannelRow, title: String, start: Long, end: Long) {
         val sourceId = row.preferredSource ?: return
-        dvr.registerCatchUpPrograms(
-            listOf(CatchUpProgram(sourceId, row.id, "${row.id}:$start", title, start, end)),
-        )
+        dvr.registerCatchUpPrograms(listOf(CatchUpProgram(sourceId, row.id, "${row.id}:$start", title, start, end)))
         val item = dvr.catchUp(row.id, start, end).firstOrNull()
         if (item == null) {
             Toast.makeText(context, "This source does not expose authorized catch-up for that program.", Toast.LENGTH_LONG).show()
         } else {
-            scope.launch {
-                val urls = listOf(item.playbackUrl)
-                context.startActivity(
-                    Intent(context, PlayerActivity::class.java)
-                        .putExtra(PlayerActivity.EXTRA_URL, urls.first())
-                        .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(urls))
-                        .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
-                )
-            }
+            context.startActivity(
+                Intent(context, PlayerActivity::class.java)
+                    .putExtra(PlayerActivity.EXTRA_URL, item.playbackUrl)
+                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, arrayListOf(item.playbackUrl))
+                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+            )
         }
     }
 
@@ -192,7 +188,7 @@ fun AstraWaveGuideScreen(
         Spacer(Modifier.height(5.dp))
         AstraWavePageHeader(
             title = "Guide",
-            subtitle = "A personalized timeline EPG with merged sources, Smart Source Fusion, catch-up and DVR when supported.",
+            subtitle = "A synchronized timeline EPG with fixed channels, Smart Source Fusion, catch-up and DVR when supported.",
         )
         Spacer(Modifier.height(18.dp))
 
@@ -201,6 +197,7 @@ fun AstraWaveGuideScreen(
             is GuideLoadState.Error -> AstraWaveErrorState("Guide unavailable", current.message, retryLabel = "Refresh guide", onRetry = { refreshKey += 1 })
             is GuideLoadState.Ready -> {
                 val snapshot = current.snapshot
+                val timelineScroll = rememberScrollState()
                 GuideSummaryRail(snapshot, current.customized, current.epgOverrides)
                 Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
@@ -232,10 +229,10 @@ fun AstraWaveGuideScreen(
 
                 AstraWaveSectionHeader(
                     title = "Timeline",
-                    subtitle = "${visible.size} channels • ${horizonHours} hour horizon • profile channel edits and manual guide mappings update live.",
+                    subtitle = "${visible.size} channels • ${horizonHours} hour horizon • one synchronized time viewport.",
                 )
                 Spacer(Modifier.height(8.dp))
-                TimelineHeader(horizonHours)
+                TimelineHeader(horizonHours, timelineScroll)
 
                 if (visible.isEmpty()) {
                     AstraWaveEmptyState("No guide matches", "Try another search, group, or time filter. Hidden channels stay out of this profile's guide.")
@@ -244,6 +241,7 @@ fun AstraWaveGuideScreen(
                         TimelineRow(
                             row = row,
                             hours = horizonHours,
+                            timelineScroll = timelineScroll,
                             onPlay = { play(row) },
                             onCatchUp = { title, start, end -> catchUp(row, title, start, end) },
                             onRecord = { title, start, end -> schedule(row, title, start, end, false) },
@@ -260,16 +258,18 @@ fun AstraWaveGuideScreen(
 }
 
 @Composable
-private fun TimelineHeader(hours: Int) {
+private fun TimelineHeader(hours: Int, timelineScroll: ScrollState) {
     val now = System.currentTimeMillis()
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).background(AstraWaveColors.BackgroundRaised)) {
+    Row(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised)) {
         Box(Modifier.width(210.dp).padding(10.dp)) {
             Text("CHANNEL", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
         }
-        repeat(hours * 2) { index ->
-            val time = now + index * 30L * 60_000L
-            Box(Modifier.width(145.dp).padding(10.dp)) {
-                Text(formatGuideTime(time), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+        Row(Modifier.weight(1f).horizontalScroll(timelineScroll)) {
+            repeat(hours * 2) { index ->
+                val time = now + index * 30L * 60_000L
+                Box(Modifier.width(145.dp).padding(10.dp)) {
+                    Text(formatGuideTime(time), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }
@@ -279,6 +279,7 @@ private fun TimelineHeader(hours: Int) {
 private fun TimelineRow(
     row: GuideChannelRow,
     hours: Int,
+    timelineScroll: ScrollState,
     onPlay: () -> Unit,
     onCatchUp: (String, Long, Long) -> Unit,
     onRecord: (String, Long, Long) -> Unit,
@@ -295,7 +296,7 @@ private fun TimelineRow(
     }
     val capabilities = row.preferredSource?.let(dvr::capabilities)
 
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).horizontalScroll(rememberScrollState())) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Column(
             Modifier.width(210.dp).background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.medium)
                 .clickable(onClick = onPlay).padding(11.dp),
@@ -308,33 +309,35 @@ private fun TimelineRow(
             }
         }
 
-        if (programmes.isEmpty()) {
-            Box(Modifier.width(290.dp).padding(12.dp)) { Text(row.now?.title ?: "No EPG data", color = AstraWaveColors.SecondaryText) }
-        } else {
-            programmes.take(20).forEach { (programme, start, end) ->
-                val past = end <= now
-                val current = now in start until end
-                val durationMinutes = ((end - start) / 60_000L).coerceAtLeast(15L)
-                val width = (durationMinutes / 30.0 * 145.0).coerceIn(100.0, 360.0).dp
-                AstraWaveFocusableCard(Modifier.width(width).padding(horizontal = 2.dp)) {
-                    Column {
-                        Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleSmall, maxLines = 2)
-                        Text(
-                            "${formatGuideTime(start)} – ${formatGuideTime(end)}",
-                            color = if (current) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                            if (current) Text("WATCH", color = AstraWaveColors.Accent, modifier = Modifier.clickable(onClick = onPlay))
-                            if (past && capabilities != null && DvrEligibility.canCatchUp(capabilities)) {
-                                Text("REPLAY", color = AstraWaveColors.Accent, modifier = Modifier.clickable { onCatchUp(programme.title, start, end) })
-                            }
-                            if (!past && capabilities?.supportsDvr == true) {
-                                Text("REC", color = AstraWaveColors.Warning, modifier = Modifier.clickable { onRecord(programme.title, start, end) })
-                            }
-                            if (!past && capabilities?.supportsSeriesRecording == true) {
-                                Text("SERIES", color = AstraWaveColors.Accent, modifier = Modifier.clickable { onSeries(programme.title, start, end) })
+        Row(Modifier.weight(1f).horizontalScroll(timelineScroll)) {
+            if (programmes.isEmpty()) {
+                Box(Modifier.width(290.dp).padding(12.dp)) { Text(row.now?.title ?: "No EPG data", color = AstraWaveColors.SecondaryText) }
+            } else {
+                programmes.take(20).forEach { (programme, start, end) ->
+                    val past = end <= now
+                    val current = now in start until end
+                    val durationMinutes = ((end - start) / 60_000L).coerceAtLeast(15L)
+                    val width = (durationMinutes / 30.0 * 145.0).coerceIn(100.0, 360.0).dp
+                    AstraWaveFocusableCard(Modifier.width(width).padding(horizontal = 2.dp)) {
+                        Column {
+                            Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+                            Text(
+                                "${formatGuideTime(start)} – ${formatGuideTime(end)}",
+                                color = if (current) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                if (current) Text("WATCH", color = AstraWaveColors.Accent, modifier = Modifier.clickable(onClick = onPlay))
+                                if (past && capabilities != null && DvrEligibility.canCatchUp(capabilities)) {
+                                    Text("REPLAY", color = AstraWaveColors.Accent, modifier = Modifier.clickable { onCatchUp(programme.title, start, end) })
+                                }
+                                if (!past && capabilities?.supportsDvr == true) {
+                                    Text("REC", color = AstraWaveColors.Warning, modifier = Modifier.clickable { onRecord(programme.title, start, end) })
+                                }
+                                if (!past && capabilities?.supportsSeriesRecording == true) {
+                                    Text("SERIES", color = AstraWaveColors.Accent, modifier = Modifier.clickable { onSeries(programme.title, start, end) })
+                                }
                             }
                         }
                     }
