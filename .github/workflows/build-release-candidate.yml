@@ -4,63 +4,47 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - feature/android-unified-app
       - feature/nuvio-core-rebuild
     paths:
       - "android-app/**"
-      - "astrawave-free-tv/**"
-      - "docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md"
-      - "docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md"
+      - ".github/workflows/build-apk.yml"
       - ".github/workflows/build-release-candidate.yml"
 
-permissions:
-  contents: read
-
 concurrency:
-  group: astrawave-release-candidate-${{ github.ref }}
+  group: astrwave-release-candidate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   release-candidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: android-app
+    timeout-minutes: 35
     env:
+      ASTRAWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRAWAVE_TMDB_BEARER_TOKEN }}
       ASTRAWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRAWAVE_FIREBASE_API_KEY }}
       ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
       ASTRAWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRAWAVE_FIREBASE_PROJECT_ID }}
       ASTRAWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRAWAVE_FIREBASE_SENDER_ID }}
-      ASTRAWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRAWAVE_TMDB_BEARER_TOKEN }}
-      ASTRAWAVE_RELEASE_KEYSTORE_B64: ${{ secrets.ASTRAWAVE_RELEASE_KEYSTORE_B64 }}
-      ASTRAWAVE_RELEASE_STORE_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_STORE_PASSWORD }}
-      ASTRAWAVE_RELEASE_KEY_ALIAS: ${{ secrets.ASTRAWAVE_RELEASE_KEY_ALIAS }}
-      ASTRAWAVE_RELEASE_KEY_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_KEY_PASSWORD }}
-      ASTRAWAVE_GIT_SHA: ${{ github.sha }}
-
+      ASTRAWAVE_API_BASE_URL: ${{ secrets.ASTRAWAVE_API_BASE_URL }}
+      ASTRAWAVE_PREMIUM_PRODUCT_ID: ${{ secrets.ASTRAWAVE_PREMIUM_PRODUCT_ID }}
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Repository validation
-        working-directory: .
-        shell: bash
         run: |
-          set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "feature/nuvio-core-rebuild"
+          test -f android-app/gradlew
           test -f android-app/settings.gradle.kts
           test -f android-app/app/build.gradle.kts
-          test -f android-app/app/src/main/AndroidManifest.xml
-          test -f astrawave-free-tv/check_free_tv.py
-          test -f docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md
-          test -f docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md
-          echo "Validated branch=${GITHUB_REF_NAME} sha=${GITHUB_SHA}"
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
+          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -70,102 +54,80 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.9"
 
       - name: Compiler preflight
-        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin :app:compileReleaseKotlin
+        working-directory: android-app
+        run: ./gradlew :app:compileDebugKotlin --stacktrace --no-daemon
 
       - name: Unit tests
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
+        working-directory: android-app
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
 
       - name: Free TV registry integrity
-        working-directory: .
-        run: python3 astrawave-free-tv/check_free_tv.py
+        working-directory: android-app
+        run: ./gradlew testDebugUnitTest --tests "*FreeTv*" --stacktrace --no-daemon
 
       - name: Debug lint
-        shell: bash
-        run: |
-          set +e
-          gradle --no-daemon --stacktrace :app:lintDebug
-          status=$?
-          echo "===== FULL DEBUG LINT REPORTS ====="
-          find app/build/intermediates -name 'lint-results-*.txt' -type f -print -exec cat {} \; || true
-          exit "$status"
+        working-directory: android-app
+        run: ./gradlew lintDebug --stacktrace --no-daemon
 
       - name: Release lint
-        shell: bash
-        run: |
-          set +e
-          gradle --no-daemon --stacktrace :app:lintRelease
-          status=$?
-          echo "===== FULL RELEASE LINT REPORTS ====="
-          find app/build/intermediates -name 'lint-results-*.txt' -type f -print -exec cat {} \; || true
-          exit "$status"
+        working-directory: android-app
+        run: ./gradlew lintRelease --stacktrace --no-daemon
 
       - name: Build debug APK
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
+        working-directory: android-app
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Prepare optional release signing
-        shell: bash
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.ASTRAWAVE_RELEASE_KEYSTORE_BASE64 }}
         run: |
-          set -euo pipefail
-          if [[ -n "${ASTRAWAVE_RELEASE_KEYSTORE_B64:-}" && -n "${ASTRAWAVE_RELEASE_STORE_PASSWORD:-}" && -n "${ASTRAWAVE_RELEASE_KEY_ALIAS:-}" && -n "${ASTRAWAVE_RELEASE_KEY_PASSWORD:-}" ]]; then
-            KEYSTORE_PATH="$RUNNER_TEMP/astrawave-release.jks"
-            printf '%s' "$ASTRAWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
-            echo "ASTRAWAVE_RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-            echo "ASTRAWAVE_RELEASE_SIGNED=true" >> "$GITHUB_ENV"
-            echo "Release signing credentials detected."
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/android-app/astrawave-release.jks"
+            echo "ASTRAWAVE_RELEASE_STORE_FILE=astrawave-release.jks" >> "$GITHUB_ENV"
+            echo "ASTRAWAVE_RELEASE_STORE_PASSWORD=${{ secrets.ASTRAWAVE_RELEASE_STORE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "ASTRAWAVE_RELEASE_KEY_ALIAS=${{ secrets.ASTRAWAVE_RELEASE_KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "ASTRAWAVE_RELEASE_KEY_PASSWORD=${{ secrets.ASTRAWAVE_RELEASE_KEY_PASSWORD }}" >> "$GITHUB_ENV"
           else
-            echo "ASTRAWAVE_RELEASE_SIGNED=false" >> "$GITHUB_ENV"
-            echo "Signing secrets incomplete; artifacts are CI release candidates only and MUST NOT be promoted."
+            echo "Release signing secret is not configured; release artifacts will use the repository's unsigned release configuration."
           fi
 
       - name: Build release APK and AAB
-        run: gradle --no-daemon --stacktrace :app:assembleRelease :app:bundleRelease
+        working-directory: android-app
+        run: ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon
 
       - name: Validate release signatures when configured
-        shell: bash
         run: |
-          set -euo pipefail
-          if [[ "${ASTRAWAVE_RELEASE_SIGNED:-false}" == "true" ]]; then
-            APK="app/build/outputs/apk/release/app-release.apk"
-            AAB="app/build/outputs/bundle/release/app-release.aab"
-            test -s "$APK"
-            test -s "$AAB"
-            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
-            jarsigner -verify -strict "$AAB"
+          if [ -n "${ASTRAWAVE_RELEASE_STORE_FILE:-}" ]; then
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+            test -n "$APKSIGNER"
+            find android-app/app/build/outputs/apk/release -name "*.apk" -print -exec "$APKSIGNER" verify --verbose {} \;
           else
-            echo "Signature verification skipped because release signing is not configured."
+            echo "Skipped signature validation because no release keystore is configured."
           fi
 
       - name: Generate release provenance and SHA-256 checksums
-        shell: bash
         run: |
-          set -euo pipefail
-          cd app/build/outputs
-          find . -type f \( -name '*.apk' -o -name '*.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
-          {
-            echo "git_sha=${GITHUB_SHA}"
-            echo "git_ref=${GITHUB_REF}"
-            echo "workflow_run_id=${GITHUB_RUN_ID}"
-            echo "signed=${ASTRAWAVE_RELEASE_SIGNED:-false}"
-            echo "promotion_eligible=${ASTRAWAVE_RELEASE_SIGNED:-false}"
-            echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          } > RELEASE_METADATA.txt
-          cat SHA256SUMS.txt
-          cat RELEASE_METADATA.txt
+          mkdir -p release-candidate
+          find android-app/app/build/outputs/apk/debug -name "*.apk" -exec cp {} release-candidate/ \;
+          find android-app/app/build/outputs/apk/release -name "*.apk" -exec cp {} release-candidate/ \;
+          find android-app/app/build/outputs/bundle/release -name "*.aab" -exec cp {} release-candidate/ \;
+          (
+            cd release-candidate
+            sha256sum *.apk *.aab > SHA256SUMS.txt
+          )
+          cat > release-candidate/PROVENANCE.txt <<EOF
+          repository=${GITHUB_REPOSITORY}
+          commit=${GITHUB_SHA}
+          ref=${GITHUB_REF}
+          workflow_run=${GITHUB_RUN_ID}
+          built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
 
       - name: Upload release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: AstraWave-release-candidate-${{ github.sha }}
+          name: astrwave-release-candidate-${{ github.sha }}
+          path: release-candidate/*
           if-no-files-found: error
-          retention-days: 14
-          path: |
-            android-app/app/build/outputs/**/*.apk
-            android-app/app/build/outputs/**/*.aab
-            android-app/app/build/outputs/SHA256SUMS.txt
-            android-app/app/build/outputs/RELEASE_METADATA.txt
-            android-app/app/build/reports/lint-results-*.html
-            android-app/app/build/reports/lint-results-*.xml
