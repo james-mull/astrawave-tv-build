@@ -22,6 +22,7 @@ import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.core.StremioMetaItem
 import com.astrawave.app.core.WatchlistEntry
 import com.astrawave.app.data.FirebaseCloudRepository
+import com.astrawave.app.data.HouseholdProfileStore
 import com.astrawave.app.data.LocalLibraryStore
 import com.astrawave.app.data.TmdbItem
 
@@ -55,13 +56,16 @@ fun LibraryActionRow(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val resolvedProfileId = remember(profileId) {
+        if (profileId == "default") HouseholdProfileStore(context).activeProfileId() else profileId
+    }
     val store = remember { LocalLibraryStore(context) }
     val cloud = remember { FirebaseCloudRepository(context) }
-    var inWatchlist by remember(item.id, profileId) {
-        mutableStateOf(store.watchlist(profileId).any { it.item.id == item.id })
+    var inWatchlist by remember(item.id, resolvedProfileId) {
+        mutableStateOf(store.watchlist(resolvedProfileId).any { it.item.id == item.id })
     }
-    var favorite by remember(item.id, profileId) {
-        mutableStateOf(store.favorites(profileId).any { it.item.id == item.id })
+    var favorite by remember(item.id, resolvedProfileId) {
+        mutableStateOf(store.favorites(resolvedProfileId).any { it.item.id == item.id })
     }
 
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -72,24 +76,19 @@ fun LibraryActionRow(
                         .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.title)
                         .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, item.type.name)
                         .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, item.sourceId)
-                        .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+                        .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, resolvedProfileId),
                 )
             },
         ) {
-            Text(
-                "Open",
-                color = AstraWaveColors.Accent,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            )
+            Text("Open", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 2.dp))
         }
         AstraWaveFocusableCard(
             Modifier.clickable {
                 inWatchlist = !inWatchlist
-                val entry = WatchlistEntry(profileId = profileId, item = item)
+                val entry = WatchlistEntry(profileId = resolvedProfileId, item = item)
                 store.setWatchlist(entry, inWatchlist)
                 if (cloud.signedIn) {
-                    if (inWatchlist) cloud.saveWatchlist(entry) else cloud.removeWatchlist(profileId, item.id)
+                    if (inWatchlist) cloud.saveWatchlist(entry) else cloud.removeWatchlist(resolvedProfileId, item.id)
                 }
             },
         ) {
@@ -103,10 +102,10 @@ fun LibraryActionRow(
         AstraWaveFocusableCard(
             Modifier.clickable {
                 favorite = !favorite
-                val entry = FavoriteEntry(profileId = profileId, item = item)
+                val entry = FavoriteEntry(profileId = resolvedProfileId, item = item)
                 store.setFavorite(entry, favorite)
                 if (cloud.signedIn) {
-                    if (favorite) cloud.saveFavorite(entry) else cloud.removeFavorite(profileId, item.id)
+                    if (favorite) cloud.saveFavorite(entry) else cloud.removeFavorite(resolvedProfileId, item.id)
                 }
             },
         ) {
