@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
@@ -79,33 +80,46 @@ fun AstraWaveSectionHeader(
     }
 }
 
+enum class AstraWaveStateTone { ACCENT, SUCCESS, WARNING, ERROR, NEUTRAL }
+
+private fun stateToneColor(tone: AstraWaveStateTone): Color = when (tone) {
+    AstraWaveStateTone.ACCENT -> AstraWaveColors.Accent
+    AstraWaveStateTone.SUCCESS -> AstraWaveColors.Success
+    AstraWaveStateTone.WARNING -> AstraWaveColors.Warning
+    AstraWaveStateTone.ERROR -> AstraWaveColors.Error
+    AstraWaveStateTone.NEUTRAL -> AstraWaveColors.TertiaryText
+}
+
 @Composable
 fun AstraWaveStatePanel(
     title: String,
     message: String,
     loading: Boolean = false,
     modifier: Modifier = Modifier,
+    tone: AstraWaveStateTone = AstraWaveStateTone.ACCENT,
 ) {
+    val accent = if (loading) AstraWaveColors.AccentStrong else stateToneColor(tone)
     Row(
         modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(AstraWaveColors.SurfaceRaised)
-            .padding(horizontal = 18.dp, vertical = 15.dp),
+            .border(1.dp, accent.copy(alpha = 0.16f), MaterialTheme.shapes.large)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.width(3.dp).height(38.dp).clip(MaterialTheme.shapes.small)
-                .background(if (loading) AstraWaveColors.Accent else AstraWaveColors.AccentSoft),
+            Modifier.width(4.dp).height(42.dp).clip(MaterialTheme.shapes.small)
+                .background(accent),
         )
         Spacer(Modifier.width(14.dp))
         if (loading) {
-            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AstraWaveColors.AccentStrong, strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = accent, strokeWidth = 2.dp)
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(4.dp))
             Text(message, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -160,6 +174,7 @@ fun AstraWaveActionRow(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(AstraWaveColors.SurfaceRaised)
+            .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.45f), MaterialTheme.shapes.large)
             .padding(horizontal = 18.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
