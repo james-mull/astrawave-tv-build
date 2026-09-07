@@ -9,7 +9,11 @@ import org.json.JSONObject
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
-/** Zero-configuration discovery for AstraWave Radio, Music previews and Podcasts. */
+/**
+ * Large, zero-configuration discovery layer for AstraWave Radio, music previews and podcasts.
+ * Full commercial music playback is intentionally delegated to licensed/user-authorized providers;
+ * this repository provides broad searchable discovery plus legal preview playback.
+ */
 class AstraWaveAudioDiscoveryRepository {
     private val radioServers = listOf(
         "https://de1.api.radio-browser.info",
@@ -19,41 +23,63 @@ class AstraWaveAudioDiscoveryRepository {
     )
 
     val podcastTopics = listOf(
-        "news", "comedy", "true crime", "sports", "business", "technology",
-        "science", "history", "society culture", "education", "health fitness",
-        "music", "tv film", "kids family", "arts", "fiction", "politics",
-        "daily news", "entrepreneurship", "investing", "design", "food", "travel",
-        "parenting", "relationships", "gaming", "automotive", "nature", "medicine",
-        "self improvement",
-    )
+        "news", "comedy", "true crime", "sports", "business", "technology", "science", "history",
+        "society culture", "education", "health fitness", "music", "tv film", "kids family", "arts",
+        "fiction", "politics", "daily news", "entrepreneurship", "investing", "design", "food", "travel",
+        "parenting", "relationships", "gaming", "automotive", "nature", "medicine", "self improvement",
+        "religion spirituality", "government", "books", "film reviews", "basketball", "football", "baseball",
+        "hockey", "soccer", "wrestling", "mma", "motorsports", "cryptocurrency", "personal finance",
+        "careers", "marketing", "startups", "artificial intelligence", "cybersecurity", "space", "psychology",
+        "mental health", "fitness", "nutrition", "running", "outdoors", "photography", "fashion", "home",
+        "gardening", "diy", "parenting", "relationships", "language learning", "documentary", "audio drama",
+    ).distinct()
 
     val musicGenres = listOf(
-        "pop", "rock", "hip hop", "r&b", "country", "electronic",
-        "alternative", "jazz", "classical", "latin", "reggae", "metal",
-        "dance", "blues", "folk", "indie", "punk", "gospel", "world",
-        "afrobeats", "k-pop", "j-pop", "ambient", "house", "techno", "trance",
-        "disco", "funk", "soul",
+        "pop", "rock", "hip hop", "rap", "r&b", "country", "electronic", "alternative", "jazz", "classical",
+        "latin", "reggae", "metal", "dance", "blues", "folk", "indie", "punk", "gospel", "world",
+        "afrobeats", "k-pop", "j-pop", "ambient", "house", "techno", "trance", "disco", "funk", "soul",
+        "americana", "bluegrass", "christian", "soundtrack", "new age", "opera", "singer songwriter",
+        "hard rock", "indie pop", "indie rock", "edm", "dubstep", "drum and bass", "lofi", "chill",
+        "salsa", "bachata", "reggaeton", "regional mexican", "brazilian", "african", "arabic", "bollywood",
+    ).distinct()
+
+    val radioGenres = listOf(
+        "news", "talk", "sports", "pop", "rock", "hip hop", "r&b", "country", "jazz", "classical",
+        "electronic", "dance", "house", "techno", "metal", "alternative", "indie", "oldies", "80s", "90s",
+        "latin", "reggae", "world", "religious", "gospel", "public radio", "college", "community", "ambient",
     )
 
-    fun discoverRadio(limit: Int = 80): List<RadioStation> {
-        val capped = limit.coerceIn(1, 100)
-        val json = radioServers.firstNotNullOfOrNull { server ->
-            runCatching {
-                SimpleHttp.getText("$server/json/stations/topvote/$capped?hidebroken=true&order=votes&reverse=true")
-            }.getOrNull()
-        } ?: return emptyList()
-        return parseRadio(json)
+    val radioCountries = listOf(
+        "US", "CA", "MX", "GB", "IE", "FR", "DE", "ES", "IT", "NL", "BE", "CH", "AT", "PT",
+        "SE", "NO", "DK", "FI", "PL", "CZ", "RO", "GR", "TR", "AU", "NZ", "JP", "KR", "IN",
+        "BR", "AR", "CL", "CO", "PE", "ZA", "NG", "KE", "EG", "AE", "IL", "PH", "ID", "SG",
+    )
+
+    fun discoverRadio(limit: Int = 200, offset: Int = 0): List<RadioStation> =
+        radioRequest("/json/stations/topvote/${limit.coerceIn(1, 500)}?hidebroken=true&order=votes&reverse=true&offset=${offset.coerceAtLeast(0)}")
+
+    fun radioByGenre(genre: String, limit: Int = 200, offset: Int = 0): List<RadioStation> {
+        val tag = URLEncoder.encode(genre.trim(), StandardCharsets.UTF_8.name())
+        return radioRequest("/json/stations/bytag/$tag?hidebroken=true&order=votes&reverse=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}")
     }
 
-    fun searchRadio(query: String, limit: Int = 60): List<RadioStation> {
+    fun radioByCountry(countryCode: String, limit: Int = 200, offset: Int = 0): List<RadioStation> {
+        val code = URLEncoder.encode(countryCode.trim().uppercase(), StandardCharsets.UTF_8.name())
+        return radioRequest("/json/stations/bycountrycodeexact/$code?hidebroken=true&order=votes&reverse=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}")
+    }
+
+    fun searchRadio(query: String, limit: Int = 250, offset: Int = 0): List<RadioStation> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
         val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
-        val capped = limit.coerceIn(1, 100)
+        return radioRequest(
+            "/json/stations/search?name=$encoded&hidebroken=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}&order=votes&reverse=true",
+        )
+    }
+
+    private fun radioRequest(path: String): List<RadioStation> {
         val json = radioServers.firstNotNullOfOrNull { server ->
-            runCatching {
-                SimpleHttp.getText("$server/json/stations/search?name=$encoded&hidebroken=true&limit=$capped&order=votes&reverse=true")
-            }.getOrNull()
+            runCatching { SimpleHttp.getText("$server$path") }.getOrNull()
         } ?: return emptyList()
         return parseRadio(json)
     }
@@ -81,18 +107,22 @@ class AstraWaveAudioDiscoveryRepository {
         }.distinctBy { it.id }
     }
 
-    fun discoverPodcasts(perTopic: Int = 6): List<AudioSubscription> {
-        val limit = perTopic.coerceIn(1, 12)
-        return podcastTopics.flatMap { topic -> searchPodcasts(topic, limit) }
+    fun discoverPodcasts(perTopic: Int = 10, maxItems: Int = 500): List<AudioSubscription> {
+        val limit = perTopic.coerceIn(1, 20)
+        return podcastTopics.asSequence()
+            .flatMap { topic -> searchPodcasts(topic, limit).asSequence() }
             .distinctBy { it.feedUrl.lowercase() }
-            .take(140)
+            .take(maxItems.coerceIn(1, 1_000))
+            .toList()
     }
 
-    fun searchPodcasts(query: String, limit: Int = 80): List<AudioSubscription> {
+    fun podcastsByTopic(topic: String, limit: Int = 120): List<AudioSubscription> = searchPodcasts(topic, limit)
+
+    fun searchPodcasts(query: String, limit: Int = 150): List<AudioSubscription> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
         val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
-        val capped = limit.coerceIn(1, 120)
+        val capped = limit.coerceIn(1, 200)
         val root = runCatching {
             JSONObject(SimpleHttp.getText("https://itunes.apple.com/search?media=podcast&entity=podcast&country=US&limit=$capped&term=$encoded"))
         }.getOrNull() ?: return emptyList()
@@ -109,7 +139,8 @@ class AstraWaveAudioDiscoveryRepository {
                         id = "itunes:$collectionId",
                         title = title,
                         feedUrl = feedUrl,
-                        artworkUrl = item.optString("artworkUrl600").ifBlank { item.optString("artworkUrl100") }.takeIf { it.startsWith("https://") },
+                        artworkUrl = item.optString("artworkUrl600").ifBlank { item.optString("artworkUrl100") }
+                            .takeIf { it.startsWith("https://") },
                         videoCapable = false,
                     ),
                 )
@@ -117,16 +148,19 @@ class AstraWaveAudioDiscoveryRepository {
         }.distinctBy { it.feedUrl.lowercase() }
     }
 
-    fun discoverMusic(perGenre: Int = 6): List<AudioItem> = musicGenres
-        .flatMap { genre -> searchMusic(genre, perGenre) }
+    fun discoverMusic(perGenre: Int = 10, maxItems: Int = 500): List<AudioItem> = musicGenres.asSequence()
+        .flatMap { genre -> searchMusic(genre, perGenre).asSequence() }
         .distinctBy { it.id }
-        .take(160)
+        .take(maxItems.coerceIn(1, 1_000))
+        .toList()
 
-    fun searchMusic(query: String, limit: Int = 90): List<AudioItem> {
+    fun musicByGenre(genre: String, limit: Int = 150): List<AudioItem> = searchMusic(genre, limit)
+
+    fun searchMusic(query: String, limit: Int = 150): List<AudioItem> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
         val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
-        val capped = limit.coerceIn(1, 120)
+        val capped = limit.coerceIn(1, 200)
         val root = runCatching {
             JSONObject(SimpleHttp.getText("https://itunes.apple.com/search?media=music&entity=song&country=US&limit=$capped&term=$encoded"))
         }.getOrNull() ?: return emptyList()
@@ -136,17 +170,20 @@ class AstraWaveAudioDiscoveryRepository {
                 val item = results.optJSONObject(i) ?: continue
                 val preview = item.optString("previewUrl").trim()
                 val title = item.optString("trackName").trim()
-                if (!preview.startsWith("https://") || title.isBlank()) continue
+                if (title.isBlank()) continue
                 val trackId = item.optLong("trackId", 0L)
                 add(
                     AudioItem(
                         id = "itunes-music:${if (trackId > 0) trackId else title.hashCode()}",
                         type = AudioItemType.MUSIC,
                         title = title,
-                        subtitle = listOf(item.optString("artistName"), item.optString("collectionName"), item.optString("primaryGenreName"))
-                            .filter(String::isNotBlank).joinToString(" • "),
+                        subtitle = listOf(
+                            item.optString("artistName"),
+                            item.optString("collectionName"),
+                            item.optString("primaryGenreName"),
+                        ).filter(String::isNotBlank).joinToString(" • "),
                         artworkUrl = item.optString("artworkUrl100").takeIf { it.startsWith("https://") },
-                        mediaUrl = preview,
+                        mediaUrl = preview.takeIf { it.startsWith("https://") },
                     ),
                 )
             }
