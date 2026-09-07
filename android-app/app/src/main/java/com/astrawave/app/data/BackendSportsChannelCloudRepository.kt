@@ -17,6 +17,10 @@ class BackendSportsChannelCloudRepository(
         val sourceId: String,
         val streamUrl: String,
         val group: String? = null,
+        val quality: String? = null,
+        val healthScore: Double? = null,
+        val uptimePercent: Double? = null,
+        val latencyMs: Int? = null,
     )
 
     data class ChannelMatch(
@@ -27,6 +31,7 @@ class BackendSportsChannelCloudRepository(
         val matchScore: Int,
         val matchReason: String,
         val sourceCount: Int,
+        val healthScore: Double? = null,
         val candidates: List<Candidate>,
     )
 
@@ -86,6 +91,10 @@ class BackendSportsChannelCloudRepository(
                                                 sourceId = candidate.optString("sourceId").ifBlank { "public" },
                                                 streamUrl = streamUrl,
                                                 group = candidate.optString("group").takeIf(String::isNotBlank),
+                                                quality = candidate.optString("quality").takeIf(String::isNotBlank),
+                                                healthScore = candidate.optDouble("healthScore").takeIf { !it.isNaN() },
+                                                uptimePercent = candidate.optDouble("uptimePercent").takeIf { !it.isNaN() },
+                                                latencyMs = candidate.optInt("latencyMs").takeIf { candidate.has("latencyMs") && it >= 0 },
                                             ),
                                         )
                                     }
@@ -100,6 +109,7 @@ class BackendSportsChannelCloudRepository(
                                     matchScore = match.optInt("matchScore", 0),
                                     matchReason = match.optString("matchReason"),
                                     sourceCount = match.optInt("sourceCount", candidates.size),
+                                    healthScore = match.optDouble("healthScore").takeIf { !it.isNaN() },
                                     candidates = candidates,
                                 ),
                             )
