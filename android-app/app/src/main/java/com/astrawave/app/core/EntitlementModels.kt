@@ -51,7 +51,11 @@ data class EntitlementSnapshot(
     fun premiumActive(atEpochMs: Long = System.currentTimeMillis()): Boolean {
         if (plan == AstraWavePlan.FREE) return false
         val trialEnd = trialEndsAtEpochMs
-        if (trialEnd != null && renewsAtEpochMs == null && atEpochMs >= trialEnd) return false
+        val paidThrough = renewsAtEpochMs
+        if (trialEnd != null && paidThrough == null && atEpochMs >= trialEnd) return false
+        // Server-verified recurring subscriptions fail closed after their paid-through timestamp.
+        // A fresh Play verification (including grace-period access) advances this timestamp.
+        if (paidThrough != null && atEpochMs >= paidThrough) return false
         return true
     }
 
