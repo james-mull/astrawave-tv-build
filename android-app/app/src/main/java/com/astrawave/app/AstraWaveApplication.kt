@@ -2,6 +2,7 @@ package com.astrawave.app
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
 import com.astrawave.app.data.AstraWaveFirebase
 import com.astrawave.app.data.CloudDeviceSessionSync
@@ -26,6 +27,9 @@ class AstraWaveApplication : Application() {
                         "VOLUME_UP" -> adjustVolume(AudioManager.ADJUST_RAISE)
                         "VOLUME_DOWN" -> adjustVolume(AudioManager.ADJUST_LOWER)
                         "MUTE" -> toggleMute()
+                        "HOME" -> openHome()
+                        "OPEN_GUIDE" -> openRemoteDestination(RemoteDestinationActivity.DEST_GUIDE)
+                        "OPEN_SPORTS" -> openRemoteDestination(RemoteDestinationActivity.DEST_SPORTS)
                         else -> inbox.offer(command)
                     }
                 }
@@ -34,6 +38,21 @@ class AstraWaveApplication : Application() {
             }
         }
     }
+
+    private fun openHome(): Boolean = runCatching {
+        startActivity(Intent(this, RebuildMainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        })
+        true
+    }.getOrDefault(false)
+
+    private fun openRemoteDestination(destination: String): Boolean = runCatching {
+        startActivity(Intent(this, RemoteDestinationActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(RemoteDestinationActivity.EXTRA_DESTINATION, destination)
+        })
+        true
+    }.getOrDefault(false)
 
     private fun adjustVolume(direction: Int): Boolean = runCatching {
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
