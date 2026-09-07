@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,25 +35,23 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
-/** Reusable premium visual primitives for the AstraWave shell and feature modules. */
+/** Shared premium primitives. Screens should stay content-first and avoid repeating chrome. */
 @Composable
 fun AstraWavePageHeader(
     title: String,
     subtitle: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    val device = LocalAstraWaveDeviceClass.current
     Column(modifier.fillMaxWidth()) {
-        Text(
-            title,
-            color = AstraWaveColors.PrimaryText,
-            style = MaterialTheme.typography.headlineLarge,
-        )
+        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
         if (!subtitle.isNullOrBlank()) {
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(if (device == AstraWaveDeviceClass.TV) 8.dp else 5.dp))
             Text(
                 subtitle,
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.fillMaxWidth(if (device == AstraWaveDeviceClass.TV) 0.78f else 1f),
             )
         }
     }
@@ -65,20 +64,16 @@ fun AstraWaveSectionHeader(
     trailing: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
             Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
             if (!subtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(3.dp))
+                Text(subtitle, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)
             }
         }
         trailing?.let {
-            Spacer(Modifier.size(LocalAstraWaveSpacing.current.md))
+            Spacer(Modifier.width(LocalAstraWaveSpacing.current.md))
             it()
         }
     }
@@ -94,32 +89,28 @@ fun AstraWaveStatePanel(
     Row(
         modifier
             .fillMaxWidth()
-            .shadow(10.dp, MaterialTheme.shapes.large, clip = false)
-            .border(1.dp, AstraWaveColors.Divider, MaterialTheme.shapes.large)
-            .background(AstraWaveColors.GlassRaised, MaterialTheme.shapes.large)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .clip(MaterialTheme.shapes.large)
+            .background(AstraWaveColors.SurfaceRaised)
+            .padding(horizontal = 18.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            Modifier.width(3.dp).height(38.dp).clip(MaterialTheme.shapes.small)
+                .background(if (loading) AstraWaveColors.Accent else AstraWaveColors.AccentSoft),
+        )
+        Spacer(Modifier.width(14.dp))
         if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(22.dp),
-                color = AstraWaveColors.AccentStrong,
-                strokeWidth = 2.dp,
-            )
-            Spacer(Modifier.size(14.dp))
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AstraWaveColors.AccentStrong, strokeWidth = 2.dp)
+            Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(3.dp))
             Text(message, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
-/**
- * TV/Fire TV focus primitive. Focus uses subtle scale, premium elevation and a bright lavender ring.
- * Layout bounds stay stable so rails never jitter while navigating with a remote.
- */
 @Composable
 fun AstraWaveFocusableCard(
     modifier: Modifier = Modifier,
@@ -142,24 +133,19 @@ fun AstraWaveFocusableCard(
 
     Box(
         modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Divider,
+                color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Divider.copy(alpha = 0.55f),
                 shape = MaterialTheme.shapes.large,
             )
             .clip(MaterialTheme.shapes.large)
-            .background(if (focused) AstraWaveColors.SurfaceFocus else AstraWaveColors.Surface)
+            .background(if (focused) AstraWaveColors.SurfaceFocus else AstraWaveColors.SurfaceRaised)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .padding(16.dp),
-    ) {
-        content()
-    }
+    ) { content() }
 }
 
 @Composable
@@ -172,21 +158,20 @@ fun AstraWaveActionRow(
     Row(
         modifier
             .fillMaxWidth()
-            .shadow(8.dp, MaterialTheme.shapes.large, clip = false)
-            .border(1.dp, AstraWaveColors.Divider, MaterialTheme.shapes.large)
-            .background(AstraWaveColors.Surface, MaterialTheme.shapes.large)
-            .padding(horizontal = 18.dp, vertical = 17.dp),
+            .clip(MaterialTheme.shapes.large)
+            .background(AstraWaveColors.SurfaceRaised)
+            .padding(horizontal = 18.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
             if (!subtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Spacer(Modifier.size(LocalAstraWaveSpacing.current.md))
+        Spacer(Modifier.width(LocalAstraWaveSpacing.current.md))
         trailing()
     }
 }
@@ -200,32 +185,22 @@ fun AstraWavePrimaryButton(
 ) {
     var focused by remember { mutableStateOf(false) }
     val sizing = LocalAstraWaveSizing.current
-    val elevationTokens = LocalAstraWaveElevation.current
     val motion = LocalAstraWaveMotion.current
     val scale by animateFloatAsState(
         targetValue = if (focused && enabled) sizing.focusScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-primary-action-focus-scale",
     )
-    val elevation by animateDpAsState(
-        targetValue = if (focused && enabled) elevationTokens.focused else elevationTokens.resting,
-        animationSpec = tween(durationMillis = motion.focusMs),
-        label = "astrawave-primary-action-focus-elevation",
-    )
 
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .border(
                 width = if (focused && enabled) 2.dp else 0.dp,
-                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.Accent,
-                shape = MaterialTheme.shapes.large,
+                color = AstraWaveColors.FocusRing,
+                shape = MaterialTheme.shapes.medium,
             )
             .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.buttonColors(
@@ -234,10 +209,9 @@ fun AstraWavePrimaryButton(
             disabledContainerColor = AstraWaveColors.SurfaceRaised,
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-    }
+        shape = MaterialTheme.shapes.medium,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 13.dp),
+    ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
 
 @Composable
@@ -249,42 +223,31 @@ fun AstraWaveSecondaryButton(
 ) {
     var focused by remember { mutableStateOf(false) }
     val sizing = LocalAstraWaveSizing.current
-    val elevationTokens = LocalAstraWaveElevation.current
     val motion = LocalAstraWaveMotion.current
     val scale by animateFloatAsState(
         targetValue = if (focused && enabled) sizing.focusScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-secondary-action-focus-scale",
     )
-    val elevation by animateDpAsState(
-        targetValue = if (focused && enabled) elevationTokens.focused else elevationTokens.resting,
-        animationSpec = tween(durationMillis = motion.focusMs),
-        label = "astrawave-secondary-action-focus-elevation",
-    )
 
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .border(
                 width = if (focused && enabled) 2.dp else 1.dp,
                 color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.Divider,
-                shape = MaterialTheme.shapes.large,
+                shape = MaterialTheme.shapes.medium,
             )
             .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = AstraWaveColors.PrimaryText,
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-    }
+        shape = MaterialTheme.shapes.medium,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 19.dp, vertical = 12.dp),
+    ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
 
 @Composable
