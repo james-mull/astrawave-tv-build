@@ -112,6 +112,10 @@ fun AstraWaveOnboardingScreen(
 
     val actionableSteps = OnboardingFlow.orderedSteps.filterNot { it == OnboardingStep.COMPLETE }
     val doneCount = actionableSteps.count(state::isDone)
+    val recommendations = health.items
+        .filter { it.optional && !it.ready }
+        .sortedBy { recommendationPriority(it.id) }
+        .take(3)
 
     Column(
         Modifier.fillMaxSize()
@@ -185,6 +189,30 @@ fun AstraWaveOnboardingScreen(
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(8.dp),
                     )
+                }
+            }
+        }
+
+        if (health.readyToWatch && recommendations.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            AstraWaveSectionHeader("Next Best Upgrades", "Only suggestions that are still missing on this profile")
+            Spacer(Modifier.height(8.dp))
+            recommendations.forEach { item ->
+                val target = recommendationTarget(item.id)
+                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(3.dp))
+                            Text(item.detail, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Text(
+                            if (target == null) "LATER" else "SET UP",
+                            color = if (target == null) AstraWaveColors.TertiaryText else AstraWaveColors.Accent,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = if (target == null) Modifier.padding(8.dp) else Modifier.clickable { routeTo(target) }.padding(8.dp),
+                        )
+                    }
                 }
             }
         }
@@ -301,6 +329,23 @@ fun AstraWaveOnboardingScreen(
             }
         }
     }
+}
+
+private fun recommendationPriority(id: String): Int = when (id) {
+    "live" -> 1
+    "devices" -> 2
+    "audio" -> 3
+    "dvr" -> 4
+    "cloud" -> 5
+    "travel" -> 6
+    else -> 99
+}
+
+private fun recommendationTarget(id: String): OnboardingStep? = when (id) {
+    "live", "dvr" -> OnboardingStep.LIVE_TV
+    "audio" -> OnboardingStep.AUDIO
+    "devices" -> OnboardingStep.DEVICE_PAIRING
+    else -> null
 }
 
 private fun stepTitle(step: OnboardingStep): String = when (step) {
