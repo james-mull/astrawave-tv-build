@@ -54,7 +54,11 @@ class AuthorizedDownloadWorker(
             val code = connection.responseCode
             if (code !in 200..299) throw IOException("Download server returned HTTP $code")
 
-            val expectedBytes = connection.contentLengthLong.takeIf { it > 0L }
+            // Header-based length works on AstraWave's minSdk 23; contentLengthLong is API 24+.
+            val expectedBytes = connection.getHeaderField("Content-Length")
+                ?.trim()
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
             val storageCapBytes = policy.maxStorageGb.coerceAtLeast(1).toLong() * 1024L * 1024L * 1024L
             val usedBytes = directory.listFiles()?.filter { it.isFile && it != partial }?.sumOf { it.length() } ?: 0L
             if (expectedBytes != null && usedBytes + expectedBytes > storageCapBytes) {
