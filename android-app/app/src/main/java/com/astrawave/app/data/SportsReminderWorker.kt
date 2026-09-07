@@ -14,7 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.astrawave.app.RebuildMainActivity
+import com.astrawave.app.GameDayReminderActivity
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -111,10 +111,10 @@ class SportsReminderWorker(
             )
         }
 
-        val openIntent = Intent(applicationContext, RebuildMainActivity::class.java).apply {
+        val openIntent = Intent(applicationContext, GameDayReminderActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("astrawave_open_destination", "sports")
-            putExtra("astrawave_event_id", saved.eventId)
+            putExtra(GameDayReminderActivity.EXTRA_EVENT_ID, saved.eventId)
+            putExtra(GameDayReminderActivity.EXTRA_EVENT_TITLE, saved.title)
         }
         val pending = PendingIntent.getActivity(
             applicationContext,
