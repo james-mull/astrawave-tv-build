@@ -33,6 +33,9 @@ android {
         val apiBaseUrl = providers.gradleProperty("ASTRAWAVE_API_BASE_URL").orNull
             ?: providers.environmentVariable("ASTRAWAVE_API_BASE_URL").orNull
             ?: ""
+        val premiumProductId = providers.gradleProperty("ASTRAWAVE_PREMIUM_PRODUCT_ID").orNull
+            ?: providers.environmentVariable("ASTRAWAVE_PREMIUM_PRODUCT_ID").orNull
+            ?: "astrawave_premium_monthly"
         val gitSha = providers.gradleProperty("ASTRAWAVE_GIT_SHA").orNull
             ?: providers.environmentVariable("GITHUB_SHA").orNull
             ?: "local-untracked"
@@ -43,6 +46,7 @@ android {
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"$firebaseSenderId\"")
         buildConfigField("String", "TMDB_BEARER_TOKEN", "\"$tmdbBearerToken\"")
         buildConfigField("String", "ASTRAWAVE_API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "ASTRAWAVE_PREMIUM_PRODUCT_ID", "\"$premiumProductId\"")
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
