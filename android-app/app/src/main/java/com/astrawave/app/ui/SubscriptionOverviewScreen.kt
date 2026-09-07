@@ -1,5 +1,6 @@
 package com.astrawave.app.ui
 
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,11 +25,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.android.billingclient.api.BillingClient
 import com.astrawave.app.core.AstraWaveEntitlement
 import com.astrawave.app.core.AstraWaveEntitlementPolicy
 import com.astrawave.app.core.AstraWavePlan
 import com.astrawave.app.core.EntitlementSnapshot
 import com.astrawave.app.data.EntitlementCloudRepository
+import com.astrawave.app.data.PlayBillingRepository
 import java.text.DateFormat
 import java.util.Date
 
@@ -38,11 +42,43 @@ fun SubscriptionOverviewScreen(
     profileId: String = "default",
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val fallbackPlan = AstraWavePlan.entries.firstOrNull { it.displayName.equals(currentPlanName, true) } ?: AstraWavePlan.FREE
     val repository = remember { EntitlementCloudRepository(context) }
+    val billing = remember { PlayBillingRepository(context) }
     var entitlement by remember { mutableStateOf(AstraWaveEntitlementPolicy.snapshot(null, fallbackPlan, source = "account-fallback")) }
     var statusMessage by remember { mutableStateOf(if (repository.signedIn) "Checking your account…" else "Sign in to sync verified plan status.") }
+    var billingMessage by remember { mutableStateOf("Connecting to Google Play…") }
+    var premiumOffer by remember { mutableStateOf<PlayBillingRepository.PremiumOffer?>(null) }
     var showPowerCenter by remember { mutableStateOf(false) }
+
+    fun refreshEntitlement() {
+        repository.load(fallbackPlan) { result ->
+            result.onSuccess { snapshot ->
+                entitlement = snapshot
+                statusMessage = when {
+                    snapshot.source == "firestore-entitlements" -> "Verified from your AstraWave account"
+                    repository.signedIn -> "No server entitlement is active yet; showing the current app plan"
+                    else -> "Local plan view — sign in to restore purchases and cloud entitlements"
+                }
+            }.onFailure { statusMessage = "Could not verify plan state right now; showing your last known plan" }
+        }
+    }
+
+    DisposableEffect(billing) {
+        billing.setEventListener { event ->
+            when (event) {
+                is PlayBillingRepository.Event.Status -> billingMessage = event.message
+                is PlayBillingRepository.Event.Pending -> billingMessage = event.message
+                is PlayBillingRepository.Event.Error -> billingMessage = event.message
+                is PlayBillingRepository.Event.Verified -> {
+                    billingMessage = "Premium purchase verified. Refreshing your AstraWave entitlement…"
+                    refreshEntitlement()
+                }
+            }
+        }
+        onDispose { billing.close() }
+    }
 
     if (showPowerCenter) {
         Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
@@ -53,15 +89,15 @@ fun SubscriptionOverviewScreen(
     }
 
     LaunchedEffect(currentPlanName) {
-        repository.load(fallbackPlan) { result ->
-            result.onSuccess { snapshot ->
-                entitlement = snapshot
-                statusMessage = when {
-                    snapshot.source == "firestore-entitlements" -> "Verified from your AstraWave account"
-                    repository.signedIn -> "No server entitlement is active yet; showing the current app plan"
-                    else -> "Local plan view — sign in to restore purchases and cloud entitlements"
-                }
-            }.onFailure { statusMessage = "Could not verify plan state right now; showing your last known plan" }
+        refreshEntitlement()
+        billing.loadPremiumOffer { result ->
+            result.onSuccess { offer ->
+                premiumOffer = offer
+                billingMessage = "Google Play Premium available • ${offer.formattedPrice}/month"
+            }.onFailure { error ->
+                premiumOffer = null
+                billingMessage = error.message ?: "Google Play Premium is unavailable right now."
+            }
         }
     }
 
@@ -81,6 +117,38 @@ fun SubscriptionOverviewScreen(
         }
 
         CurrentPlanStatus(entitlement = entitlement, statusMessage = statusMessage)
+        PlayBillingCard(
+            signedIn = repository.signedIn,
+            offer = premiumOffer,
+            activePremium = entitlement.premiumActive(),
+            message = billingMessage,
+            onPurchase = {
+                when {
+                    !repository.signedIn -> billingMessage = "Sign in to AstraWave first so Premium can be verified to your account."
+                    activity == null -> billingMessage = "Google Play checkout must be opened from an AstraWave activity."
+                    premiumOffer == null -> billingMessage = "Premium is not available from Google Play on this device/account yet."
+                    else -> {
+                        val result = billing.launchPremium(activity, requireNotNull(premiumOffer))
+                        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                            billingMessage = result.debugMessage.ifBlank { "Google Play could not start checkout." }
+                        } else {
+                            billingMessage = "Google Play checkout opened. Premium activates only after verified payment."
+                        }
+                    }
+                }
+            },
+            onRestore = {
+                if (!repository.signedIn) {
+                    billingMessage = "Sign in to AstraWave before restoring purchases."
+                } else {
+                    billingMessage = "Checking Google Play subscriptions…"
+                    billing.restore { result ->
+                        result.onSuccess { count -> billingMessage = if (count > 0) "Found $count AstraWave subscription purchase${if (count == 1) "" else "s"}; verifying…" else "No active AstraWave Premium purchase was found on this Play account." }
+                            .onFailure { billingMessage = it.message ?: "Restore failed" }
+                    }
+                }
+            },
+        )
 
         PlanCard(
             plan = AstraWavePlan.FREE,
@@ -135,10 +203,37 @@ fun SubscriptionOverviewScreen(
         }
 
         Text(
-            "Purchase and restore actions must be completed through Google Play Billing and verified by the AstraWave backend before public launch. /entitlements/{userId} remains read-only to clients, so the app cannot grant itself Premium access.",
+            "Google Play checkout never grants Premium by itself. AstraWave submits the purchase to the verification service, and only the server-owned /entitlements/{userId} record unlocks paid capabilities.",
             color = AstraWaveColors.TertiaryText,
             style = MaterialTheme.typography.bodyMedium,
         )
+    }
+}
+
+@Composable
+private fun PlayBillingCard(
+    signedIn: Boolean,
+    offer: PlayBillingRepository.PremiumOffer?,
+    activePremium: Boolean,
+    message: String,
+    onPurchase: () -> Unit,
+    onRestore: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(20.dp)).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("GOOGLE PLAY", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
+        Text(if (activePremium) "Premium is active" else "Start AstraWave Premium", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+        Text(offer?.let { "${it.formattedPrice}/month • billed by Google Play" } ?: "Loading current Google Play offer…", color = AstraWaveColors.SecondaryText)
+        Text(message, color = if (activePremium) AstraWaveColors.Success else AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+        if (!signedIn) {
+            AstraWaveStatePanel("Sign in required", "AstraWave ties a Play purchase to your private account only after backend verification.")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (!activePremium) AstraWavePrimaryButton("Start Premium", onPurchase, enabled = signedIn && offer != null)
+            AstraWaveSecondaryButton("Restore Purchases", onRestore, enabled = signedIn)
+        }
     }
 }
 
