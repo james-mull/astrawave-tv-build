@@ -12,9 +12,55 @@ service cloud.firestore {
         (!('avatarUrl' in request.resource.data) || request.resource.data.avatarUrl is string) &&
         (!('kidsMode' in request.resource.data) || request.resource.data.kidsMode is bool);
     }
-    function validWatchlist(docId) { return request.resource.data.mediaId == docId && request.resource.data.kind is string && request.resource.data.title is string && hasUpdatedAt(); }
-    function validProgress(docId) { return request.resource.data.mediaId == docId && request.resource.data.kind is string && request.resource.data.title is string && request.resource.data.positionMs is number && request.resource.data.durationMs is number && request.resource.data.positionMs >= 0 && request.resource.data.durationMs >= 0 && hasUpdatedAt(); }
+    function validHouseholdProfile(profileId) {
+      return onlyKeys(['profileId','name','kidsMode','updatedAt']) &&
+        request.resource.data.profileId == profileId &&
+        request.resource.data.name is string &&
+        request.resource.data.kidsMode is bool &&
+        hasUpdatedAt();
+    }
+    function validWatchlist(docId) {
+      return request.resource.data.mediaId == docId &&
+        request.resource.data.kind is string &&
+        request.resource.data.title is string &&
+        (!('posterUrl' in request.resource.data) || request.resource.data.posterUrl == null || request.resource.data.posterUrl is string) &&
+        (!('sourceId' in request.resource.data) || request.resource.data.sourceId == null || request.resource.data.sourceId is string) &&
+        (!('notifyWhenAvailable' in request.resource.data) || request.resource.data.notifyWhenAvailable is bool) &&
+        hasUpdatedAt();
+    }
+    function validFavorite(docId) {
+      return request.resource.data.mediaId == docId &&
+        request.resource.data.kind is string &&
+        request.resource.data.title is string &&
+        (!('posterUrl' in request.resource.data) || request.resource.data.posterUrl == null || request.resource.data.posterUrl is string) &&
+        (!('sourceId' in request.resource.data) || request.resource.data.sourceId == null || request.resource.data.sourceId is string) &&
+        hasUpdatedAt();
+    }
+    function validList(docId) {
+      return request.resource.data.id == docId &&
+        request.resource.data.name is string &&
+        request.resource.data.description is string &&
+        request.resource.data.sortOrder is number &&
+        request.resource.data.isPinned is bool &&
+        request.resource.data.items is list &&
+        hasUpdatedAt();
+    }
+    function validProgress(docId) {
+      return request.resource.data.mediaId == docId &&
+        request.resource.data.kind is string &&
+        request.resource.data.title is string &&
+        request.resource.data.positionMs is number &&
+        request.resource.data.durationMs is number &&
+        request.resource.data.positionMs >= 0 &&
+        request.resource.data.durationMs >= 0 &&
+        hasUpdatedAt();
+    }
     function validFavoriteTeam(docId) { return request.resource.data.teamId == docId && request.resource.data.name is string && hasUpdatedAt(); }
+    function validPreference(docId) {
+      return request.resource.data.key == docId &&
+        request.resource.data.keys().hasOnly(['key','value','updatedAt']) &&
+        hasUpdatedAt();
+    }
     function validSettings() { return request.resource.data is map && hasUpdatedAt(); }
     function validSource() { return request.resource.data.name is string && request.resource.data.type is string && request.resource.data.enabled is bool && (!('priority' in request.resource.data) || request.resource.data.priority is number) && (!('config' in request.resource.data) || request.resource.data.config is map) && hasUpdatedAt(); }
     function validChannelCustomization() {
@@ -61,6 +107,7 @@ service cloud.firestore {
       allow read, create, update: if owns(uid) && validProfile();
       allow delete: if false;
 
+      // Web Control Center / legacy user-scoped collections.
       match /watchlist/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validWatchlist(docId); allow delete: if owns(uid); }
       match /progress/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validProgress(docId); allow delete: if owns(uid); }
       match /favoriteTeams/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validFavoriteTeam(docId); allow delete: if owns(uid); }
@@ -74,13 +121,19 @@ service cloud.firestore {
       match /household/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validHousehold(); allow delete: if owns(uid); }
       match /sportsReminders/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validSportsReminder(); allow delete: if owns(uid); }
 
+      // Android profile-scoped library and diagnostics. These paths match FirebaseCloudRepository.
       match /profiles/{profileId} {
         allow read: if owns(uid);
-        match /playbackDiagnostics/{docId} {
-          allow read: if owns(uid);
-          allow create, update: if owns(uid) && validPlaybackDiagnostic();
-          allow delete: if owns(uid);
-        }
+        allow create, update: if owns(uid) && validHouseholdProfile(profileId);
+        allow delete: if owns(uid);
+
+        match /watchlist/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validWatchlist(docId); allow delete: if owns(uid); }
+        match /favorites/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validFavorite(docId); allow delete: if owns(uid); }
+        match /lists/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validList(docId); allow delete: if owns(uid); }
+        match /progress/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validProgress(docId); allow delete: if owns(uid); }
+        match /preferences/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validPreference(docId); allow delete: if owns(uid); }
+        match /favoriteTeams/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validFavoriteTeam(docId); allow delete: if owns(uid); }
+        match /playbackDiagnostics/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validPlaybackDiagnostic(); allow delete: if owns(uid); }
       }
     }
 
