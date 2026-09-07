@@ -9,7 +9,7 @@ This file is an implementation ledger for premium execution paths. It is intenti
 - Synchronized Android timeline Guide viewport with fixed channel column.
 - Sports source fusion and hardware-aware Multiview.
 - WorkManager-based authorized direct download transport with network constraints, app-private storage, progress, retry, cancel, and Travel Mode storage policy.
-- Google Play Billing client integration and backend purchase-verification endpoint; Premium remains server-entitlement-authoritative.
+- Google Play Billing client integration and backend purchase-verification endpoint; Premium remains server-entitlement-authoritative and paid-through expiry is enforced locally.
 
 ## Active release gates
 - Configure Google Play Console Premium subscription and server service-account credentials.
