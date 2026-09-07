@@ -12,6 +12,7 @@ data class GuideChannelRow(
     val programmes: List<XmlTvProgramme> = emptyList(),
     val playableCandidateCount: Int,
     val preferredSource: String?,
+    val recordingSource: String? = null,
     val playableUrl: String?,
     val playableUrls: List<String> = emptyList(),
     val externalUrl: String? = null,
@@ -32,8 +33,10 @@ class GuideRepository(private val combined: CombinedLiveTvRepository = CombinedL
         epgOverrides: Map<String, String> = emptyMap(),
     ): GuideSnapshot {
         val live = combined.load(sources, epgOverrides)
+        val customerSourceNames = sources.filter { it.enabled }.map { it.name }.toSet()
         val directRows = live.groups.map { group ->
             val preferred = group.bestCandidate
+            val recordingCandidate = group.candidates.firstOrNull { it.source in customerSourceNames }
             GuideChannelRow(
                 id = group.canonicalName,
                 name = group.displayName,
@@ -44,6 +47,7 @@ class GuideRepository(private val combined: CombinedLiveTvRepository = CombinedL
                 programmes = group.schedule,
                 playableCandidateCount = group.candidates.size,
                 preferredSource = preferred?.source,
+                recordingSource = recordingCandidate?.source,
                 playableUrl = preferred?.url,
                 playableUrls = group.candidates.map { it.url }.distinct(),
             )
@@ -52,7 +56,8 @@ class GuideRepository(private val combined: CombinedLiveTvRepository = CombinedL
             GuideChannelRow(
                 id = "handoff:${handoff.id}", name = handoff.name, logo = null, group = handoff.group,
                 now = null, next = null, programmes = emptyList(), playableCandidateCount = 0,
-                preferredSource = handoff.provider ?: "Official provider", playableUrl = null, playableUrls = emptyList(), externalUrl = handoff.actionUrl,
+                preferredSource = handoff.provider ?: "Official provider", recordingSource = null,
+                playableUrl = null, playableUrls = emptyList(), externalUrl = handoff.actionUrl,
             )
         }
         return GuideSnapshot(
