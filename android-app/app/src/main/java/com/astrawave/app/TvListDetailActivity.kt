@@ -6,17 +6,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -28,8 +27,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.AstraWaveMetadataGateway
@@ -82,11 +85,33 @@ private fun TvListDetailScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val dynamic = remember { DynamicCollectionRepository() }
     val metadata = remember { AstraWaveMetadataGateway() }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var items by remember { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
+
+    val columns = when {
+        configuration.screenWidthDp >= 1200 -> 6
+        configuration.screenWidthDp >= 840 -> 5
+        configuration.screenWidthDp >= 600 -> 3
+        else -> 2
+    }
+    val pagePadding = if (configuration.screenWidthDp < 600) 16.dp else 24.dp
+
+    fun openDetails(item: AstraWaveMetadataGateway.Item) {
+        context.startActivity(
+            Intent(context, TitleDetailsActivity::class.java)
+                .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
+                .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "SERIES")
+                .putExtra(
+                    TitleDetailsActivity.EXTRA_SOURCE_ID,
+                    if (item.id.startsWith("tt", true)) "stremio:cinemeta:series:${item.id}" else "tmdb:${item.id}",
+                )
+                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+        )
+    }
 
     LaunchedEffect(title, query, queries, genre) {
         loading = true
@@ -109,51 +134,110 @@ private fun TvListDetailScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .background(AstraWaveColors.Background).padding(24.dp),
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .background(AstraWaveColors.Background)
+            .padding(horizontal = pagePadding, vertical = 18.dp),
     ) {
-        AstraWavePageHeader(title = title, subtitle = reason.ifBlank { "AstraWave TV collection" })
+        AstraWavePageHeader(
+            title = title,
+            subtitle = reason.ifBlank { "A curated AstraWave TV collection" },
+        )
         Spacer(Modifier.height(10.dp))
         AstraWaveSecondaryButton(label = "← Back", onClick = onBack)
         Spacer(Modifier.height(18.dp))
 
         when {
-            loading -> AstraWaveStatePanel("Loading $title…", "Finding matching shows.", loading = true)
+            loading -> AstraWaveStatePanel("Loading $title…", "Finding the best matching shows.", loading = true)
             error != null -> AstraWaveStatePanel("List unavailable", error.orEmpty())
             items.isEmpty() -> AstraWaveStatePanel("No shows found", "This collection does not have matching series right now.")
             else -> {
-                Text("${items.size} shows", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                val featured = items.first()
+                AstraWaveFocusableCard(
+                    Modifier.fillMaxWidth().clickable { openDetails(featured) },
                 ) {
-                    items.forEach { item ->
-                        AstraWaveFocusableCard(
-                            Modifier.width(170.dp).clickable {
-                                context.startActivity(
-                                    Intent(context, TitleDetailsActivity::class.java)
-                                        .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
-                                        .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "SERIES")
-                                        .putExtra(
-                                            TitleDetailsActivity.EXTRA_SOURCE_ID,
-                                            if (item.id.startsWith("tt", true)) "stremio:cinemeta:series:${item.id}" else "tmdb:${item.id}",
-                                        )
-                                        .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
-                                )
-                            },
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier
+                                .weight(if (configuration.screenWidthDp < 600) 0.38f else 0.28f)
+                                .aspectRatio(2f / 3f),
                         ) {
-                            Column {
-                                Box(Modifier.fillMaxWidth().height(240.dp)) {
-                                    AstraWaveArtwork(item.name, Modifier.fillMaxSize())
-                                }
-                                Spacer(Modifier.height(8.dp))
-                                Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                                item.releaseInfo?.let {
-                                    Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+                            AstraWaveArtwork(featured.name, Modifier.fillMaxSize())
+                        }
+                        Column(Modifier.weight(0.62f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text(
+                                "FEATURED IN THIS COLLECTION",
+                                color = AstraWaveColors.Accent,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                featured.name,
+                                color = AstraWaveColors.PrimaryText,
+                                style = if (configuration.screenWidthDp < 600) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            featured.releaseInfo?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Text(
+                                "Open details → Continue series, seasons, episodes, trailer, related shows and source choices",
+                                color = AstraWaveColors.SecondaryText,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
+                Text(
+                    "${items.size} shows",
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Spacer(Modifier.height(12.dp))
+
+                items.chunked(columns).forEach { rowItems ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        rowItems.forEach { item ->
+                            AstraWaveFocusableCard(
+                                Modifier.weight(1f).clickable { openDetails(item) },
+                            ) {
+                                Column {
+                                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
+                                        AstraWaveArtwork(item.name, Modifier.fillMaxSize())
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        item.name,
+                                        color = AstraWaveColors.PrimaryText,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    item.releaseInfo?.takeIf { it.isNotBlank() }?.let {
+                                        Text(
+                                            it,
+                                            color = AstraWaveColors.SecondaryText,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                             }
                         }
+                        repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
