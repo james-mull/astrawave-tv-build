@@ -15,6 +15,22 @@ async function tmdb(path: string) {
   return response.json();
 }
 
+async function trakt(path: string) {
+  const clientId = process.env.TRAKT_CLIENT_ID?.trim();
+  if (!clientId) return null;
+  const response = await fetch(`https://api.trakt.tv${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'trakt-api-version': '2',
+      'trakt-api-key': clientId,
+      'User-Agent': 'AstraWave/1.0',
+    },
+    next: { revalidate: 900 },
+  });
+  if (!response.ok) throw new Error(`Trakt ${response.status}`);
+  return response.json();
+}
+
 function mapItems(items: any[], kind: 'movie' | 'series') {
   return (items || []).slice(0, 30).map((item) => ({
     id: String(item.id),
@@ -28,6 +44,32 @@ function mapItems(items: any[], kind: 'movie' | 'series') {
     popularity: Number(item.popularity || 0),
     genreIds: Array.isArray(item.genre_ids) ? item.genre_ids : [],
   }));
+}
+
+function mapTraktItems(rows: any[], kind: 'movie' | 'series') {
+  return (rows || []).slice(0, 30).flatMap((row) => {
+    const media = kind === 'movie' ? (row.movie || row) : (row.show || row);
+    if (!media?.title) return [];
+    const tmdbId = media.ids?.tmdb;
+    const traktId = media.ids?.trakt;
+    const id = tmdbId || traktId;
+    if (!id) return [];
+    return [{
+      id: String(id),
+      kind,
+      title: String(media.title),
+      subtitle: media.year ? String(media.year) : undefined,
+      score: Number(row.score || 0) || undefined,
+      popularity: Number(row.list_count || row.watchers || row.plays || 0) || undefined,
+      sourceId: traktId ? `trakt:${traktId}` : undefined,
+      externalIds: {
+        trakt: traktId || undefined,
+        tmdb: tmdbId || undefined,
+        imdb: media.ids?.imdb || undefined,
+        slug: media.ids?.slug || undefined,
+      },
+    }];
+  });
 }
 
 const movieRails: RailDef[] = [
@@ -61,20 +103,54 @@ const tvRails: RailDef[] = [
   { title: 'Kids', kind: 'series', path: '/discover/tv?with_genres=10762&sort_by=popularity.desc&language=en-US' },
 ];
 
+const traktMovieRails = [
+  ['Trakt • Trending Now', '/movies/trending?limit=30'],
+  ['Trakt • Most Anticipated', '/movies/anticipated?limit=30'],
+  ['Trakt • Popular Community Picks', '/movies/popular?limit=30'],
+] as const;
+
+const traktTvRails = [
+  ['Trakt • Trending Shows', '/shows/trending?limit=30'],
+  ['Trakt • Most Anticipated Shows', '/shows/anticipated?limit=30'],
+  ['Trakt • Popular Community Shows', '/shows/popular?limit=30'],
+] as const;
+
 export async function GET(request: NextRequest) {
   const requested = request.nextUrl.searchParams.get('kind') === 'series' ? 'series' : 'movie';
   const definitions = requested === 'series' ? tvRails : movieRails;
-  const configured = Boolean(process.env.TMDB_BEARER_TOKEN);
-  if (!configured) return NextResponse.json({ configured: false, source: 'TMDB', rails: [] });
+  const tmdbConfigured = Boolean(process.env.TMDB_BEARER_TOKEN);
+  const traktConfigured = Boolean(process.env.TRAKT_CLIENT_ID);
+  if (!tmdbConfigured && !traktConfigured) {
+    return NextResponse.json({ configured: false, source: 'TMDB + Trakt', rails: [] });
+  }
 
-  const settled = await Promise.allSettled(definitions.map(async (rail) => {
-    const body = await tmdb(rail.path);
-    return { title: rail.title, source: 'TMDB', items: mapItems(body?.results || [], rail.kind) };
-  }));
+  const tmdbSettled = tmdbConfigured
+    ? await Promise.allSettled(definitions.map(async (rail) => {
+        const body = await tmdb(rail.path);
+        return { title: rail.title, source: 'TMDB', items: mapItems(body?.results || [], rail.kind) };
+      }))
+    : [];
+
+  const traktDefs = requested === 'series' ? traktTvRails : traktMovieRails;
+  const traktSettled = traktConfigured
+    ? await Promise.allSettled(traktDefs.map(async ([title, path]) => {
+        const body = await trakt(path);
+        return {
+          title,
+          source: 'Trakt',
+          items: mapTraktItems(body || [], requested),
+        };
+      }))
+    : [];
+
+  const rails = [
+    ...tmdbSettled.flatMap((result) => result.status === 'fulfilled' && result.value.items.length ? [result.value] : []),
+    ...traktSettled.flatMap((result) => result.status === 'fulfilled' && result.value.items.length ? [result.value] : []),
+  ];
 
   return NextResponse.json({
-    configured: true,
-    source: 'TMDB',
-    rails: settled.flatMap((result) => result.status === 'fulfilled' && result.value.items.length ? [result.value] : []),
+    configured: rails.length > 0,
+    source: [tmdbConfigured ? 'TMDB' : null, traktConfigured ? 'Trakt' : null].filter(Boolean).join(' + '),
+    rails,
   });
 }
