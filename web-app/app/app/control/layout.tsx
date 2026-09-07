@@ -7,6 +7,7 @@ export default function ControlCenterLayout({ children }: { children: ReactNode 
       <strong style={{color:'#c38bff',marginRight:6,letterSpacing:'.08em'}}>ASTRAWAVE CONTROL</strong>
       <ControlLink href="/app/control">Sources & Settings</ControlLink>
       <ControlLink href="/app/control/channels">Channel Studio</ControlLink>
+      <ControlLink href="/app/control/trakt">Trakt</ControlLink>
       <ControlLink href="/app/control/diagnostics">Playback Diagnostics</ControlLink>
       <span style={{marginLeft:'auto',fontSize:12,color:'#77707e'}}>Private account tools • no playback secrets shown</span>
     </nav>
