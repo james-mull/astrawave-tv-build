@@ -36,6 +36,20 @@ service cloud.firestore {
     function validDownload() { return request.resource.data.mediaId is string && request.resource.data.kind is string && request.resource.data.title is string && request.resource.data.state is string && request.resource.data.progressPercent is number && request.resource.data.progressPercent >= 0 && request.resource.data.progressPercent <= 100 && hasUpdatedAt(); }
     function validHousehold() { return request.resource.data.name is string && request.resource.data.profileIds is list && request.resource.data.candidates is list && request.resource.data.votes is list && request.resource.data.status is string && hasUpdatedAt(); }
     function validSportsReminder() { return request.resource.data.eventId is string && request.resource.data.title is string && request.resource.data.startTime is string && request.resource.data.enabled is bool && hasUpdatedAt(); }
+    function validPlaybackDiagnostic() {
+      return onlyKeys(['title','mediaType','provider','quality','latencyMs','providerCount','backupCount','personalMedia','debridOptimized','resolvedAtEpochMs','updatedAt']) &&
+        request.resource.data.title is string &&
+        request.resource.data.mediaType is string &&
+        request.resource.data.provider is string &&
+        (!('quality' in request.resource.data) || request.resource.data.quality == null || request.resource.data.quality is string) &&
+        (!('latencyMs' in request.resource.data) || request.resource.data.latencyMs == null || request.resource.data.latencyMs is number) &&
+        request.resource.data.providerCount is number && request.resource.data.providerCount >= 0 &&
+        request.resource.data.backupCount is number && request.resource.data.backupCount >= 0 &&
+        request.resource.data.personalMedia is bool &&
+        request.resource.data.debridOptimized is bool &&
+        request.resource.data.resolvedAtEpochMs is number &&
+        hasUpdatedAt();
+    }
 
     match /profiles/{uid} {
       allow read: if owns(uid);
@@ -59,6 +73,15 @@ service cloud.firestore {
       match /downloads/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validDownload(); allow delete: if owns(uid); }
       match /household/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validHousehold(); allow delete: if owns(uid); }
       match /sportsReminders/{docId} { allow read: if owns(uid); allow create, update: if owns(uid) && validSportsReminder(); allow delete: if owns(uid); }
+
+      match /profiles/{profileId} {
+        allow read: if owns(uid);
+        match /playbackDiagnostics/{docId} {
+          allow read: if owns(uid);
+          allow create, update: if owns(uid) && validPlaybackDiagnostic();
+          allow delete: if owns(uid);
+        }
+      }
     }
 
     match /entitlements/{uid} { allow read: if owns(uid); allow write: if false; }
