@@ -10,14 +10,19 @@ import org.json.JSONObject
 
 /** Persistent queue for authorized direct downloads and Travel Mode planning. */
 class DownloadTravelStore(context: Context) {
-    private val prefs = context.getSharedPreferences("astrawave_downloads_v1", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences("astrawave_downloads_v1", Context.MODE_PRIVATE)
 
     fun downloads(profileId: String): List<DownloadRequest> = decode().filter { it.profileId == profileId }.sortedByDescending { it.createdAtEpochMs }
 
+    fun find(id: String): DownloadRequest? = decode().firstOrNull { it.id == id }
+
     fun enqueue(request: DownloadRequest) {
         require(request.sourceUrl.startsWith("http://") || request.sourceUrl.startsWith("https://")) { "Download source must be HTTP(S)" }
+        val normalized = request.copy(state = DownloadState.QUEUED, progressPercent = request.progressPercent.coerceIn(0, 99), error = null)
         val all = decode().filterNot { it.id == request.id }
-        write(all + request.copy(progressPercent = request.progressPercent.coerceIn(0, 100)))
+        write(all + normalized)
+        DownloadWorkScheduler.enqueue(appContext, normalized)
     }
 
     fun update(id: String, state: DownloadState, progressPercent: Int, localUri: String? = null, error: String? = null) {
@@ -26,7 +31,24 @@ class DownloadTravelStore(context: Context) {
         })
     }
 
-    fun remove(id: String) { write(decode().filterNot { it.id == id }) }
+    fun retry(id: String) {
+        val item = find(id) ?: return
+        enqueue(item.copy(state = DownloadState.QUEUED, progressPercent = 0, localUri = null, error = null))
+    }
+
+    fun cancel(id: String) {
+        DownloadWorkScheduler.cancel(appContext, id)
+        find(id)?.let { update(id, DownloadState.CANCELED, it.progressPercent, localUri = it.localUri, error = "Canceled") }
+    }
+
+    fun remove(id: String) {
+        DownloadWorkScheduler.cancel(appContext, id)
+        val item = find(id)
+        item?.localUri?.takeIf { it.startsWith("file:") }?.let { uri ->
+            runCatching { java.io.File(java.net.URI(uri)).delete() }
+        }
+        write(decode().filterNot { it.id == id })
+    }
 
     fun travelPolicy(profileId: String): TravelModePolicy {
         val raw = prefs.getString("travel_$profileId", null) ?: return TravelModePolicy()
