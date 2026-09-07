@@ -60,6 +60,7 @@ class FirebaseCloudRepository(context: Context) {
     fun readFavorites(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "favorites")?.get()
     fun readLists(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "lists")?.get()
     fun readProgress(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "progress")?.get()
+    fun readPlaybackDiagnostics(profileId: String): Task<QuerySnapshot>? = profileCollection(profileId, "playbackDiagnostics")?.get()
 
     fun saveProgress(
         mediaId: String,
@@ -78,6 +79,26 @@ class FirebaseCloudRepository(context: Context) {
                 "title" to title,
                 "positionMs" to positionMs,
                 "durationMs" to durationMs,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ))
+    }
+
+    fun savePlaybackDiagnostic(profileId: String, decision: VodPlaybackDiagnosticsStore.Decision) {
+        val uid = currentUserId ?: return
+        val documentId = "${decision.resolvedAtEpochMs}-${decision.title.hashCode().toUInt()}"
+        db?.collection("users")?.document(uid)?.collection("profiles")?.document(profileId)
+            ?.collection("playbackDiagnostics")?.document(documentId)
+            ?.set(mapOf(
+                "title" to decision.title,
+                "mediaType" to decision.mediaType,
+                "provider" to decision.provider,
+                "quality" to decision.quality,
+                "latencyMs" to decision.latencyMs,
+                "providerCount" to decision.providerCount,
+                "backupCount" to decision.backupCount,
+                "personalMedia" to decision.personalMedia,
+                "debridOptimized" to decision.debridOptimized,
+                "resolvedAtEpochMs" to decision.resolvedAtEpochMs,
                 "updatedAt" to FieldValue.serverTimestamp(),
             ))
     }
