@@ -57,19 +57,28 @@ const espnLeagues=[
 
 function iso(offset=0){const d=new Date();d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10)}
 function ymd(date:string){return date.replaceAll('-','')}
-function norm(value:string){return value.toLowerCase().replace(/\b(uhd|fhd|hd|sd|4k|hevc|h\.?26[45]|60fps|backup|alt|east|west|central|network|channel|tv|us|usa|feed)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim()}
+function norm(value:string){
+  return value.toLowerCase()
+    .replace(/espn\s*\+/g,'espnplus')
+    .replace(/paramount\s*\+/g,'paramountplus')
+    .replace(/\b(uhd|fhd|hd|sd|4k|hevc|h\.?26[45]|60fps|backup|alt|east|west|central|network|channel|tv|us|usa|feed)\b/g,' ')
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim()
+}
 function aliases(value:string){
   const n=norm(value);const out=new Set([n]);
   const swaps:Record<string,string[]>= {
     'espn':['espn','espn1'], 'espn 2':['espn2'], 'espn2':['espn 2'], 'espn u':['espnu'], 'espnu':['espn u'], 'espn news':['espnews'], 'espnews':['espn news'],
-    'abc':['abc'], 'cbs':['cbs'], 'nbc':['nbc'], 'fox':['fox'], 'tnt':['tnt sports'], 'tbs':['tbs'], 'tru tv':['trutv'], 'trutv':['tru tv'],
-    'fox sports 1':['fs1','fox sports 1'], 'fs1':['fox sports 1'], 'fox sports 2':['fs2','fox sports 2'], 'fs2':['fox sports 2'],
-    'cbs sports':['cbs sports network','cbssn'], 'cbs sports network':['cbs sports','cbssn'], 'cbssn':['cbs sports network'], 'nbc sports':['nbc sports'],
-    'nfl':['nfl network'], 'nfl network':['nfl'], 'nba':['nba tv'], 'nba tv':['nba'], 'mlb':['mlb network'], 'mlb network':['mlb'],
-    'nhl':['nhl network'], 'nhl network':['nhl'], 'golf':['golf channel'], 'golf channel':['golf'],
-    'usa':['usa network'], 'usa network':['usa'], 'peacock':['peacock'], 'amazon prime':['prime video'], 'prime video':['amazon prime'],
+    'espnplus':['espnplus'], 'espn deportes':['espn deportes'],
+    'abc':['abc'], 'cbs':['cbs'], 'nbc':['nbc'], 'fox':['fox'], 'cw':['the cw'], 'the cw':['cw'], 'tnt':['tnt sports'], 'tbs':['tbs'], 'tru tv':['trutv'], 'trutv':['tru tv'],
+    'fox sports 1':['fs1','fox sports 1'], 'fs1':['fox sports 1'], 'fox sports 2':['fs2','fox sports 2'], 'fs2':['fox sports 2'], 'fox deportes':['fox deportes'],
+    'cbs sports':['cbs sports network','cbssn'], 'cbs sports network':['cbs sports','cbssn'], 'cbssn':['cbs sports network'], 'cbs sports golazo':['golazo','cbs sports golazo'], 'golazo':['cbs sports golazo'],
+    'nbc sports':['nbc sports'], 'sec':['sec network'], 'acc':['acc network','accn'], 'accn':['acc network'], 'big ten':['big ten network','btn'], 'btn':['big ten network'],
+    'nfl':['nfl network'], 'nba':['nba tv'], 'mlb':['mlb network'], 'nhl':['nhl network'], 'golf':['golf channel'],
+    'usa':['usa network'], 'peacock':['peacock'], 'amazon prime':['prime video'], 'prime video':['amazon prime'], 'paramountplus':['paramountplus'],
+    'telemundo':['telemundo'], 'univision':['univision'], 'tudn':['tudn'],
   };
-  for(const [key,vals] of Object.entries(swaps)) if(n===key||n.includes(key)) vals.forEach(x=>out.add(norm(x)));
+  for(const [key,vals] of Object.entries(swaps)) if(n===key) vals.forEach(x=>out.add(norm(x)));
   return [...out].filter(Boolean);
 }
 
