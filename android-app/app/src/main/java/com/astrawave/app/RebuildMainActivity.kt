@@ -66,6 +66,8 @@ import com.astrawave.app.core.MultiviewSession
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.AstraWaveCatalog
 import com.astrawave.app.data.DeviceConfigCloudSync
+import com.astrawave.app.data.EntitlementCloudRepository
+import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.HouseholdProfileStore
 import com.astrawave.app.data.IptvSourceStore
 import com.astrawave.app.data.StremioCatalogAggregator
@@ -143,6 +145,9 @@ private fun RebuildRoot() {
     val context = LocalContext.current
     val profileStore = remember { HouseholdProfileStore(context) }
     val cloudConfigSync = remember { DeviceConfigCloudSync(context) }
+    val firebaseCloud = remember { FirebaseCloudRepository(context) }
+    val entitlementCloud = remember { EntitlementCloudRepository(context) }
+    var accountPlanName by remember { mutableStateOf("AstraWave Free") }
     var activeProfileId by remember { mutableStateOf(profileStore.activeProfileId()) }
     var activeProfile by remember(activeProfileId) {
         mutableStateOf(
@@ -150,6 +155,12 @@ private fun RebuildRoot() {
         )
     }
     var showProfileGate by remember { mutableStateOf(profileStore.shouldPromptAtLaunch()) }
+
+    LaunchedEffect(activeProfileId, firebaseCloud.signedIn) {
+        entitlementCloud.load { result ->
+            accountPlanName = result.getOrNull()?.plan?.displayName ?: "AstraWave Free"
+        }
+    }
 
     if (showProfileGate) {
         HouseholdProfilesScreen(
@@ -354,11 +365,11 @@ private fun RebuildRoot() {
                 )
                 RebuildDestination.My -> MyAstraWaveHub(
                     account = AccountOverview(
-                        userId = "local",
+                        userId = firebaseCloud.currentUserId ?: "local",
                         displayName = "${activeProfile.avatar} ${activeProfile.name}",
                         activeProfileId = activeProfileId,
-                        planName = if (activeProfile.kidsMode) "Kids Profile" else "AstraWave Free",
-                        cloudSyncEnabled = false,
+                        planName = if (activeProfile.kidsMode) "Kids Profile • $accountPlanName" else accountPlanName,
+                        cloudSyncEnabled = firebaseCloud.signedIn,
                     ),
                     lists = emptyList(),
                     onOpenAccountSection = { section ->
@@ -371,6 +382,7 @@ private fun RebuildRoot() {
                             else -> current
                         }
                     },
+                    onOpenAudio = { current = RebuildDestination.Audio },
                 )
             }
 
@@ -379,10 +391,10 @@ private fun RebuildRoot() {
                     val mobileItems = listOf(
                         RebuildDestination.Home,
                         RebuildDestination.Movies,
+                        RebuildDestination.Shows,
                         RebuildDestination.Live,
-                        RebuildDestination.Sports,
                         RebuildDestination.My,
-                    ).filter { !activeProfile.kidsMode || it !in setOf(RebuildDestination.Live, RebuildDestination.Sports) }
+                    ).filter { !activeProfile.kidsMode || it != RebuildDestination.Live }
                     mobileItems.forEach { item ->
                         NavigationBarItem(
                             selected = current == item,
@@ -545,7 +557,8 @@ private fun AddonDiscoverRow(row: StremioCatalogRow, profileId: String) {
                                 Intent(context, TitleDetailsActivity::class.java)
                                     .putExtra(TitleDetailsActivity.EXTRA_TITLE, libraryItem.title)
                                     .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, libraryItem.type.name)
-                                    .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, libraryItem.sourceId),
+                                    .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, libraryItem.sourceId)
+                                    .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
                             )
                         },
                     ) {
@@ -578,7 +591,7 @@ private fun RealCatalogRow(page: TmdbCatalogPage) {
                         Spacer(Modifier.height(10.dp))
                         Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                         Spacer(Modifier.height(10.dp))
-                        LibraryActionRow(item = item.toLibraryItemRef(), profileId = "default")
+                        LibraryActionRow(item = item.toLibraryItemRef())
                     }
                 }
             }
