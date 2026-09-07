@@ -3,7 +3,7 @@ package com.astrawave.app.data
 import android.content.Context
 
 /**
- * Converts eligible live/source candidates into a learned failover order.
+ * Converts eligible live/source candidates into a learned, predictive failover order.
  * Only candidates already supplied by an authorized/reviewed connector are considered.
  */
 class SourceFusionPlaybackPlanner(context: Context) {
@@ -22,10 +22,20 @@ class SourceFusionPlaybackPlanner(context: Context) {
         val bestProvider: String?,
         val bestHealthScore: Int?,
         val backupCount: Int,
+        val predictiveConfidence: Int? = null,
+        val backupProvider: String? = null,
+        val preemptiveFailoverRecommended: Boolean = false,
     ) {
         /** Alias used by UI callers that want to emphasize failover ordering. */
         val orderedUrls: List<String> get() = urls
     }
+
+    private data class BrainRank(
+        val ranked: SourceFusionRepository.RankedCandidate,
+        val predictiveScore: Int,
+        val confidence: Int,
+        val recentFailures: Int,
+    )
 
     fun live(group: LiveChannelGroup): Plan = plan(
         group.candidates.map { candidate ->
@@ -52,6 +62,7 @@ class SourceFusionPlaybackPlanner(context: Context) {
     /** Generic route for Guide, Sports and provider-specific adapters. */
     fun plan(inputs: List<Input>, probeUnknown: Boolean = true): Plan? {
         if (inputs.isEmpty()) return null
+        val now = System.currentTimeMillis()
         val ranked = fusion.rank(
             inputs.distinctBy { it.url }.map { input ->
                 SourceFusionRepository.Candidate(
@@ -63,20 +74,69 @@ class SourceFusionPlaybackPlanner(context: Context) {
                 )
             },
             probeUnknown = probeUnknown,
-        ).filter { ranked ->
-            val latest = fusion.samples(ranked.candidate.sourceKey).lastOrNull()
-            latest?.reachable != false && ranked.health.score >= MIN_PLAYABLE_SCORE
-        }
+        ).mapNotNull { candidate ->
+            val samples = fusion.samples(candidate.candidate.sourceKey)
+            val latest = samples.lastOrNull()
+            if (latest?.reachable == false || candidate.health.score < MIN_PLAYABLE_SCORE) return@mapNotNull null
+
+            val recent = samples.takeLast(5)
+            val recentFailures = recent.count { !it.reachable }
+            val recentSuccesses = recent.count { it.reachable }
+            val stalePenalty = latest?.checkedAtEpochMs?.let { checkedAt ->
+                when {
+                    checkedAt <= 0L -> 0
+                    now - checkedAt > STALE_AFTER_MS -> 8
+                    now - checkedAt > WARM_AFTER_MS -> 3
+                    else -> 0
+                }
+            } ?: 0
+            val trendAdjustment = recentSuccesses * 2 - recentFailures * 10
+            val latencyPenalty = when {
+                candidate.health.medianLatencyMs == null -> 0
+                candidate.health.medianLatencyMs > 4_000L -> 12
+                candidate.health.medianLatencyMs > 2_000L -> 6
+                candidate.health.medianLatencyMs > 1_000L -> 3
+                else -> 0
+            }
+            val predictiveScore = (candidate.finalScore + trendAdjustment - stalePenalty - latencyPenalty)
+                .coerceIn(0, 130)
+            val confidence = when {
+                samples.size >= 20 -> 95
+                samples.size >= 10 -> 85
+                samples.size >= 5 -> 72
+                samples.size >= 2 -> 58
+                else -> 40
+            }
+            BrainRank(candidate, predictiveScore, confidence, recentFailures)
+        }.sortedWith(
+            compareByDescending<BrainRank> { it.predictiveScore }
+                .thenByDescending { it.ranked.health.score }
+                .thenBy { it.ranked.candidate.provider },
+        )
+
         if (ranked.isEmpty()) return null
+        val best = ranked.first()
+        val backup = ranked.getOrNull(1)
+        val preemptiveFailover = best.recentFailures >= 2 ||
+            best.predictiveScore < PREEMPTIVE_FAILOVER_SCORE ||
+            (backup != null && backup.predictiveScore >= best.predictiveScore + BACKUP_ADVANTAGE_THRESHOLD)
+
         return Plan(
-            urls = ranked.map { it.candidate.url }.distinct(),
-            bestProvider = ranked.firstOrNull()?.candidate?.provider,
-            bestHealthScore = ranked.firstOrNull()?.health?.score,
+            urls = ranked.map { it.ranked.candidate.url }.distinct(),
+            bestProvider = best.ranked.candidate.provider,
+            bestHealthScore = best.ranked.health.score,
             backupCount = (ranked.size - 1).coerceAtLeast(0),
+            predictiveConfidence = best.confidence,
+            backupProvider = backup?.ranked?.candidate?.provider,
+            preemptiveFailoverRecommended = preemptiveFailover,
         )
     }
 
     companion object {
         private const val MIN_PLAYABLE_SCORE = 35
+        private const val PREEMPTIVE_FAILOVER_SCORE = 55
+        private const val BACKUP_ADVANTAGE_THRESHOLD = 10
+        private const val WARM_AFTER_MS = 15 * 60 * 1000L
+        private const val STALE_AFTER_MS = 60 * 60 * 1000L
     }
 }
