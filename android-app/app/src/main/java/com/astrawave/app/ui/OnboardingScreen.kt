@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -26,6 +27,8 @@ import com.astrawave.app.core.OnboardingFlow
 import com.astrawave.app.core.OnboardingStep
 import com.astrawave.app.data.OnboardingStore
 import com.astrawave.app.data.SetupHealthRepository
+import com.astrawave.app.data.SetupRepairRepository
+import kotlinx.coroutines.launch
 
 @Composable
 fun AstraWaveOnboardingScreen(
@@ -34,10 +37,14 @@ fun AstraWaveOnboardingScreen(
     onFinished: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val store = remember { OnboardingStore(context) }
     val healthRepository = remember { SetupHealthRepository(context) }
+    val repairRepository = remember { SetupRepairRepository(context) }
     var state by remember(profileId) { mutableStateOf(store.load(profileId)) }
     var health by remember(profileId) { mutableStateOf(healthRepository.snapshot(profileId)) }
+    var repairing by remember { mutableStateOf(false) }
+    var repairMessage by remember { mutableStateOf<String?>(null) }
 
     fun refreshHealth() { health = healthRepository.snapshot(profileId) }
 
@@ -114,6 +121,36 @@ fun AstraWaveOnboardingScreen(
                     )
                 }
             }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        AstraWaveSecondaryButton(
+            label = if (repairing) "Fixing Setup…" else "Fix Everything Safe",
+            onClick = {
+                if (repairing) return@AstraWaveSecondaryButton
+                repairing = true
+                repairMessage = null
+                scope.launch {
+                    val report = runCatching { repairRepository.repair(profileId) }
+                    repairing = false
+                    repairMessage = report.fold(
+                        onSuccess = { it.messages.joinToString(" ") },
+                        onFailure = { it.message ?: "Safe repair pass could not complete." },
+                    )
+                    refreshHealth()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Safe repair only: refreshes source health/counts, removes duplicate local source records and normalizes Travel Mode limits. It never changes passwords, debrid tokens, DVR consent, parental controls or subscription state.",
+            color = AstraWaveColors.TertiaryText,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        repairMessage?.let {
+            Spacer(Modifier.height(8.dp))
+            AstraWaveStatePanel("Repair Result", it)
         }
 
         if (health.readyToWatch) {
