@@ -19,6 +19,7 @@ class VodPlaybackCoordinator(context: Context) {
     private val appContext = context.applicationContext
     private val resolver = UnifiedVodSourceRepository(appContext)
     private val personalResolver = PersonalMediaVodResolver(appContext)
+    private val diagnostics = VodPlaybackDiagnosticsStore(appContext)
 
     suspend fun prepare(request: VodPlaybackRequest): VodPlaybackLaunch = coroutineScope {
         val scrapeRequest = ScrapeRequest(
@@ -37,7 +38,9 @@ class VodPlaybackCoordinator(context: Context) {
             request = request,
             plan = online.await(),
             personal = personal.await(),
-        )
+        ).also { launch ->
+            if (launch.playable) runCatching { diagnostics.record(request.profileId, launch) }
+        }
     }
 
     fun intent(launch: VodPlaybackLaunch): Intent? {
