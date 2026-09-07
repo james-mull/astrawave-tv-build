@@ -11,10 +11,11 @@ import kotlinx.coroutines.coroutineScope
 /**
  * Unified VOD resolver used by movie, series and episode detail surfaces.
  *
- * The repository intentionally separates catalog discovery from playback eligibility. Enabled
- * addons may enrich metadata, but only sources that pass AstraWave's explicit authorization policy
- * and health checks are returned as playable candidates. User-provided Xtream accounts are treated
- * as customer-authorized sources and are read from the device's Keystore-backed IPTV source store.
+ * Catalog discovery stays separate from playback eligibility. Enabled addons may enrich metadata,
+ * but only sources that pass AstraWave's explicit authorization policy and health checks are
+ * returned as playable candidates. User-provided Xtream accounts are treated as customer-authorized
+ * sources. An optional linked debrid account may optimize already-authorized links after discovery;
+ * it never participates in title or file discovery.
  */
 class UnifiedVodSourceRepository(context: Context) {
     private val appContext = context.applicationContext
@@ -22,18 +23,14 @@ class UnifiedVodSourceRepository(context: Context) {
     private val xtreamSources = XtreamVodSourceResolver(appContext)
     private val addonStore = StremioAddonStore(appContext)
     private val authorizationStore = VodProviderAuthorizationStore(appContext)
+    private val debridAccounts = DebridAccountRepository(appContext)
     private val catalogGateway = StremioHttpGateway()
     private val catalogAggregator = StremioCatalogAggregator(appContext, catalogGateway)
     private val healthCache = linkedMapOf<String, CachedHealth>()
 
-    /** Backwards-compatible source list consumed by the current TitleDetailsActivity. */
     suspend fun discover(request: ScrapeRequest, profileId: String = "default"): List<ResolvedSource> =
         plan(request, profileId).sources
 
-    /**
-     * Resolve the title into one ranked playback plan. The first URL is the preferred source and
-     * the remaining URLs are ordered backups ready for PlayerActivity's existing failover engine.
-     */
     suspend fun plan(request: ScrapeRequest, profileId: String = "default"): VodPlaybackPlan = coroutineScope {
         val publicDeferred = async { runCatching { publicSources.discover(request) }.getOrDefault(emptyList()) }
         val xtreamDeferred = async { runCatching { xtreamSources.discover(request, profileId) }.getOrDefault(emptyList()) }
@@ -49,13 +46,13 @@ class UnifiedVodSourceRepository(context: Context) {
             }.getOrDefault(emptyList())
         }
 
-        val ranked = (publicDeferred.await() + xtreamDeferred.await() + stremioDeferred.await())
+        val baseRanked = (publicDeferred.await() + xtreamDeferred.await() + stremioDeferred.await())
             .groupBy { normalizeUrl(it.link.url) }
             .mapNotNull { (_, duplicates) -> duplicates.maxByOrNull { it.score } }
-            .sortedWith(
-                compareByDescending<ResolvedSource> { it.score }
-                    .thenBy { it.latencyMs ?: Long.MAX_VALUE },
-            )
+            .sortedWith(compareByDescending<ResolvedSource> { it.score }.thenBy { it.latencyMs ?: Long.MAX_VALUE })
+
+        val ranked = runCatching { debridAccounts.optimize(profileId, baseRanked) }
+            .getOrDefault(baseRanked)
 
         val providers = ranked.map { it.link.sourceName }.filter(String::isNotBlank).distinct()
         val qualities = ranked.mapNotNull { it.link.quality?.takeIf(String::isNotBlank) }.distinct()
@@ -67,6 +64,7 @@ class UnifiedVodSourceRepository(context: Context) {
             providers = providers,
             qualities = qualities,
             bestQuality = ranked.maxByOrNull { qualityWeight(it.link.quality) }?.link?.quality,
+            debridOptimized = ranked.any { it.link.licenseLabel == "User-linked debrid optimization" },
         )
     }
 
@@ -89,9 +87,7 @@ class UnifiedVodSourceRepository(context: Context) {
         val preferred = hits.firstOrNull()?.first ?: return emptyList()
         val streamId = if (request.season != null && request.episode != null) {
             "${preferred.item.id}:${request.season}:${request.episode}"
-        } else {
-            preferred.item.id
-        }
+        } else preferred.item.id
         val streamType = if (request.season != null && request.episode != null) "series" else preferred.item.type
         return discoverApprovedStremioById(streamType, streamId, profileId)
     }
@@ -199,10 +195,7 @@ class UnifiedVodSourceRepository(context: Context) {
         .trimEnd('/')
         .lowercase()
 
-    private data class CachedHealth(
-        val checkedAtMs: Long,
-        val health: StreamHealth,
-    )
+    private data class CachedHealth(val checkedAtMs: Long, val health: StreamHealth)
 
     companion object {
         private const val HEALTH_CACHE_TTL_MS = 120_000L
@@ -210,7 +203,6 @@ class UnifiedVodSourceRepository(context: Context) {
     }
 }
 
-/** A single resolver result ready to hand to the player. */
 data class VodPlaybackPlan(
     val sources: List<ResolvedSource>,
     val preferred: ResolvedSource?,
@@ -219,6 +211,7 @@ data class VodPlaybackPlan(
     val providers: List<String>,
     val qualities: List<String>,
     val bestQuality: String?,
+    val debridOptimized: Boolean = false,
 ) {
     val playable: Boolean get() = preferred != null && urls.isNotEmpty()
     val backupCount: Int get() = backups.size
