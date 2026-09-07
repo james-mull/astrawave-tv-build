@@ -18,12 +18,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
 
-/**
- * Executes DVR capture only from stream URLs already attached to an authorized RecordingRequest.
- * The first transport intentionally supports continuous direct HTTP(S) streams. HLS manifests are
- * rejected rather than being incorrectly saved as playlist text; a future HLS segment recorder can
- * add that transport explicitly.
- */
+/** Executes DVR capture only from URLs attached to an explicitly authorized RecordingRequest. */
 class DvrRecordingWorker(
     appContext: Context,
     params: WorkerParameters,
@@ -67,11 +62,18 @@ class DvrRecordingWorker(
                 partial.delete()
                 return@withContext Result.success()
             }
-            if (looksLikeHls(streamUrl)) {
-                lastError = "HLS DVR transport is not enabled for this source yet"
-                continue
+            val outcome = runCatching {
+                if (looksLikeHls(streamUrl)) {
+                    HlsDvrRecorder().record(
+                        playlistUrl = streamUrl,
+                        target = partial,
+                        endEpochMs = request.endEpochMs,
+                        shouldStop = { isStopped || gateway.find(recordingId)?.state == RecordingState.CANCELED },
+                    )
+                } else {
+                    captureDirect(streamUrl, partial, request.endEpochMs, gateway, recordingId)
+                }
             }
-            val outcome = runCatching { captureDirect(streamUrl, partial, request.endEpochMs, gateway, recordingId) }
             if (outcome.isSuccess) {
                 if (target.exists()) target.delete()
                 if (!partial.renameTo(target)) {
@@ -113,7 +115,7 @@ class DvrRecordingWorker(
             if (connection.responseCode !in 200..299) throw IOException("DVR source returned HTTP ${connection.responseCode}")
             val contentType = connection.contentType.orEmpty().lowercase()
             if (contentType.contains("mpegurl") || contentType.contains("m3u8")) {
-                throw IOException("HLS DVR transport is not enabled for this source yet")
+                throw IOException("HLS source did not advertise a .m3u8 URL; use a playlist URL for DVR")
             }
 
             connection.inputStream.buffered(128 * 1024).use { input ->
