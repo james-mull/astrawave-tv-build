@@ -118,7 +118,6 @@ fun AstraWaveSportsScreen(
                             url = candidate.streamUrl,
                             provider = candidate.source,
                             priority = index,
-                            qualityLabel = candidate.quality,
                         )
                     },
                 )
