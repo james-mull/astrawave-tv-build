@@ -13,8 +13,12 @@ import java.nio.charset.StandardCharsets
  * Large, zero-configuration discovery layer for AstraWave Radio, music previews and podcasts.
  * Full commercial music playback is intentionally delegated to licensed/user-authorized providers;
  * this repository provides broad searchable discovery plus legal preview playback.
+ *
+ * When ASTRAWAVE_API_BASE_URL is configured, server-side catalogs (for example Podcast Index)
+ * are merged ahead of the public fallback directories without exposing provider secrets on-device.
  */
 class AstraWaveAudioDiscoveryRepository {
+    private val backend = BackendAudioDirectoryRepository()
     private val radioServers = listOf(
         "https://de1.api.radio-browser.info",
         "https://nl1.api.radio-browser.info",
@@ -31,7 +35,7 @@ class AstraWaveAudioDiscoveryRepository {
         "hockey", "soccer", "wrestling", "mma", "motorsports", "cryptocurrency", "personal finance",
         "careers", "marketing", "startups", "artificial intelligence", "cybersecurity", "space", "psychology",
         "mental health", "fitness", "nutrition", "running", "outdoors", "photography", "fashion", "home",
-        "gardening", "diy", "parenting", "relationships", "language learning", "documentary", "audio drama",
+        "gardening", "diy", "language learning", "documentary", "audio drama",
     ).distinct()
 
     val musicGenres = listOf(
@@ -55,27 +59,45 @@ class AstraWaveAudioDiscoveryRepository {
         "BR", "AR", "CL", "CO", "PE", "ZA", "NG", "KE", "EG", "AE", "IL", "PH", "ID", "SG",
     )
 
-    fun discoverRadio(limit: Int = 200, offset: Int = 0): List<RadioStation> =
-        radioRequest("/json/stations/topvote/${limit.coerceIn(1, 500)}?hidebroken=true&order=votes&reverse=true&offset=${offset.coerceAtLeast(0)}")
+    fun discoverRadio(limit: Int = 200, offset: Int = 0): List<RadioStation> {
+        val remote = if (backend.configured) backend.radio(limit = limit, offset = offset) else emptyList()
+        val fallback = radioRequest(
+            "/json/stations/topvote/${limit.coerceIn(1, 500)}?hidebroken=true&order=votes&reverse=true&offset=${offset.coerceAtLeast(0)}",
+        )
+        return mergeRadio(remote, fallback, limit)
+    }
 
     fun radioByGenre(genre: String, limit: Int = 200, offset: Int = 0): List<RadioStation> {
+        val remote = if (backend.configured) backend.radio(genre = genre, limit = limit, offset = offset) else emptyList()
         val tag = URLEncoder.encode(genre.trim(), StandardCharsets.UTF_8.name())
-        return radioRequest("/json/stations/bytag/$tag?hidebroken=true&order=votes&reverse=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}")
+        val fallback = radioRequest(
+            "/json/stations/bytag/$tag?hidebroken=true&order=votes&reverse=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}",
+        )
+        return mergeRadio(remote, fallback, limit)
     }
 
     fun radioByCountry(countryCode: String, limit: Int = 200, offset: Int = 0): List<RadioStation> {
+        val remote = if (backend.configured) backend.radio(country = countryCode, limit = limit, offset = offset) else emptyList()
         val code = URLEncoder.encode(countryCode.trim().uppercase(), StandardCharsets.UTF_8.name())
-        return radioRequest("/json/stations/bycountrycodeexact/$code?hidebroken=true&order=votes&reverse=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}")
+        val fallback = radioRequest(
+            "/json/stations/bycountrycodeexact/$code?hidebroken=true&order=votes&reverse=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}",
+        )
+        return mergeRadio(remote, fallback, limit)
     }
 
     fun searchRadio(query: String, limit: Int = 250, offset: Int = 0): List<RadioStation> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
+        val remote = if (backend.configured) backend.radio(query = q, limit = limit, offset = offset) else emptyList()
         val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
-        return radioRequest(
+        val fallback = radioRequest(
             "/json/stations/search?name=$encoded&hidebroken=true&limit=${limit.coerceIn(1, 500)}&offset=${offset.coerceAtLeast(0)}&order=votes&reverse=true",
         )
+        return mergeRadio(remote, fallback, limit)
     }
+
+    private fun mergeRadio(primary: List<RadioStation>, fallback: List<RadioStation>, limit: Int): List<RadioStation> =
+        (primary + fallback).distinctBy { it.streamUrl.lowercase() }.take(limit.coerceIn(1, 500))
 
     private fun radioRequest(path: String): List<RadioStation> {
         val json = radioServers.firstNotNullOfOrNull { server ->
@@ -108,12 +130,15 @@ class AstraWaveAudioDiscoveryRepository {
     }
 
     fun discoverPodcasts(perTopic: Int = 10, maxItems: Int = 500): List<AudioSubscription> {
+        val target = maxItems.coerceIn(1, 1_000)
+        val server = if (backend.configured) backend.podcasts(limit = target.coerceAtMost(300)) else emptyList()
         val limit = perTopic.coerceIn(1, 20)
-        return podcastTopics.asSequence()
-            .flatMap { topic -> searchPodcasts(topic, limit).asSequence() }
+        val fallback = podcastTopics.asSequence()
+            .flatMap { topic -> applePodcastSearch(topic, limit).asSequence() }
             .distinctBy { it.feedUrl.lowercase() }
-            .take(maxItems.coerceIn(1, 1_000))
+            .take(target)
             .toList()
+        return (server + fallback).distinctBy { it.feedUrl.lowercase() }.take(target)
     }
 
     fun podcastsByTopic(topic: String, limit: Int = 120): List<AudioSubscription> = searchPodcasts(topic, limit)
@@ -121,7 +146,14 @@ class AstraWaveAudioDiscoveryRepository {
     fun searchPodcasts(query: String, limit: Int = 150): List<AudioSubscription> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
-        val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
+        val target = limit.coerceIn(1, 300)
+        val server = if (backend.configured) backend.podcasts(q, target) else emptyList()
+        val fallback = applePodcastSearch(q, target.coerceAtMost(200))
+        return (server + fallback).distinctBy { it.feedUrl.lowercase() }.take(target)
+    }
+
+    private fun applePodcastSearch(query: String, limit: Int): List<AudioSubscription> {
+        val encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8.name())
         val capped = limit.coerceIn(1, 200)
         val root = runCatching {
             JSONObject(SimpleHttp.getText("https://itunes.apple.com/search?media=podcast&entity=podcast&country=US&limit=$capped&term=$encoded"))
@@ -159,7 +191,14 @@ class AstraWaveAudioDiscoveryRepository {
     fun searchMusic(query: String, limit: Int = 150): List<AudioItem> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
-        val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
+        val target = limit.coerceIn(1, 300)
+        val server = if (backend.configured) backend.music(q, target) else emptyList()
+        val fallback = appleMusicSearch(q, target.coerceAtMost(200))
+        return (server + fallback).distinctBy { it.id }.take(target)
+    }
+
+    private fun appleMusicSearch(query: String, limit: Int): List<AudioItem> {
+        val encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8.name())
         val capped = limit.coerceIn(1, 200)
         val root = runCatching {
             JSONObject(SimpleHttp.getText("https://itunes.apple.com/search?media=music&entity=song&country=US&limit=$capped&term=$encoded"))
