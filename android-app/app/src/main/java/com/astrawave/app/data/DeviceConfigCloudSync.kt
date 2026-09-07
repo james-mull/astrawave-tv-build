@@ -91,23 +91,10 @@ class DeviceConfigCloudSync(private val context: Context) {
                         xmlTvUrl = rawConfig["xmlTvUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
                     )
                 }
-                "XTREAM" -> {
-                    val server = rawConfig["server"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    val username = rawConfig["username"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    val password = rawConfig["password"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    IptvSource(
-                        id = doc.id,
-                        profileId = profileId,
-                        name = doc.getString("name").orEmpty().ifBlank { "Cloud Xtream" },
-                        type = IptvSourceType.XTREAM,
-                        enabled = enabled,
-                        priority = (doc.getLong("priority") ?: 20L).toInt(),
-                        xtreamServer = server,
-                        xtreamUsername = username,
-                        xtreamPassword = password,
-                        xmlTvUrl = rawConfig["xmlTvUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
-                    )
-                }
+                // Xtream credentials are intentionally device-local. IptvSourceStore encrypts the
+                // password with Android Keystore; AstraWave does not import a plaintext password
+                // from Firestore. Add/test Xtream accounts from the TV/device Source Manager.
+                "XTREAM" -> null
                 else -> null
             }
         }
