@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './premium-overrides.css';
 
 export const metadata: Metadata = {
   title: 'AstraWave — All Your Entertainment. One Place.',
