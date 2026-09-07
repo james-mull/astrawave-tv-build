@@ -23,6 +23,7 @@
         <activity android:name=".TvListDetailActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".TitleDetailsActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".RebuildMainActivity" android:exported="false" android:screenOrientation="unspecified" />
+        <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".RemoteDestinationActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".GameDayReminderActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".AstraWaveEntryActivity" android:exported="true" android:screenOrientation="unspecified">
