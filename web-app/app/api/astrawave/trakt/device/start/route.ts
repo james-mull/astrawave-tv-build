@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseUser } from '../../../../../lib/trakt-device';
+import { verifyFirebaseUser } from '../../../../../../lib/trakt-device';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
