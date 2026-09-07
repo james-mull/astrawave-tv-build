@@ -26,6 +26,8 @@ data class RecordingRequest(
     val endEpochMs: Long,
     val seriesId: String? = null,
     val eventId: String? = null,
+    /** Exact HTTP(S) candidates already authorized by the user/provider resolution path. */
+    val authorizedStreamUrls: List<String> = emptyList(),
 )
 
 data class Recording(
@@ -87,9 +89,15 @@ object DvrEligibility {
         if (request.endEpochMs <= request.startEpochMs) add("Recording end time must be after start time")
         if (request.endEpochMs <= nowEpochMs) add("Recording has already ended")
         if (!canSchedule(capabilities)) add("This source does not advertise authorized DVR support")
+        if (request.authorizedStreamUrls.none { it.startsWith("http://") || it.startsWith("https://") }) {
+            add("No authorized HTTP(S) recording stream is available")
+        }
         if (request.seriesId != null && !canSeriesRecord(capabilities)) add("This source does not advertise series-recording support")
         capabilities.maxRecordingHours?.let { maxHours ->
             if (request.endEpochMs - request.startEpochMs > maxHours * 3_600_000L) add("Recording exceeds this source's maximum duration")
         }
     }
+
+    fun overlaps(first: RecordingRequest, second: RecordingRequest): Boolean =
+        first.startEpochMs < second.endEpochMs && second.startEpochMs < first.endEpochMs
 }
