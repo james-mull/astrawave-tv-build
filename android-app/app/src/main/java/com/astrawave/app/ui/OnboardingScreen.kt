@@ -23,9 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.OnboardingFlow
-import com.astrawave.app.core.OnboardingState
 import com.astrawave.app.core.OnboardingStep
 import com.astrawave.app.data.OnboardingStore
+import com.astrawave.app.data.SetupHealthRepository
 
 @Composable
 fun AstraWaveOnboardingScreen(
@@ -35,13 +35,18 @@ fun AstraWaveOnboardingScreen(
 ) {
     val context = LocalContext.current
     val store = remember { OnboardingStore(context) }
+    val healthRepository = remember { SetupHealthRepository(context) }
     var state by remember(profileId) { mutableStateOf(store.load(profileId)) }
+    var health by remember(profileId) { mutableStateOf(healthRepository.snapshot(profileId)) }
+
+    fun refreshHealth() { health = healthRepository.snapshot(profileId) }
 
     fun completeCurrent() {
         if (state.currentStep == OnboardingStep.COMPLETE) {
             onFinished()
         } else {
             state = store.markComplete(profileId, state.currentStep)
+            refreshHealth()
             if (state.complete) onFinished()
         }
     }
@@ -49,6 +54,7 @@ fun AstraWaveOnboardingScreen(
     fun skipCurrent() {
         if (state.currentStep != OnboardingStep.WELCOME && state.currentStep != OnboardingStep.COMPLETE) {
             state = store.skip(profileId, state.currentStep)
+            refreshHealth()
             if (state.complete) onFinished()
         }
     }
@@ -63,24 +69,68 @@ fun AstraWaveOnboardingScreen(
         Text("ASTRAWAVE SETUP", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(8.dp))
         Text(
-            if (state.complete) "You’re ready to watch." else "Set up AstraWave your way.",
+            if (health.readyToWatch) "You’re ready to watch." else "Set up AstraWave your way.",
             color = AstraWaveColors.PrimaryText,
             style = MaterialTheme.typography.headlineLarge,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            if (state.complete) {
-                "Your setup progress is saved. You can revisit any connection or preference whenever you want."
+            if (health.readyToWatch) {
+                "Core setup is ready. Everything below that is marked optional can be added whenever you want."
             } else {
-                "AstraWave saves each step automatically, so you can stop and continue later on this device."
+                "AstraWave checks your setup automatically. You only need to fix the items that actually need attention."
             },
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.bodyLarge,
         )
         Spacer(Modifier.height(18.dp))
         AstraWaveStatePanel(
-            title = "$doneCount of ${actionableSteps.size} setup steps finished",
-            message = if (state.complete) "Setup complete" else "Current step: ${stepTitle(state.currentStep)}",
+            title = "Setup Health • ${health.score}%",
+            message = if (health.readyToWatch) "Core playback setup is ready" else "${health.readyCount} of ${health.requiredCount} required checks ready",
+        )
+        Spacer(Modifier.height(10.dp))
+
+        health.items.forEach { item ->
+            AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(3.dp))
+                        Text(item.detail, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(
+                        when {
+                            item.ready -> "READY"
+                            item.optional -> "OPTIONAL"
+                            else -> "FIX"
+                        },
+                        color = when {
+                            item.ready -> AstraWaveColors.Success
+                            item.optional -> AstraWaveColors.TertiaryText
+                            else -> AstraWaveColors.Warning
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
+            }
+        }
+
+        if (health.readyToWatch) {
+            Spacer(Modifier.height(16.dp))
+            AstraWavePrimaryButton("Use AstraWave Now", onFinished, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Advanced setup is optional. Add Live TV, DVR, personal media, devices, debrid, addons or Travel Mode later from My AstraWave.",
+                color = AstraWaveColors.TertiaryText,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        Spacer(Modifier.height(22.dp))
+        AstraWaveStatePanel(
+            title = "$doneCount of ${actionableSteps.size} guided steps finished",
+            message = if (state.complete) "Guided setup complete" else "Current step: ${stepTitle(state.currentStep)}",
         )
         Spacer(Modifier.height(18.dp))
 
@@ -112,6 +162,7 @@ fun AstraWaveOnboardingScreen(
                         modifier = Modifier.clickable {
                             state = store.goTo(profileId, step)
                             onOpenStep(step)
+                            refreshHealth()
                         }.padding(8.dp),
                     )
                 }
@@ -123,17 +174,18 @@ fun AstraWaveOnboardingScreen(
             AstraWavePrimaryButton("Finish", onFinished, Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
             Text(
-                "Restart setup",
+                "Restart guided setup",
                 color = AstraWaveColors.Warning,
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.clickable {
                     store.reset(profileId)
                     state = store.load(profileId)
+                    refreshHealth()
                 }.padding(8.dp),
             )
         } else {
             AstraWavePrimaryButton(
-                label = if (state.currentStep == OnboardingStep.WELCOME) "Start Setup" else "Mark Step Complete",
+                label = if (state.currentStep == OnboardingStep.WELCOME) "Start Guided Setup" else "Mark Step Complete",
                 onClick = ::completeCurrent,
                 modifier = Modifier.fillMaxWidth(),
             )
