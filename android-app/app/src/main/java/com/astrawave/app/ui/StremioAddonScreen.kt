@@ -51,6 +51,7 @@ fun StremioAddonScreen(profileId: String = "default") {
     var catalogRows by remember(profileId) { mutableStateOf<List<StremioCatalogRow>>(emptyList()) }
     var installDialog by remember { mutableStateOf(false) }
     var showVodAuthorization by remember { mutableStateOf(false) }
+    var showDebrid by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
     var loadingCatalogs by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -59,6 +60,14 @@ fun StremioAddonScreen(profileId: String = "default") {
         VodProviderAuthorizationScreen(
             profileId = profileId,
             onBack = { showVodAuthorization = false },
+        )
+        return
+    }
+
+    if (showDebrid) {
+        DebridAccountScreen(
+            profileId = profileId,
+            onBack = { showDebrid = false },
         )
         return
     }
@@ -87,7 +96,8 @@ fun StremioAddonScreen(profileId: String = "default") {
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { installDialog = true }) { Text("Install Stremio Addon") }
-            AstraWaveSecondaryButton("Authorized VOD Providers", { showVodAuthorization = true })
+            AstraWaveSecondaryButton(label = "Authorized VOD Providers", onClick = { showVodAuthorization = true })
+            AstraWaveSecondaryButton(label = "Cloud & Debrid", onClick = { showDebrid = true })
             Text(
                 "Manage more from AstraWave Web Control Center",
                 color = AstraWaveColors.Accent,
