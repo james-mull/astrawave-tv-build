@@ -32,12 +32,12 @@ import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.IptvSource
 import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.data.ProfileSafetyStore
+import com.astrawave.app.data.SourceFusionPlaybackPlanner
 import com.astrawave.app.data.SportsGuideItem
 import com.astrawave.app.data.SportsGuideRepository
 import com.astrawave.app.data.SportsGuideSnapshot
 import com.astrawave.app.data.SportsPreferenceStore
 import com.astrawave.app.data.StremioLiveCatalogDiscovery
-import com.astrawave.app.data.StreamHealthChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -76,6 +76,7 @@ fun AstraWaveSportsScreen(
     val scope = rememberCoroutineScope()
     val preferences = remember { SportsPreferenceStore(context) }
     val addonLiveDiscovery = remember { StremioLiveCatalogDiscovery(context) }
+    val playbackPlanner = remember { SourceFusionPlaybackPlanner(context) }
     var state by remember(sources, profileId) { mutableStateOf<SportsLoadState>(SportsLoadState.Loading) }
     var selectedDate by remember { mutableStateOf(LocalDate.now(ZoneOffset.UTC)) }
     var selectedLeague by remember { mutableStateOf<String?>(null) }
@@ -103,23 +104,34 @@ fun AstraWaveSportsScreen(
     }
 
     fun play(item: SportsGuideItem) {
-        val urls = item.resolution?.candidates?.map { it.streamUrl }?.distinct().orEmpty()
-        if (urls.isEmpty()) {
+        val candidates = item.resolution?.candidates.orEmpty()
+        if (candidates.isEmpty()) {
             Toast.makeText(context, "No matched authorized channel is available for this event.", Toast.LENGTH_LONG).show()
             return
         }
         scope.launch {
-            val healthy = withContext(Dispatchers.IO) {
-                urls.filter { url -> runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false) }
+            val plan = withContext(Dispatchers.IO) {
+                playbackPlanner.plan(
+                    candidates.mapIndexed { index, candidate ->
+                        SourceFusionPlaybackPlanner.Input(
+                            sourceKey = "sports:${item.event.id}:$index:${candidate.source}",
+                            url = candidate.streamUrl,
+                            provider = candidate.source,
+                            priority = index,
+                            qualityLabel = candidate.quality,
+                        )
+                    },
+                )
             }
-            if (healthy.isEmpty()) {
+            val urls = plan?.orderedUrls.orEmpty()
+            if (urls.isEmpty()) {
                 Toast.makeText(context, "Matched channels are not reachable right now.", Toast.LENGTH_LONG).show()
                 return@launch
             }
             context.startActivity(
                 Intent(context, PlayerActivity::class.java)
-                    .putExtra(PlayerActivity.EXTRA_URL, healthy.first())
-                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(healthy))
+                    .putExtra(PlayerActivity.EXTRA_URL, urls.first())
+                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(urls))
                     .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
             )
         }
@@ -175,7 +187,7 @@ fun AstraWaveSportsScreen(
                 Text("ASTRAWAVE SPORTS", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
                 Text("Game Day", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
                 Text(
-                    "Events first: favorite teams, live scores, reminders, matched broadcasters, hardcoded channel catalogs and six-screen Sports Mosaic.",
+                    "Events first: favorite teams, live scores, reminders, matched broadcasters, hardcoded channel catalogs and Smart Source Fusion.",
                     color = AstraWaveColors.SecondaryText,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
@@ -373,6 +385,7 @@ fun AstraWaveSportsScreen(
                                         append(" • ${selected.watchCandidate.source}")
                                         val backups = (selected.resolution?.candidates?.size ?: 1) - 1
                                         if (backups > 0) append(" • $backups backup${if (backups == 1) "" else "s"}")
+                                        append(" • Smart Source Fusion")
                                     } else if (selected.addonCatalogMatches.isNotEmpty()) {
                                         append("Hardcoded addon catalog match: ${selected.addonCatalogMatches.joinToString()}. Metadata match only; playback still requires an eligible authorized source.")
                                     } else if (selected.broadcasterNames.isNotEmpty()) {
@@ -431,7 +444,7 @@ private fun SourceLine(item: SportsGuideItem) {
         candidate != null -> {
             val backups = (item.resolution?.candidates?.size ?: 1) - 1
             Text(
-                "${candidate.channelName} • ${candidate.source}${if (backups > 0) " • $backups backups" else ""}",
+                "${candidate.channelName} • ${candidate.source}${if (backups > 0) " • $backups backups" else ""} • Smart Source Fusion",
                 color = AstraWaveColors.Success,
                 style = MaterialTheme.typography.labelLarge,
             )
