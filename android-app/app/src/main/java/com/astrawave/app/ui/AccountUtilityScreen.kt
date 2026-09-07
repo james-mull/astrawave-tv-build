@@ -33,6 +33,7 @@ import com.astrawave.app.data.DownloadTravelStore
 import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LibraryCloudSync
 import com.astrawave.app.data.LocalDeviceSessionGateway
+import com.astrawave.app.data.LocalDvrGateway
 import com.astrawave.app.data.SportsPreferenceStore
 
 /**
@@ -120,10 +121,25 @@ private fun DeviceUtility(profileId: String, onBack: () -> Unit) {
 private fun DownloadsUtility(profileId: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val store = remember { DownloadTravelStore(context) }
+    val dvr = remember { LocalDvrGateway(context) }
     var policy by remember(profileId) { mutableStateOf(store.travelPolicy(profileId)) }
     val downloads = remember(profileId) { store.downloads(profileId) }
+    var showRecordings by remember { mutableStateOf(false) }
 
-    UtilityShell("Downloads & Storage", "Authorized download queue and Travel Mode planning. The background download worker is not advertised as complete until transport QA is finished.", onBack) {
+    if (showRecordings) {
+        RecordingsScreen(profileId = profileId, onBack = { showRecordings = false })
+        return
+    }
+
+    UtilityShell("Downloads & Storage", "Authorized offline downloads, Travel Mode and local DVR recordings stored on this device.", onBack) {
+        AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { showRecordings = true }) {
+            Column {
+                Text("Recordings", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                Text("${dvr.recordings(profileId).size} scheduled, active or completed DVR item${if (dvr.recordings(profileId).size == 1) "" else "s"}", color = AstraWaveColors.SecondaryText)
+                Text("Open DVR library", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
         UtilityToggle("Travel Mode planning", store.travelSummary(profileId), policy.enabled) { enabled ->
             policy = policy.copy(enabled = enabled)
             store.saveTravelPolicy(profileId, policy)
@@ -138,8 +154,8 @@ private fun DownloadsUtility(profileId: String, onBack: () -> Unit) {
             }
         }
         Spacer(Modifier.height(18.dp))
-        AstraWaveSectionHeader("Queue", "${downloads.size} stored request${if (downloads.size == 1) "" else "s"}")
-        if (downloads.isEmpty()) AstraWaveEmptyState("No downloads queued", "Eligible authorized offline items will appear here when the download worker is enabled.")
+        AstraWaveSectionHeader("Offline downloads", "${downloads.size} stored request${if (downloads.size == 1) "" else "s"}")
+        if (downloads.isEmpty()) AstraWaveEmptyState("No downloads queued", "Eligible authorized offline items will appear here when you choose Download on supported media.")
         downloads.take(30).forEach { item ->
             AstraWaveStatePanel(item.title, "${item.state.name} • ${item.progressPercent}%${item.error?.let { " • $it" }.orEmpty()}")
             Spacer(Modifier.height(5.dp))
@@ -157,7 +173,7 @@ private fun NotificationsUtility(profileId: String, onBack: () -> Unit) {
     var sourceHealthEnabled by remember(profileId) { mutableStateOf(prefs.getBoolean("$profileId:sourceHealth", false)) }
     val reminders = remember(profileId) { sports.reminders(profileId) }
 
-    UtilityShell("Notifications", "Choose which local AstraWave events may surface notifications. Actual system scheduling remains provider/device capability dependent.", onBack) {
+    UtilityShell("Notifications", "Choose which local AstraWave events may surface notifications. Game Day reminders are scheduled on-device when notification permission is granted.", onBack) {
         UtilityToggle("Sports reminders", "${reminders.size} saved Game Day reminder${if (reminders.size == 1) "" else "s"}", sportsEnabled) {
             sportsEnabled = it; prefs.edit().putBoolean("$profileId:sports", it).apply()
         }
