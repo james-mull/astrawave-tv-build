@@ -126,15 +126,15 @@ class SportsGuideRepository(
                 startTimeEpochMs = 0L,
                 broadcasterNames = cloud.broadcasts,
             )
-            val candidates = cloud.channelMatches.flatMap { match ->
-                match.candidates.mapIndexed { index, candidate ->
+            val candidates = cloud.channelMatches.flatMapIndexed { matchIndex, match ->
+                match.candidates.mapIndexed { candidateIndex, candidate ->
                     SportsWatchCandidate(
                         eventId = cloud.id,
                         channelName = match.name,
                         source = candidate.provider,
                         streamUrl = candidate.streamUrl,
                         broadcasterMatchScore = match.matchScore,
-                        priority = index,
+                        priority = (matchIndex * 1_000) + candidateIndex,
                     )
                 }
             }
