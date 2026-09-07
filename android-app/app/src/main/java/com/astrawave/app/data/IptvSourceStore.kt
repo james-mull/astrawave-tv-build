@@ -41,6 +41,14 @@ class IptvSourceStore(private val context: Context) {
         }.getOrElse { emptyList() }
     }
 
+    fun loadAllProfiles(): List<IptvSource> = prefs.all.keys
+        .filter { it.startsWith(PROFILE_KEY_PREFIX) }
+        .flatMap { storedKey ->
+            val profileId = storedKey.removePrefix(PROFILE_KEY_PREFIX)
+            if (profileId.isBlank()) emptyList() else load(profileId)
+        }
+        .distinctBy { "${it.profileId}:${it.id}" }
+
     fun save(profileId: String, sources: List<IptvSource>) {
         val array = JSONArray()
         sources.filter { it.profileId == profileId }.forEach { array.put(toJson(it)) }
@@ -166,7 +174,7 @@ class IptvSourceStore(private val context: Context) {
         return generator.generateKey()
     }
 
-    private fun key(profileId: String) = "sources_$profileId"
+    private fun key(profileId: String) = "$PROFILE_KEY_PREFIX$profileId"
 
     private fun JSONObject.putNullable(name: String, value: String?) {
         if (value == null) put(name, JSONObject.NULL) else put(name, value)
@@ -177,6 +185,7 @@ class IptvSourceStore(private val context: Context) {
 
     private companion object {
         const val PREFS_NAME = "astrawave_iptv_sources"
+        const val PROFILE_KEY_PREFIX = "sources_"
         const val KEY_ALIAS = "astrawave_iptv_credentials"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
