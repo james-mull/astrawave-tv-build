@@ -21,11 +21,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.IptvSource
 import com.astrawave.app.core.IptvSourceStatus
 import com.astrawave.app.core.IptvSourceType
 import com.astrawave.app.core.IptvSourceValidation
+import com.astrawave.app.data.DvrAuthorizationStore
 import com.astrawave.app.data.IptvSourceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -47,10 +49,13 @@ fun IptvSourceEditorDialog(
     onSave: (IptvSource) -> Unit,
     onDelete: ((IptvSource) -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val dvrAuthorization = remember { DvrAuthorizationStore(context) }
     var draft by remember(source) { mutableStateOf(source) }
     var message by remember(source) { mutableStateOf<String?>(source.lastError) }
     var testing by remember(source) { mutableStateOf(false) }
+    var dvrAllowed by remember(source) { mutableStateOf(dvrAuthorization.allowed(source.profileId, source.id)) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -123,6 +128,20 @@ fun IptvSourceEditorDialog(
                     )
                     Text("Enabled", style = MaterialTheme.typography.bodyMedium)
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = dvrAllowed,
+                        onCheckedChange = { dvrAllowed = it },
+                    )
+                    Column {
+                        Text("Allow local DVR recording", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Enable only if you are authorized to record this provider. Direct HTTP transport is supported first; unsupported HLS recordings fail closed.",
+                            color = AstraWaveColors.TertiaryText,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
 
                 message?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(6.dp))
@@ -162,7 +181,10 @@ fun IptvSourceEditorDialog(
 
                     if (onDelete != null) {
                         Spacer(Modifier.padding(horizontal = 4.dp))
-                        OutlinedButton(onClick = { onDelete(draft) }) { Text("Delete") }
+                        OutlinedButton(onClick = {
+                            dvrAuthorization.clear(draft.profileId, draft.id)
+                            onDelete(draft)
+                        }) { Text("Delete") }
                     }
                 }
             }
@@ -171,7 +193,10 @@ fun IptvSourceEditorDialog(
             Button(
                 onClick = {
                     val errors = IptvSourceValidation.validate(draft)
-                    if (errors.isEmpty()) onSave(draft) else message = errors.joinToString(" • ")
+                    if (errors.isEmpty()) {
+                        dvrAuthorization.setAllowed(draft.profileId, draft.id, dvrAllowed)
+                        onSave(draft)
+                    } else message = errors.joinToString(" • ")
                 },
             ) { Text("Save") }
         },
