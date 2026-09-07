@@ -70,6 +70,8 @@ fun AstraWaveGuideScreen(
     repository: GuideRepository = remember { GuideRepository() },
 ) {
     val context = LocalContext.current
+    val deviceClass = LocalAstraWaveDeviceClass.current
+    val isPhone = deviceClass == AstraWaveDeviceClass.PHONE
     val safety = remember(profileId) { ProfileSafetyStore(context).load(profileId) }
     if (!ProfileSafetyPolicy.liveTvAllowed(safety)) {
         Column(Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp)) {
@@ -105,8 +107,7 @@ fun AstraWaveGuideScreen(
                 edit.epgIdOverride?.takeIf(String::isNotBlank)?.let { edit.channelId to it }
             }.toMap()
             val raw = withContext(Dispatchers.IO) { repository.load(sources, overrides) }
-            val projected = channelProjection.guide(profileId, raw)
-            GuideLoadState.Ready(projected, edits.size, overrides.size)
+            GuideLoadState.Ready(channelProjection.guide(profileId, raw), edits.size, overrides.size)
         } catch (error: Exception) {
             GuideLoadState.Error(error.message ?: "Unable to load guide")
         }
@@ -122,16 +123,14 @@ fun AstraWaveGuideScreen(
         }
         scope.launch {
             val plan = withContext(Dispatchers.IO) {
-                playbackPlanner.plan(
-                    row.playableUrls.mapIndexed { index, url ->
-                        SourceFusionPlaybackPlanner.Input(
-                            sourceKey = "guide:${row.id}:$index",
-                            url = url,
-                            provider = row.preferredSource ?: "Live TV",
-                            priority = index,
-                        )
-                    },
-                )
+                playbackPlanner.plan(row.playableUrls.mapIndexed { index, url ->
+                    SourceFusionPlaybackPlanner.Input(
+                        sourceKey = "guide:${row.id}:$index",
+                        url = url,
+                        provider = row.preferredSource ?: "Live TV",
+                        priority = index,
+                    )
+                })
             }
             val urls = plan?.orderedUrls.orEmpty()
             if (urls.isEmpty()) {
@@ -182,22 +181,21 @@ fun AstraWaveGuideScreen(
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .background(AstraWaveColors.Background).padding(24.dp),
+            .background(AstraWaveColors.Background).padding(if (isPhone) 16.dp else 24.dp),
     ) {
         Text("ASTRAWAVE LIVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(5.dp))
         AstraWavePageHeader(
             title = "Guide",
-            subtitle = "A synchronized timeline EPG with fixed channels, Smart Source Fusion, catch-up and DVR when supported.",
+            subtitle = if (isPhone) "See what is on now and next, then watch in one tap." else "A synchronized timeline EPG with Smart Source Fusion, catch-up and DVR when supported.",
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(if (isPhone) 14.dp else 18.dp))
 
         when (val current = state) {
             GuideLoadState.Loading -> AstraWaveLoadingState("Building your guide", "Loading channels, schedules, profile edits and source matches.")
             is GuideLoadState.Error -> AstraWaveErrorState("Guide unavailable", current.message, retryLabel = "Refresh guide", onRetry = { refreshKey += 1 })
             is GuideLoadState.Ready -> {
                 val snapshot = current.snapshot
-                val timelineScroll = rememberScrollState()
                 GuideSummaryRail(snapshot, current.customized, current.epgOverrides)
                 Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
@@ -213,7 +211,7 @@ fun AstraWaveGuideScreen(
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     GuideFilterButton("All", selectedGroup == null) { selectedGroup = null }
                     GuideFilterButton("On now", nowOnly) { nowOnly = !nowOnly }
-                    listOf(3, 6, 12, 24).forEach { hours -> GuideFilterButton("${hours}h", horizonHours == hours) { horizonHours = hours } }
+                    if (!isPhone) listOf(3, 6, 12, 24).forEach { hours -> GuideFilterButton("${hours}h", horizonHours == hours) { horizonHours = hours } }
                     groups.forEach { group -> GuideFilterButton(group, selectedGroup == group) { selectedGroup = if (selectedGroup == group) null else group } }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -227,33 +225,136 @@ fun AstraWaveGuideScreen(
                             row.programmes.any { it.title.lowercase().contains(normalizedQuery) } || group.lowercase().contains(normalizedQuery))
                 }
 
-                AstraWaveSectionHeader(
-                    title = "Timeline",
-                    subtitle = "${visible.size} channels • ${horizonHours} hour horizon • one synchronized time viewport.",
-                )
-                Spacer(Modifier.height(8.dp))
-                TimelineHeader(horizonHours, timelineScroll)
-
-                if (visible.isEmpty()) {
-                    AstraWaveEmptyState("No guide matches", "Try another search, group, or time filter. Hidden channels stay out of this profile's guide.")
+                if (isPhone) {
+                    AstraWaveSectionHeader(
+                        title = "Channels",
+                        subtitle = "${visible.size} channels • tap Watch to start the healthiest available source.",
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (visible.isEmpty()) {
+                        AstraWaveEmptyState("No guide matches", "Try another search or group filter.")
+                    } else {
+                        visible.take(250).forEach { row ->
+                            PhoneGuideCard(
+                                row = row,
+                                onPlay = { play(row) },
+                                onCatchUp = { title, start, end -> catchUp(row, title, start, end) },
+                                onRecord = { title, start, end -> schedule(row, title, start, end, false) },
+                                onSeries = { title, start, end -> schedule(row, title, start, end, true) },
+                                dvr = dvr,
+                                customized = channelProjection.customization(profileId, row.id) != null,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
                 } else {
-                    visible.take(400).forEach { row ->
-                        TimelineRow(
-                            row = row,
-                            hours = horizonHours,
-                            timelineScroll = timelineScroll,
-                            onPlay = { play(row) },
-                            onCatchUp = { title, start, end -> catchUp(row, title, start, end) },
-                            onRecord = { title, start, end -> schedule(row, title, start, end, false) },
-                            onSeries = { title, start, end -> schedule(row, title, start, end, true) },
-                            dvr = dvr,
-                            customized = channelProjection.customization(profileId, row.id) != null,
-                        )
+                    val timelineScroll = rememberScrollState()
+                    AstraWaveSectionHeader(
+                        title = "Timeline",
+                        subtitle = "${visible.size} channels • ${horizonHours} hour horizon • one synchronized time viewport.",
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TimelineHeader(horizonHours, timelineScroll)
+                    if (visible.isEmpty()) {
+                        AstraWaveEmptyState("No guide matches", "Try another search, group, or time filter. Hidden channels stay out of this profile's guide.")
+                    } else {
+                        visible.take(400).forEach { row ->
+                            TimelineRow(
+                                row = row,
+                                hours = horizonHours,
+                                timelineScroll = timelineScroll,
+                                onPlay = { play(row) },
+                                onCatchUp = { title, start, end -> catchUp(row, title, start, end) },
+                                onRecord = { title, start, end -> schedule(row, title, start, end, false) },
+                                onSeries = { title, start, end -> schedule(row, title, start, end, true) },
+                                dvr = dvr,
+                                customized = channelProjection.customization(profileId, row.id) != null,
+                            )
+                        }
                     }
                 }
             }
         }
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+@Composable
+private fun PhoneGuideCard(
+    row: GuideChannelRow,
+    onPlay: () -> Unit,
+    onCatchUp: (String, Long, Long) -> Unit,
+    onRecord: (String, Long, Long) -> Unit,
+    onSeries: (String, Long, Long) -> Unit,
+    dvr: LocalDvrGateway,
+    customized: Boolean,
+) {
+    val nowMs = System.currentTimeMillis()
+    val catchUpCapabilities = row.preferredSource?.let(dvr::capabilities)
+    val recordingCapabilities = row.recordingSource?.let(dvr::capabilities)
+    val parsed = row.programmes.mapNotNull { programme ->
+        val start = LiveTvRepository.parseXmlTvEpochMs(programme.start)
+        val end = LiveTvRepository.parseXmlTvEpochMs(programme.stop)
+        if (start == null || end == null) null else Triple(programme, start, end)
+    }
+    val currentProgram = parsed.firstOrNull { nowMs in it.second until it.third }
+    val nextProgram = parsed.firstOrNull { it.second > nowMs }
+
+    Column(
+        Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.large).padding(15.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                Text(row.group ?: row.preferredSource ?: "Live TV", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+            }
+            Text(
+                if (row.playableUrls.isNotEmpty()) "READY" else if (row.externalUrl != null) "OFFICIAL" else "NO SOURCE",
+                color = if (row.playableUrls.isNotEmpty()) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        if (currentProgram != null) {
+            val (programme, start, end) = currentProgram
+            Text("NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelSmall)
+            Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Text("${formatGuideTime(start)} – ${formatGuideTime(end)}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall)
+        } else {
+            Text("NOW", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+            Text(row.now?.title ?: "No current guide data", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+        }
+        nextProgram?.let { (programme, start, _) ->
+            Spacer(Modifier.height(7.dp))
+            Text("NEXT • ${formatGuideTime(start)}", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+            Text(programme.title, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (row.playableUrls.isNotEmpty() || row.externalUrl != null) AstraWavePrimaryButton("Watch", onPlay)
+            if (currentProgram != null) {
+                val (programme, start, end) = currentProgram
+                if (catchUpCapabilities != null && DvrEligibility.canCatchUp(catchUpCapabilities) && end <= nowMs) {
+                    AstraWaveSecondaryButton("Replay", { onCatchUp(programme.title, start, end) })
+                }
+            }
+            nextProgram?.let { (programme, start, end) ->
+                if (recordingCapabilities?.supportsDvr == true) AstraWaveSecondaryButton("Record", { onRecord(programme.title, start, end) })
+                if (recordingCapabilities?.supportsSeriesRecording == true) AstraWaveSecondaryButton("Series", { onSeries(programme.title, start, end) })
+            }
+        }
+        if (row.playableUrls.size > 1 || customized || recordingCapabilities?.supportsDvr == true) {
+            Spacer(Modifier.height(9.dp))
+            Text(
+                buildList {
+                    if (row.playableUrls.size > 1) add("${row.playableUrls.size} sources")
+                    if (recordingCapabilities?.supportsDvr == true) add("DVR")
+                    if (customized) add("Custom channel")
+                }.joinToString(" • "),
+                color = AstraWaveColors.TertiaryText,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
     }
 }
 
