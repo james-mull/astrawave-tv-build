@@ -148,7 +148,7 @@ fun AstraWaveGuideScreen(
     }
 
     fun schedule(row: GuideChannelRow, title: String, start: Long, end: Long, series: Boolean) {
-        val sourceId = row.preferredSource ?: return
+        val sourceId = row.recordingSource ?: return
         val request = RecordingRequest(
             id = "rec:${row.id}:$start:${if (series) "series" else "single"}",
             profileId = profileId,
@@ -294,7 +294,8 @@ private fun TimelineRow(
         val end = LiveTvRepository.parseXmlTvEpochMs(programme.stop)
         if (start == null || end == null || end < now - 6 * 3_600_000L || start > horizon) null else Triple(programme, start, end)
     }
-    val capabilities = row.preferredSource?.let(dvr::capabilities)
+    val catchUpCapabilities = row.preferredSource?.let(dvr::capabilities)
+    val recordingCapabilities = row.recordingSource?.let(dvr::capabilities)
 
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Column(
@@ -305,6 +306,7 @@ private fun TimelineRow(
             Text(row.preferredSource ?: "Source pending", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (row.playableUrls.size > 1) Text("${row.playableUrls.size} sources", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                if (recordingCapabilities?.supportsDvr == true) Text("DVR", color = AstraWaveColors.Warning, style = MaterialTheme.typography.labelSmall)
                 if (customized) Text("CUSTOM", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelSmall)
             }
         }
@@ -329,13 +331,13 @@ private fun TimelineRow(
                             Spacer(Modifier.height(6.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                 if (current) Text("WATCH", color = AstraWaveColors.Accent, modifier = Modifier.clickable(onClick = onPlay))
-                                if (past && capabilities != null && DvrEligibility.canCatchUp(capabilities)) {
+                                if (past && catchUpCapabilities != null && DvrEligibility.canCatchUp(catchUpCapabilities)) {
                                     Text("REPLAY", color = AstraWaveColors.Accent, modifier = Modifier.clickable { onCatchUp(programme.title, start, end) })
                                 }
-                                if (!past && capabilities?.supportsDvr == true) {
+                                if (!past && recordingCapabilities?.supportsDvr == true) {
                                     Text("REC", color = AstraWaveColors.Warning, modifier = Modifier.clickable { onRecord(programme.title, start, end) })
                                 }
-                                if (!past && capabilities?.supportsSeriesRecording == true) {
+                                if (!past && recordingCapabilities?.supportsSeriesRecording == true) {
                                     Text("SERIES", color = AstraWaveColors.Accent, modifier = Modifier.clickable { onSeries(programme.title, start, end) })
                                 }
                             }
