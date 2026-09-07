@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.InstalledAddon
 import com.astrawave.app.data.CloudStreamRepositoryPreference
 import com.astrawave.app.data.CloudStreamRepositoryPreferenceStore
+import com.astrawave.app.data.RecommendedSourcePack
 import com.astrawave.app.data.StremioAddonStore
 import com.astrawave.app.data.StremioCatalogAggregator
 import com.astrawave.app.data.StremioCatalogRow
@@ -58,26 +59,15 @@ fun StremioAddonScreen(profileId: String = "default") {
     var error by remember { mutableStateOf<String?>(null) }
 
     if (showVodAuthorization) {
-        VodProviderAuthorizationScreen(
-            profileId = profileId,
-            onBack = { showVodAuthorization = false },
-        )
+        VodProviderAuthorizationScreen(profileId = profileId, onBack = { showVodAuthorization = false })
         return
     }
-
     if (showDebrid) {
-        DebridAccountScreen(
-            profileId = profileId,
-            onBack = { showDebrid = false },
-        )
+        DebridAccountScreen(profileId = profileId, onBack = { showDebrid = false })
         return
     }
-
     if (showPlaybackDiagnostics) {
-        VodPlaybackDiagnosticsScreen(
-            profileId = profileId,
-            onBack = { showPlaybackDiagnostics = false },
-        )
+        VodPlaybackDiagnosticsScreen(profileId = profileId, onBack = { showPlaybackDiagnostics = false })
         return
     }
 
@@ -94,13 +84,20 @@ fun StremioAddonScreen(profileId: String = "default") {
 
     LaunchedEffect(addons, profileId) { refreshCatalogs() }
 
+    val recommendedRepoIds = remember { RecommendedSourcePack.cloudStreamRepositoryIds }
+    val advancedRepoIds = remember { RecommendedSourcePack.advancedCloudStreamRepositoryIds }
+    val recommendedRepos = repositories.filter { it.id in recommendedRepoIds }
+    val customRepos = repositories.filter { it.custom }
+    val advancedRepos = repositories.filter { !it.custom && it.id in advancedRepoIds }
+    val activeRecommendedCount = recommendedRepos.count { it.enabled }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .background(AstraWaveColors.Background).padding(24.dp),
     ) {
         AstraWavePageHeader(
-            title = "Extensions, Addons & Repositories",
-            subtitle = "Web-synced configuration, hardcoded catalog defaults and local controls in one place. Stream-capable community extensions remain authorization-gated.",
+            title = "Sources & Addons",
+            subtitle = "Recommended sources work out of the box. Your own connections stay separate, and community repositories remain clearly marked Advanced.",
         )
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -108,67 +105,60 @@ fun StremioAddonScreen(profileId: String = "default") {
             AstraWaveSecondaryButton(label = "Authorized VOD Providers", onClick = { showVodAuthorization = true })
             AstraWaveSecondaryButton(label = "Cloud & Debrid", onClick = { showDebrid = true })
             AstraWaveSecondaryButton(label = "Playback Diagnostics", onClick = { showPlaybackDiagnostics = true })
-            Text(
-                "Manage more from AstraWave Web Control Center",
-                color = AstraWaveColors.Accent,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(vertical = 12.dp),
-            )
         }
-        error?.let {
-            Spacer(Modifier.height(12.dp))
-            AstraWaveStatePanel("Addon error", it)
-        }
-        Spacer(Modifier.height(18.dp))
+        error?.let { Spacer(Modifier.height(12.dp)); AstraWaveStatePanel("Addon error", it) }
+        Spacer(Modifier.height(20.dp))
 
-        Text("Stremio-compatible addons", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
-        if (addons.isEmpty()) {
-            AstraWaveStatePanel(
-                "No addons installed",
-                "Install a compatible manifest URL on this device or add it from the web Control Center and sync.",
-            )
+        AstraWaveSectionHeader("Recommended Pack", "$activeRecommendedCount/${recommendedRepos.size} reviewed repositories active")
+        AstraWaveStatePanel(
+            title = if (activeRecommendedCount == recommendedRepos.size) "Ready out of the box" else "Recommended Pack needs attention",
+            message = "Official/reviewed Stremio catalogs, subtitles, free Live TV, radio, podcasts and provider-availability sources are AstraWave defaults. Advanced community repos are never silently enabled.",
+        )
+        recommendedRepos.forEach { repo ->
+            RepositoryCard(repo, tierLabel = "Recommended • reviewed default") {
+                repositories = repositories.map { current -> if (current.id == repo.id) current.copy(enabled = !current.enabled) else current }
+                repoStore.save(profileId, repositories)
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+        AstraWaveSectionHeader("Connected / Installed by You", "Personal addons and custom web-synced repositories")
+        if (addons.isEmpty() && customRepos.isEmpty()) {
+            AstraWaveStatePanel("Nothing connected yet", "Optional personal Stremio addons and custom repositories will appear here.")
         } else {
             addons.sortedBy { it.sortOrder }.forEach { addon ->
                 AddonCard(
                     addon = addon,
                     activeForProfile = addon.enabled && (addon.enabledProfileIds.isEmpty() || profileId in addon.enabledProfileIds),
-                    onToggle = {
-                        store.setEnabled(addon.manifest.id, !addon.enabled)
-                        refresh()
-                    },
-                    onRemove = {
-                        store.remove(addon.manifest.id)
-                        refresh()
-                    },
+                    onToggle = { store.setEnabled(addon.manifest.id, !addon.enabled); refresh() },
+                    onRemove = { store.remove(addon.manifest.id); refresh() },
                 )
             }
-        }
-
-        Spacer(Modifier.height(28.dp))
-        Text("CloudStream repository registry", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Repository choices sync from the web Control Center. Enabling a repo exposes its configuration but does not automatically trust or execute every plugin inside it.",
-            color = AstraWaveColors.SecondaryText,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(Modifier.height(8.dp))
-        if (repositories.isEmpty()) {
-            AstraWaveStatePanel("No repositories configured", "Add or enable CloudStream repositories from AstraWave Web.")
-        } else {
-            repositories.forEach { repo ->
-                RepositoryCard(repo) {
-                    repositories = repositories.map { current ->
-                        if (current.id == repo.id) current.copy(enabled = !current.enabled) else current
-                    }
+            customRepos.forEach { repo ->
+                RepositoryCard(repo, tierLabel = "Connected by you • custom") {
+                    repositories = repositories.map { current -> if (current.id == repo.id) current.copy(enabled = !current.enabled) else current }
                     repoStore.save(profileId, repositories)
                 }
             }
         }
 
         Spacer(Modifier.height(28.dp))
-        Text("Enabled Addon Catalogs", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+        AstraWaveSectionHeader("Advanced Community Sources", "${advancedRepos.count { it.enabled }} enabled • ${advancedRepos.size} available")
+        Text(
+            "Community repositories are discoverable for power users but are not trusted or executed automatically. Stream-capable extensions still require AstraWave authorization and health checks.",
+            color = AstraWaveColors.SecondaryText,
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Spacer(Modifier.height(8.dp))
+        advancedRepos.forEach { repo ->
+            RepositoryCard(repo, tierLabel = "Advanced • community • opt-in") {
+                repositories = repositories.map { current -> if (current.id == repo.id) current.copy(enabled = !current.enabled) else current }
+                repoStore.save(profileId, repositories)
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+        AstraWaveSectionHeader("Enabled Addon Catalogs", "Metadata from active compatible addons")
         if (loadingCatalogs) {
             AstraWaveStatePanel("Loading addon catalogs…", "Refreshing metadata from enabled addons.", loading = true)
         } else if (catalogRows.isEmpty()) {
@@ -188,12 +178,8 @@ fun StremioAddonScreen(profileId: String = "default") {
                 scope.launch {
                     val result = runCatching { withContext(Dispatchers.IO) { store.install(url) } }
                     installing = false
-                    result.onSuccess {
-                        refresh()
-                        installDialog = false
-                    }.onFailure { throwable ->
-                        error = throwable.message ?: "Unable to install addon"
-                    }
+                    result.onSuccess { refresh(); installDialog = false }
+                        .onFailure { throwable -> error = throwable.message ?: "Unable to install addon" }
                 }
             },
         )
@@ -201,17 +187,13 @@ fun StremioAddonScreen(profileId: String = "default") {
 }
 
 @Composable
-private fun RepositoryCard(repo: CloudStreamRepositoryPreference, onToggle: () -> Unit) {
+private fun RepositoryCard(repo: CloudStreamRepositoryPreference, tierLabel: String, onToggle: () -> Unit) {
     AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
         Column {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
                     Text(repo.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        if (repo.custom) "Custom web-synced repository" else "AstraWave hardcoded repository registry",
-                        color = AstraWaveColors.SecondaryText,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
+                    Text(tierLabel, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
                 }
                 Text(
                     if (repo.enabled) "Enabled" else "Disabled",
@@ -231,12 +213,7 @@ private fun RepositoryCard(repo: CloudStreamRepositoryPreference, onToggle: () -
                 )
             }
             Spacer(Modifier.height(8.dp))
-            Text(
-                if (repo.enabled) "Disable repo" else "Enable repo",
-                color = AstraWaveColors.Accent,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.clickable(onClick = onToggle),
-            )
+            Text(if (repo.enabled) "Disable repo" else "Enable repo", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clickable(onClick = onToggle))
         }
     }
 }
@@ -247,10 +224,7 @@ private fun AddonCatalogPreview(row: StremioCatalogRow) {
         Column {
             Text("${row.catalog.name} • ${row.addonName}", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
             Text(row.catalog.type, color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
-            row.error?.let {
-                Spacer(Modifier.height(5.dp))
-                Text("Catalog unavailable: $it", color = AstraWaveColors.Warning, style = MaterialTheme.typography.bodyMedium)
-            }
+            row.error?.let { Spacer(Modifier.height(5.dp)); Text("Catalog unavailable: $it", color = AstraWaveColors.Warning, style = MaterialTheme.typography.bodyMedium) }
             if (row.items.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 row.items.take(8).forEach { item ->
@@ -264,12 +238,7 @@ private fun AddonCatalogPreview(row: StremioCatalogRow) {
 }
 
 @Composable
-private fun AddonCard(
-    addon: InstalledAddon,
-    activeForProfile: Boolean,
-    onToggle: () -> Unit,
-    onRemove: () -> Unit,
-) {
+private fun AddonCard(addon: InstalledAddon, activeForProfile: Boolean, onToggle: () -> Unit, onRemove: () -> Unit) {
     AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
         Column {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -277,11 +246,7 @@ private fun AddonCard(
                     Text(addon.manifest.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                     Text("v${addon.manifest.version} • ${addon.manifest.id}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
                 }
-                Text(
-                    if (activeForProfile) "Enabled" else "Disabled",
-                    color = if (activeForProfile) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                Text(if (activeForProfile) "Enabled" else "Disabled", color = if (activeForProfile) AstraWaveColors.Success else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
             }
             if (addon.manifest.description.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
@@ -293,29 +258,15 @@ private fun AddonCard(
             Text("Catalogs: ${addon.manifest.catalogs.size}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(
-                    if (addon.enabled) "Disable" else "Enable",
-                    color = AstraWaveColors.Accent,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clickable(onClick = onToggle),
-                )
-                Text(
-                    "Remove",
-                    color = AstraWaveColors.Warning,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clickable(onClick = onRemove),
-                )
+                Text(if (addon.enabled) "Disable" else "Enable", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clickable(onClick = onToggle))
+                Text("Remove", color = AstraWaveColors.Warning, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clickable(onClick = onRemove))
             }
         }
     }
 }
 
 @Composable
-private fun InstallAddonDialog(
-    installing: Boolean,
-    onDismiss: () -> Unit,
-    onInstall: (String) -> Unit,
-) {
+private fun InstallAddonDialog(installing: Boolean, onDismiss: () -> Unit, onInstall: (String) -> Unit) {
     var url by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -323,12 +274,7 @@ private fun InstallAddonDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Enter the addon manifest URL. AstraWave will load the manifest before saving it.")
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Manifest URL") },
-                    singleLine = true,
-                )
+                OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("Manifest URL") }, singleLine = true)
                 if (installing) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
@@ -337,12 +283,7 @@ private fun InstallAddonDialog(
                 }
             }
         },
-        confirmButton = {
-            TextButton(
-                enabled = !installing && url.trim().startsWith("http"),
-                onClick = { onInstall(url.trim()) },
-            ) { Text("Install") }
-        },
+        confirmButton = { TextButton(enabled = !installing && url.trim().startsWith("http"), onClick = { onInstall(url.trim()) }) { Text("Install") } },
         dismissButton = { TextButton(enabled = !installing, onClick = onDismiss) { Text("Cancel") } },
     )
 }
