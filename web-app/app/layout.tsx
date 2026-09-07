@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './premium-overrides.css';
 import './app-polish.css';
+import './control-polish.css';
 
 export const metadata: Metadata = {
   title: 'AstraWave — All Your Entertainment. One Place.',
