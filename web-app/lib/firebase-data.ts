@@ -11,6 +11,11 @@ export type CloudChannelCustomization = {
   customGroup?:string|null; hidden:boolean; sortOrder?:number; epgIdOverride?:string|null;
   logoUrlOverride?:string|null; updatedAt?:unknown;
 };
+export type CloudPlaybackDiagnostic = {
+  id:string; title:string; mediaType:string; provider:string; quality?:string|null; latencyMs?:number|null;
+  providerCount:number; backupCount:number; personalMedia:boolean; debridOptimized:boolean;
+  resolvedAtEpochMs:number; updatedAt?:unknown;
+};
 
 export type CloudDevice = {
   id:string; name:string; type:'web'|'phone'|'tablet'|'android-tv'|'fire-tv'|'cast';
@@ -30,6 +35,7 @@ export type CloudSportsReminder = { id:string; eventId:string; title:string; sta
 
 function requireDb(){if(!firestore)throw new Error('Firebase is not configured');return firestore}
 const userCollection=(uid:string,name:string)=>collection(requireDb(),'users',uid,name);
+const profileCollection=(uid:string,profileId:string,name:string)=>collection(requireDb(),'users',uid,'profiles',profileId,name);
 
 export const FirebaseData={
   async getProfile(uid:string):Promise<CloudProfile|null>{const snap=await getDoc(doc(requireDb(),'profiles',uid));return snap.exists()?(snap.data() as CloudProfile):null},
@@ -38,6 +44,7 @@ export const FirebaseData={
   async removeWatchlist(uid:string,mediaId:string){await deleteDoc(doc(requireDb(),'users',uid,'watchlist',mediaId))},
   async saveProgress(uid:string,progress:CloudProgress){await setDoc(doc(requireDb(),'users',uid,'progress',progress.mediaId),{...progress,updatedAt:serverTimestamp()},{merge:true})},
   async listProgress(uid:string):Promise<CloudProgress[]>{const snaps=await getDocs(userCollection(uid,'progress'));return snaps.docs.map(x=>x.data() as CloudProgress)},
+  async listPlaybackDiagnostics(uid:string,profileId:string):Promise<CloudPlaybackDiagnostic[]>{const snaps=await getDocs(profileCollection(uid,profileId,'playbackDiagnostics'));return snaps.docs.map(x=>({id:x.id,...(x.data() as Omit<CloudPlaybackDiagnostic,'id'>)})).sort((a,b)=>b.resolvedAtEpochMs-a.resolvedAtEpochMs)},
   async saveFavoriteTeam(uid:string,teamId:string,payload:Record<string,unknown>){await setDoc(doc(requireDb(),'users',uid,'favoriteTeams',teamId),{...payload,teamId,updatedAt:serverTimestamp()},{merge:true})},
   async getAppConfig(uid:string):Promise<CloudAppConfig|null>{const snap=await getDoc(doc(requireDb(),'users',uid,'settings','app'));return snap.exists()?(snap.data() as CloudAppConfig):null},
   async saveAppConfig(uid:string,config:CloudAppConfig){await setDoc(doc(requireDb(),'users',uid,'settings','app'),{...config,updatedAt:serverTimestamp()},{merge:true})},
