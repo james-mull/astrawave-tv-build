@@ -293,7 +293,7 @@ class PlayerActivity : ComponentActivity() {
             isHorizontalScrollBarEnabled = false
             isFillViewport = false
             overScrollMode = View.OVER_SCROLL_NEVER
-            addView(quickControls, HorizontalScrollView.LayoutParams(HorizontalScrollView.LayoutParams.WRAP_CONTENT, HorizontalScrollView.LayoutParams.WRAP_CONTENT))
+            addView(quickControls, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         }
         root.addView(quickControlsScroller, FrameLayout.LayoutParams(if (compact) FrameLayout.LayoutParams.MATCH_PARENT else FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.TOP or if (compact) Gravity.CENTER_HORIZONTAL else Gravity.END
