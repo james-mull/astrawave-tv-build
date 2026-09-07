@@ -13,12 +13,25 @@ import java.time.format.DateTimeFormatter
  * the same event/channel mapping. If the backend is unavailable, the existing local
  * TheSportsDB + combined Live TV resolver remains the automatic fallback.
  */
+enum class SportsAvailabilityReason {
+    READY,
+    NO_BROADCAST_METADATA,
+    NO_CHANNEL_MATCH,
+    NO_HEALTHY_CANDIDATE,
+}
+
 data class SportsGuideItem(
     val event: SportsEvent,
     val broadcasterNames: List<String>,
     val resolution: SportsResolution?,
     val addonCatalogMatches: List<String> = emptyList(),
     val watchCandidate: SportsWatchCandidate? = resolution?.best,
+    val availabilityReason: SportsAvailabilityReason = when {
+        resolution?.best != null -> SportsAvailabilityReason.READY
+        broadcasterNames.isEmpty() -> SportsAvailabilityReason.NO_BROADCAST_METADATA
+        resolution?.candidates.isNullOrEmpty() -> SportsAvailabilityReason.NO_CHANNEL_MATCH
+        else -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+    },
 )
 
 data class SportsGuideSnapshot(
@@ -88,7 +101,14 @@ class SportsGuideRepository(
                 broadcasters.any { broadcaster -> channelNamesLikelyMatch(addonName, broadcaster) }
             }.distinct().take(8)
 
-            SportsGuideItem(event, broadcasters, resolution, addonMatches)
+            val availability = when {
+                resolution?.best != null -> SportsAvailabilityReason.READY
+                broadcasters.isEmpty() -> SportsAvailabilityReason.NO_BROADCAST_METADATA
+                resolution == null -> SportsAvailabilityReason.NO_CHANNEL_MATCH
+                resolution.candidates.isEmpty() -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+                else -> SportsAvailabilityReason.NO_CHANNEL_MATCH
+            }
+            SportsGuideItem(event, broadcasters, resolution, addonMatches, availabilityReason = availability)
         }
         return SportsGuideSnapshot(
             date = dateText,
@@ -144,7 +164,16 @@ class SportsGuideRepository(
             val addonMatches = cloud.broadcasts.flatMap { broadcaster ->
                 addonSportsChannelNames.filter { channelNamesLikelyMatch(it, broadcaster) }
             }.distinct().take(8)
-            SportsGuideItem(event, cloud.broadcasts, resolution, addonMatches)
+            val availability = when {
+                cloud.watchable && candidates.isNotEmpty() -> SportsAvailabilityReason.READY
+                cloud.unwatchableReason == "NO_BROADCAST_METADATA" -> SportsAvailabilityReason.NO_BROADCAST_METADATA
+                cloud.unwatchableReason == "NO_CHANNEL_MATCH" -> SportsAvailabilityReason.NO_CHANNEL_MATCH
+                cloud.unwatchableReason == "NO_HEALTHY_CANDIDATE" -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+                cloud.broadcasts.isEmpty() -> SportsAvailabilityReason.NO_BROADCAST_METADATA
+                cloud.channelMatches.isEmpty() -> SportsAvailabilityReason.NO_CHANNEL_MATCH
+                else -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+            }
+            SportsGuideItem(event, cloud.broadcasts, resolution, addonMatches, availabilityReason = availability)
         }
         val channelCount = cloudEvents.flatMap { it.channelMatches }.map { it.id }.distinct().size
         return SportsGuideSnapshot(
