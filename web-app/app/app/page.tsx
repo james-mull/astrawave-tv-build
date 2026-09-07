@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, Bot, CalendarDays, Compass, Film, Gauge, Home, Menu, Music2, Play,
-  RadioTower, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Tv2,
-  Trophy, UserCircle2, Volume2, X
+  Activity, CalendarDays, Compass, Film, Gauge, Home, Menu, Music2, Play,
+  RadioTower, Search, SlidersHorizontal, Tv2, Trophy, UserCircle2, X
 } from 'lucide-react';
 import {
-  AstraWaveApi, CatalogItem, CatalogRail, LiveChannel, LiveData, SourceRegistry, SportsEvent
+  AstraWaveApi, CatalogItem, CatalogRail, LiveData, SourceRegistry, SportsEvent
 } from '../../lib/astrawave-api';
 
 type View='home'|'movies'|'tv'|'live'|'guide'|'sports'|'audio'|'discover'|'sources'|'diagnostics';
@@ -94,7 +93,6 @@ export default function WebAppHome(){
     ].filter(r=>r.items.length) as CatalogRail[];
   },[movieRails,tvRails]);
 
-  const liveItems=useMemo(()=>liveData.channels.map(c=>({id:c.id,kind:'live' as const,title:c.name,subtitle:`${c.now||c.group||'Live'} • ${c.sourceCount} source${c.sourceCount===1?'':'s'}`,posterUrl:c.logoUrl,streamUrl:c.streamUrl,sources:c.sources})),[liveData]);
   const filteredLive=useMemo(()=>{const n=norm(liveQuery);return !n?liveData.channels:liveData.channels.filter(c=>norm(`${c.name} ${c.group||''} ${c.now||''}`).includes(n))},[liveData,liveQuery]);
   const guideChannels=useMemo(()=>liveData.channels.filter(c=>c.programs?.length),[liveData]);
   const dates=useMemo(()=>Array.from(new Set(sports.map(e=>e.date||e.startTime.slice(0,10)))),[sports]);
