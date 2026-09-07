@@ -18,6 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.data.CloudStreamRepositoryPreferenceStore
+import com.astrawave.app.data.IptvSourceStore
+import com.astrawave.app.data.RecommendedSourcePack
 import com.astrawave.app.data.VodPlaybackDiagnosticsStore
 import java.text.DateFormat
 import java.util.Date
@@ -30,6 +33,22 @@ fun VodPlaybackDiagnosticsScreen(
     val context = LocalContext.current
     val store = remember { VodPlaybackDiagnosticsStore(context) }
     val decisions = remember(profileId) { store.load(profileId) }
+    val customerSources = remember(profileId) { IptvSourceStore(context).load(profileId).count { it.enabled } }
+    val repositoryPreferences = remember(profileId) { CloudStreamRepositoryPreferenceStore(context).load(profileId) }
+    val recommendedCloudRepos = remember { RecommendedSourcePack.cloudStreamRepositoryIds }
+    val enabledRecommendedRepos = remember(profileId, repositoryPreferences) {
+        repositoryPreferences.count { it.enabled && it.id in recommendedCloudRepos }
+    }
+    val enabledAdvancedRepos = remember(profileId, repositoryPreferences) {
+        repositoryPreferences.count { it.enabled && it.id in RecommendedSourcePack.advancedCloudStreamRepositoryIds }
+    }
+    val recommendedItems = remember {
+        RecommendedSourcePack.stremioManifestUrls.size +
+            RecommendedSourcePack.cloudStreamRepositoryIds.size +
+            RecommendedSourcePack.liveSourceIds.size +
+            RecommendedSourcePack.audioProviders.size +
+            RecommendedSourcePack.providerCatalogs.size
+    }
 
     Column(
         Modifier.fillMaxSize()
@@ -41,14 +60,30 @@ fun VodPlaybackDiagnosticsScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
                 AstraWavePageHeader(
-                    title = "Playback Diagnostics",
-                    subtitle = "Recent Play Best decisions for this profile. No stream URLs, credentials, tokens or personal-media locators are stored here.",
+                    title = "Playback & Source Diagnostics",
+                    subtitle = "Recommended Pack health, customer-connected sources and recent Play Best decisions. Credentials, stream URLs and personal-media locators are never shown here.",
                 )
             }
             AstraWaveSecondaryButton(label = "Back", onClick = onBack)
         }
 
         Spacer(Modifier.height(4.dp))
+        AstraWaveSectionHeader("Source health", "Three clear source tiers")
+        AstraWaveStatePanel(
+            title = if (enabledRecommendedRepos == recommendedCloudRepos.size) "Recommended Pack active" else "Recommended Pack needs attention",
+            message = "$recommendedItems reviewed/default integrations • $enabledRecommendedRepos/${recommendedCloudRepos.size} reviewed CloudStream repos enabled • official/default catalogs, Live TV and audio providers remain zero-config.",
+        )
+        AstraWaveStatePanel(
+            title = "Connected by You",
+            message = if (customerSources > 0) "$customerSources enabled customer M3U/Xtream source${if (customerSources == 1) "" else "s"}." else "No customer IPTV source connected. AstraWave Free TV remains available.",
+        )
+        AstraWaveStatePanel(
+            title = "Advanced Community Sources",
+            message = if (enabledAdvancedRepos > 0) "$enabledAdvancedRepos advanced community repos enabled for this profile. Playback remains authorization and health gated." else "No advanced community repos enabled. This is the safest default state.",
+        )
+
+        Spacer(Modifier.height(8.dp))
+        AstraWaveSectionHeader("Play Best", "Recent non-secret source decisions")
         if (decisions.isEmpty()) {
             AstraWaveStatePanel(
                 title = "No Play Best history yet",
