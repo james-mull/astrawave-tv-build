@@ -4,6 +4,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -24,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +54,12 @@ private sealed interface AudioLoadState {
     data class Error(val message: String) : AudioLoadState
 }
 
+private enum class AudioBrowseMode(val label: String) {
+    MUSIC("Music"),
+    PODCASTS("Podcasts"),
+    RADIO("Radio"),
+}
+
 @Composable
 fun AudioLibraryScreen(
     profileId: String = "default",
@@ -65,10 +74,16 @@ fun AudioLibraryScreen(
     var addPodcast by remember { mutableStateOf(false) }
     var addRadio by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(AudioBrowseMode.RADIO) }
     var discoveryLoading by remember { mutableStateOf(false) }
     var discoveredMusic by remember { mutableStateOf<List<AudioItem>>(emptyList()) }
     var discoveredPodcasts by remember { mutableStateOf<List<AudioSubscription>>(emptyList()) }
     var discoveredRadio by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
+    var visibleMusic by remember { mutableIntStateOf(60) }
+    var visiblePodcasts by remember { mutableIntStateOf(60) }
+    var visibleRadio by remember { mutableIntStateOf(80) }
+    var selectedRadioGenre by remember { mutableStateOf<String?>(null) }
+    var selectedCountry by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(sources) {
         state = AudioLoadState.Loading
@@ -92,19 +107,78 @@ fun AudioLibraryScreen(
         }
     }
 
-    fun runDiscovery(mode: String) {
+    fun discoverCurrent() {
         discoveryLoading = true
         scope.launch {
             val q = query.trim()
-            withContext(Dispatchers.IO) {
+            val result = withContext(Dispatchers.IO) {
                 when (mode) {
-                    "music" -> discoveredMusic = if (q.isBlank()) discovery.discoverMusic() else discovery.searchMusic(q)
-                    "podcasts" -> discoveredPodcasts = if (q.isBlank()) discovery.discoverPodcasts() else discovery.searchPodcasts(q)
-                    "radio" -> discoveredRadio = if (q.isBlank()) discovery.discoverRadio() else discovery.searchRadio(q)
+                    AudioBrowseMode.MUSIC -> Triple(
+                        if (q.isBlank()) discovery.discoverMusic(maxItems = 500) else discovery.searchMusic(q, 200),
+                        emptyList<AudioSubscription>(),
+                        emptyList<RadioStation>(),
+                    )
+                    AudioBrowseMode.PODCASTS -> Triple(
+                        emptyList<AudioItem>(),
+                        if (q.isBlank()) discovery.discoverPodcasts(maxItems = 500) else discovery.searchPodcasts(q, 200),
+                        emptyList<RadioStation>(),
+                    )
+                    AudioBrowseMode.RADIO -> Triple(
+                        emptyList<AudioItem>(),
+                        emptyList<AudioSubscription>(),
+                        when {
+                            q.isNotBlank() -> discovery.searchRadio(q, 300)
+                            selectedRadioGenre != null -> discovery.radioByGenre(requireNotNull(selectedRadioGenre), 300)
+                            selectedCountry != null -> discovery.radioByCountry(requireNotNull(selectedCountry), 300)
+                            else -> discovery.discoverRadio(300)
+                        },
+                    )
                 }
             }
+            discoveredMusic = result.first
+            discoveredPodcasts = result.second
+            discoveredRadio = result.third
+            visibleMusic = 60
+            visiblePodcasts = 60
+            visibleRadio = 80
             discoveryLoading = false
         }
+    }
+
+    fun browseMusicGenre(genre: String) {
+        mode = AudioBrowseMode.MUSIC
+        query = genre
+        selectedRadioGenre = null
+        selectedCountry = null
+        discoverCurrent()
+    }
+
+    fun browsePodcastTopic(topic: String) {
+        mode = AudioBrowseMode.PODCASTS
+        query = topic
+        selectedRadioGenre = null
+        selectedCountry = null
+        discoverCurrent()
+    }
+
+    fun browseRadioGenre(genre: String) {
+        mode = AudioBrowseMode.RADIO
+        query = ""
+        selectedCountry = null
+        selectedRadioGenre = genre
+        discoverCurrent()
+    }
+
+    fun browseCountry(country: String) {
+        mode = AudioBrowseMode.RADIO
+        query = ""
+        selectedRadioGenre = null
+        selectedCountry = country
+        discoverCurrent()
+    }
+
+    LaunchedEffect(profileId) {
+        if (discoveredRadio.isEmpty()) discoverCurrent()
     }
 
     Column(
@@ -112,61 +186,122 @@ fun AudioLibraryScreen(
             .background(AstraWaveColors.Background).padding(24.dp),
     ) {
         AstraWavePageHeader(
-            "Radio, Music & Podcasts",
-            "Discover music previews, podcasts and worldwide radio, then keep your own subscriptions and stations in one persistent library.",
+            "Music, Podcasts & Worldwide Radio",
+            "Browse large public directories, search hundreds of results at a time, and keep your own subscriptions and stations in one persistent library.",
         )
         Spacer(Modifier.height(16.dp))
+
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AudioBrowseMode.entries.forEach { item ->
+                FilterChip(
+                    selected = mode == item,
+                    onClick = {
+                        mode = item
+                        query = ""
+                        selectedRadioGenre = null
+                        selectedCountry = null
+                    },
+                    label = { Text(item.label) },
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Search songs, artists, podcasts or radio") },
+            label = {
+                Text(
+                    when (mode) {
+                        AudioBrowseMode.MUSIC -> "Search songs or artists"
+                        AudioBrowseMode.PODCASTS -> "Search podcasts"
+                        AudioBrowseMode.RADIO -> "Search radio stations"
+                    },
+                )
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { runDiscovery("music") }) { Text("Music") }
-            Button(onClick = { runDiscovery("podcasts") }) { Text("Podcasts") }
-            Button(onClick = { runDiscovery("radio") }) { Text("Radio") }
+            Button(onClick = ::discoverCurrent) { Text("Search / Browse") }
+            if (mode == AudioBrowseMode.PODCASTS) Button(onClick = { addPodcast = true }) { Text("Add Podcast") }
+            if (mode == AudioBrowseMode.RADIO) Button(onClick = { addRadio = true }) { Text("Add Radio") }
         }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { addPodcast = true }) { Text("Add Podcast") }
-            Button(onClick = { addRadio = true }) { Text("Add Radio") }
+
+        Spacer(Modifier.height(16.dp))
+        when (mode) {
+            AudioBrowseMode.MUSIC -> {
+                AstraWaveSectionHeader("Browse Music", "Full commercial playback can be added through licensed provider connections")
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    discovery.musicGenres.take(18).forEach { genre ->
+                        FilterChip(selected = query.equals(genre, true), onClick = { browseMusicGenre(genre) }, label = { Text(genre) })
+                    }
+                }
+            }
+            AudioBrowseMode.PODCASTS -> {
+                AstraWaveSectionHeader("Browse Podcasts", "Publisher RSS feeds can be saved directly to My Audio")
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    discovery.podcastTopics.take(18).forEach { topic ->
+                        FilterChip(selected = query.equals(topic, true), onClick = { browsePodcastTopic(topic) }, label = { Text(topic) })
+                    }
+                }
+            }
+            AudioBrowseMode.RADIO -> {
+                AstraWaveSectionHeader("Browse Radio", "Worldwide internet radio with source-health checks")
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    discovery.radioGenres.take(18).forEach { genre ->
+                        FilterChip(selected = selectedRadioGenre == genre, onClick = { browseRadioGenre(genre) }, label = { Text(genre) })
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    discovery.radioCountries.take(18).forEach { country ->
+                        FilterChip(selected = selectedCountry == country, onClick = { browseCountry(country) }, label = { Text(country) })
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(18.dp))
 
         if (discoveryLoading) {
-            AstraWaveStatePanel("Discovering audio…", "Searching AstraWave's public music, podcast and radio catalogs.", loading = true)
+            AstraWaveStatePanel("Discovering audio…", "Searching large music, podcast and radio directories.", loading = true)
             Spacer(Modifier.height(18.dp))
         }
 
         if (discoveredMusic.isNotEmpty()) {
-            Text("Music", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-            Text("Official preview audio", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            AstraWaveSectionHeader("Music", "${discoveredMusic.size} catalog matches • official preview playback where available")
             Spacer(Modifier.height(8.dp))
-            discoveredMusic.take(40).forEach { track ->
+            discoveredMusic.take(visibleMusic).forEach { track ->
+                val playable = !track.mediaUrl.isNullOrBlank()
                 AstraWaveFocusableCard(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
-                        track.mediaUrl?.let(::play)
-                    },
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).then(
+                        if (playable) Modifier.clickable { play(requireNotNull(track.mediaUrl)) } else Modifier,
+                    ),
                 ) {
                     Column {
                         Text(track.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                         Text(track.subtitle ?: "Music", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-                        Text("Play preview", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+                        Text(if (playable) "Play preview" else "Catalog result • full playback requires provider connection", color = if (playable) AstraWaveColors.Success else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
                     }
                 }
+            }
+            if (visibleMusic < discoveredMusic.size) {
+                AstraWaveSecondaryButton("Show ${minOf(60, discoveredMusic.size - visibleMusic)} more", { visibleMusic += 60 }, Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(20.dp))
         }
 
         if (discoveredPodcasts.isNotEmpty()) {
-            Text("Podcast Discovery", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-            Text("Tap a show to add its publisher RSS feed to My Audio.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            AstraWaveSectionHeader("Podcast Discovery", "${discoveredPodcasts.size} shows found")
             Spacer(Modifier.height(8.dp))
-            discoveredPodcasts.take(40).forEach { show ->
+            discoveredPodcasts.take(visiblePodcasts).forEach { show ->
                 AstraWaveFocusableCard(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
                         store.saveSubscription(profileId, show)
@@ -176,17 +311,20 @@ fun AudioLibraryScreen(
                 ) {
                     Column {
                         Text(show.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                        Text("Podcast • Add to My Audio", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
+                        Text("Podcast • Add publisher RSS feed to My Audio", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
                     }
                 }
+            }
+            if (visiblePodcasts < discoveredPodcasts.size) {
+                AstraWaveSecondaryButton("Show ${minOf(60, discoveredPodcasts.size - visiblePodcasts)} more", { visiblePodcasts += 60 }, Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(20.dp))
         }
 
         if (discoveredRadio.isNotEmpty()) {
-            Text("Radio Discovery", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            AstraWaveSectionHeader("Radio Discovery", "${discoveredRadio.size} stations loaded")
             Spacer(Modifier.height(8.dp))
-            discoveredRadio.take(50).forEach { station ->
+            discoveredRadio.take(visibleRadio).forEach { station ->
                 AstraWaveFocusableCard(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
                         playChecked(station.streamUrl, "This radio stream is not reachable right now.")
@@ -199,10 +337,13 @@ fun AudioLibraryScreen(
                     }
                 }
             }
+            if (visibleRadio < discoveredRadio.size) {
+                AstraWaveSecondaryButton("Show ${minOf(80, discoveredRadio.size - visibleRadio)} more", { visibleRadio += 80 }, Modifier.fillMaxWidth())
+            }
             Spacer(Modifier.height(20.dp))
         }
 
-        Text("My Audio", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+        AstraWaveSectionHeader("My Audio", "Saved podcasts, recent episodes and favorite radio")
         Spacer(Modifier.height(10.dp))
         when (val current = state) {
             AudioLoadState.Loading -> Row(Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(18.dp)) {
@@ -222,11 +363,11 @@ fun AudioLibraryScreen(
                 if (snapshot.recentEpisodes.isNotEmpty()) {
                     Text("Recent Episodes", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
-                    snapshot.recentEpisodes.take(40).forEach { episode ->
+                    snapshot.recentEpisodes.take(80).forEach { episode ->
                         val playable = !episode.mediaUrl.isNullOrBlank()
                         AstraWaveFocusableCard(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp).then(
-                                if (playable) Modifier.clickable { play(requireNotNull(episode.mediaUrl)) } else Modifier
+                                if (playable) Modifier.clickable { play(requireNotNull(episode.mediaUrl)) } else Modifier,
                             ),
                         ) {
                             Column {
