@@ -21,6 +21,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -53,6 +54,7 @@ class PlayerActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
     private var playerView: PlayerView? = null
     private var quickControls: LinearLayout? = null
+    private var quickControlsScroller: HorizontalScrollView? = null
     private var sourceButton: Button? = null
     private var skipIntroButton: Button? = null
     private var skipRecapButton: Button? = null
@@ -201,7 +203,7 @@ class PlayerActivity : ComponentActivity() {
                         when {
                             retryCountForCurrentStream < MAX_RETRIES_PER_STREAM -> {
                                 retryCountForCurrentStream++
-                                Toast.makeText(this@PlayerActivity, "Stream interrupted. Reconnecting…", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@PlayerActivity, "Stream interrupted. Reconnecting current source…", Toast.LENGTH_SHORT).show()
                                 handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, RETRY_DELAY_MS)
                             }
                             streamIndex + 1 < streamUrls.size -> {
@@ -210,12 +212,12 @@ class PlayerActivity : ComponentActivity() {
                                 updateSourceButton()
                                 Toast.makeText(
                                     this@PlayerActivity,
-                                    "Switching to backup ${streamIndex + 1} of ${streamUrls.size}…",
+                                    "Current source failed. Trying backup ${streamIndex + 1} of ${streamUrls.size}…",
                                     Toast.LENGTH_SHORT,
                                 ).show()
                                 handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, BACKUP_FAILOVER_DELAY_MS)
                             }
-                            else -> Toast.makeText(this@PlayerActivity, "All available streams failed.", Toast.LENGTH_LONG).show()
+                            else -> Toast.makeText(this@PlayerActivity, "All available sources failed. Open Sources to retry or choose another source.", Toast.LENGTH_LONG).show()
                         }
                     }
 
@@ -223,6 +225,7 @@ class PlayerActivity : ComponentActivity() {
                         if (playbackState == Player.STATE_READY) {
                             retryCountForCurrentStream = 0
                             exo.setPlaybackSpeed(playbackSpeed)
+                            updateSourceButton()
                             if (!historyRecorded) {
                                 libraryItem?.let { libraryStore?.recordHistory(profileId, it) }
                                 historyRecorded = true
@@ -264,9 +267,10 @@ class PlayerActivity : ComponentActivity() {
 
     private fun buildPlayerSurface() {
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        val compact = resources.configuration.smallestScreenWidthDp < 600
         playerView = PlayerView(this).apply {
             useController = true
-            controllerShowTimeoutMs = 4_500
+            controllerShowTimeoutMs = if (compact) 5_500 else 4_500
             controllerAutoShow = true
         }
         root.addView(playerView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -274,28 +278,38 @@ class PlayerActivity : ComponentActivity() {
         quickControls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(10, 10, 10, 10)
-            setBackgroundColor(0x99000000.toInt())
+            setPadding(if (compact) 6 else 10, if (compact) 6 else 10, if (compact) 6 else 10, if (compact) 6 else 10)
+            setBackgroundColor(0xB3000000.toInt())
         }
         sourceButton = quickButton(sourceLabel()) { showSourcePicker() }.also { quickControls?.addView(it) }
-        quickControls?.addView(quickButton("Speed") { showSpeedPicker() })
+        quickControls?.addView(quickButton(if (compact) "Speed" else "Playback Speed") { showSpeedPicker() })
         quickControls?.addView(quickButton("Audio") { showTrackPicker(C.TRACK_TYPE_AUDIO) })
-        quickControls?.addView(quickButton("Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })
+        quickControls?.addView(quickButton(if (compact) "Subs" else "Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })
         skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
         skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
-        quickControls?.addView(quickButton("Stats") { showDiagnostics() })
-        root.addView(quickControls, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.TOP or Gravity.END; topMargin = 18; rightMargin = 18
+        quickControls?.addView(quickButton(if (compact) "Info" else "Stats") { showDiagnostics() })
+
+        quickControlsScroller = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(quickControls, HorizontalScrollView.LayoutParams(HorizontalScrollView.LayoutParams.WRAP_CONTENT, HorizontalScrollView.LayoutParams.WRAP_CONTENT))
+        }
+        root.addView(quickControlsScroller, FrameLayout.LayoutParams(if (compact) FrameLayout.LayoutParams.MATCH_PARENT else FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or if (compact) Gravity.CENTER_HORIZONTAL else Gravity.END
+            topMargin = if (compact) 10 else 18
+            leftMargin = if (compact) 10 else 0
+            rightMargin = if (compact) 10 else 18
         })
 
         upNextOverlay = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(28, 20, 28, 20)
-            setBackgroundColor(0xDD11131A.toInt())
+            setPadding(if (compact) 20 else 28, if (compact) 16 else 20, if (compact) 20 else 28, if (compact) 16 else 20)
+            setBackgroundColor(0xE611131A.toInt())
             visibility = View.GONE
         }
-        upNextText = TextView(this).apply { setTextColor(Color.WHITE); textSize = 16f }
+        upNextText = TextView(this).apply { setTextColor(Color.WHITE); textSize = if (compact) 15f else 16f }
         upNextButton = quickButton("Play Next") { playNextEpisode() }
         upNextOverlay?.addView(upNextText)
         upNextOverlay?.addView(upNextButton)
@@ -303,14 +317,23 @@ class PlayerActivity : ComponentActivity() {
             autoplayCancelled = true
             upNextOverlay?.visibility = View.GONE
         })
-        root.addView(upNextOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.BOTTOM or Gravity.END; rightMargin = 28; bottomMargin = 86
+        root.addView(upNextOverlay, FrameLayout.LayoutParams(if (compact) FrameLayout.LayoutParams.MATCH_PARENT else FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+            leftMargin = if (compact) 14 else 0
+            rightMargin = if (compact) 14 else 28
+            bottomMargin = if (compact) 72 else 86
         })
         setContentView(root)
     }
 
     private fun quickButton(label: String, action: () -> Unit): Button = Button(this).apply {
-        text = label; isAllCaps = false; setOnClickListener { action() }; setPadding(20, 8, 20, 8); minimumWidth = 0; minWidth = 0
+        text = label
+        isAllCaps = false
+        setOnClickListener { action() }
+        setPadding(18, 8, 18, 8)
+        minimumWidth = 0
+        minWidth = 0
+        minHeight = 0
     }
 
     private fun prepareNextEpisode() {
@@ -392,11 +415,14 @@ class PlayerActivity : ComponentActivity() {
             val host = runCatching { Uri.parse(url).host }.getOrNull().orEmpty().ifBlank { "Stream ${index + 1}" }
             "${if (index == streamIndex) "✓ " else ""}Source ${index + 1} • $host"
         }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Playback source").setItems(labels) { _, which ->
+        AlertDialog.Builder(this).setTitle("Playback sources").setMessage("AstraWave automatically fails over when a source stops working. You can also switch manually.").setItems(labels) { _, which ->
             if (which == streamIndex) return@setItems
             val exo = player ?: return@setItems
-            lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L)); streamIndex = which; retryCountForCurrentStream = 0
+            lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
+            streamIndex = which
+            retryCountForCurrentStream = 0
             playCurrent(exo, lastKnownPositionMs)
+            Toast.makeText(this, "Switched to source ${which + 1} of ${streamUrls.size}", Toast.LENGTH_SHORT).show()
         }.setNegativeButton("Cancel", null).show()
     }
 
@@ -439,6 +465,7 @@ class PlayerActivity : ComponentActivity() {
         val next = nextPlan?.episode?.let { "S${it.season}E${it.episode} ${it.title}" } ?: if (nextPlanLoading) "Loading…" else "None"
         val message = buildString {
             appendLine("Source: ${streamIndex + 1}/${streamUrls.size} • $host")
+            appendLine("Backups available: ${(streamUrls.size - streamIndex - 1).coerceAtLeast(0)}")
             appendLine("Network: ${if (hasValidatedNetwork()) "Validated" else "Unavailable / unvalidated"}")
             appendLine("State: ${playbackStateLabel(exo.playbackState)}${if (exo.isPlaying) " • Playing" else ""}")
             appendLine("Speed: ${playbackSpeed}×")
@@ -446,9 +473,9 @@ class PlayerActivity : ComponentActivity() {
             appendLine("Video: ${video?.let(::formatVideo) ?: "No video format reported"}")
             appendLine("Audio: ${audio?.let(::formatAudio) ?: "No audio format reported"}")
             appendLine("Up Next: $next")
-            append("Retries: $retryCountForCurrentStream")
+            append("Retries on current source: $retryCountForCurrentStream")
         }
-        AlertDialog.Builder(this).setTitle("Playback diagnostics").setMessage(message).setPositiveButton("Close", null)
+        AlertDialog.Builder(this).setTitle("Playback info").setMessage(message).setPositiveButton("Close", null)
             .setNeutralButton("Retry source") { _, _ -> lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L)); retryCountForCurrentStream = 0; playCurrent(exo, lastKnownPositionMs) }.show()
     }
 
@@ -509,7 +536,9 @@ class PlayerActivity : ComponentActivity() {
     }
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        playerView?.useController = !isInPictureInPictureMode; quickControls?.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE; upNextOverlay?.visibility = View.GONE
+        playerView?.useController = !isInPictureInPictureMode
+        quickControlsScroller?.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+        upNextOverlay?.visibility = View.GONE
     }
 
     private fun intentLibraryItem(): LibraryItemRef? {
