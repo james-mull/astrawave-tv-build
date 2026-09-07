@@ -25,6 +25,8 @@ jobs:
       ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
       ASTRAWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRAWAVE_FIREBASE_PROJECT_ID }}
       ASTRAWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRAWAVE_FIREBASE_SENDER_ID }}
+      ASTRAWAVE_API_BASE_URL: ${{ secrets.ASTRAWAVE_API_BASE_URL }}
+      ASTRAWAVE_PREMIUM_PRODUCT_ID: ${{ secrets.ASTRAWAVE_PREMIUM_PRODUCT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +36,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -43,24 +46,18 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.9"
 
       - name: Run core invariant tests
         working-directory: android-app
-        timeout-minutes: 10
-        run: gradle --no-daemon --stacktrace testDebugUnitTest
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
 
       - name: Build debug APK
         working-directory: android-app
-        timeout-minutes: 15
-        env:
-          ASTRAWAVE_GIT_SHA: ${{ github.sha }}
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AstraWave-Android-debug
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          name: astrwave-debug-apk-${{ github.sha }}
+          path: android-app/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
