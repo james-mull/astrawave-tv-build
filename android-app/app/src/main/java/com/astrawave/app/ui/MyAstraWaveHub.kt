@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,12 +48,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.core.AccountOverview
 import com.astrawave.app.core.AccountSection
 import com.astrawave.app.core.AstraWaveList
 import com.astrawave.app.core.OnboardingStep
+import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.LibraryCloudSync
 import com.astrawave.app.data.LocalLibraryStore
 
@@ -62,6 +65,7 @@ fun MyAstraWaveHub(
     account: AccountOverview,
     lists: List<AstraWaveList> = emptyList(),
     onOpenAccountSection: (AccountSection) -> Unit = {},
+    onOpenAudio: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val store = remember { LocalLibraryStore(context) }
@@ -74,6 +78,10 @@ fun MyAstraWaveHub(
     var showSafety by remember { mutableStateOf(false) }
     var showSubscription by remember { mutableStateOf(false) }
     var showExperienceSettings by remember { mutableStateOf(false) }
+    var showDebrid by remember { mutableStateOf(false) }
+    var showDiagnostics by remember { mutableStateOf(false) }
+    var showTmdbSetup by remember { mutableStateOf(false) }
+    var utilitySection by remember { mutableStateOf<AccountSection?>(null) }
 
     fun refresh() { snapshot = store.snapshot(profileId) }
 
@@ -81,6 +89,26 @@ fun MyAstraWaveHub(
         cloudSync.restore(profileId) { result ->
             if (result.isSuccess) refresh()
         }
+    }
+
+    utilitySection?.let { section ->
+        AccountUtilityScreen(section = section, profileId = profileId, onBack = { utilitySection = null })
+        return
+    }
+
+    if (showDebrid) {
+        DebridAccountScreen(profileId = profileId, onBack = { showDebrid = false })
+        return
+    }
+
+    if (showDiagnostics) {
+        VodPlaybackDiagnosticsScreen(profileId = profileId, onBack = { showDiagnostics = false })
+        return
+    }
+
+    if (showTmdbSetup) {
+        TmdbSetupScreen(onBack = { showTmdbSetup = false })
+        return
     }
 
     if (showExperienceSettings) {
@@ -97,6 +125,7 @@ fun MyAstraWaveHub(
         SubscriptionOverviewScreen(
             currentPlanName = account.planName,
             onBack = { showSubscription = false },
+            profileId = profileId,
         )
         return
     }
@@ -107,13 +136,13 @@ fun MyAstraWaveHub(
             onOpenStep = { step ->
                 when (step) {
                     OnboardingStep.PROFILE -> onOpenAccountSection(AccountSection.PROFILES)
+                    OnboardingStep.TMDB -> showTmdbSetup = true
                     OnboardingStep.LIVE_TV -> onOpenAccountSection(AccountSection.IPTV)
                     OnboardingStep.ADDONS -> onOpenAccountSection(AccountSection.ADDONS)
                     OnboardingStep.PERSONAL_MEDIA -> onOpenAccountSection(AccountSection.PERSONAL_MEDIA)
-                    OnboardingStep.DEVICE_PAIRING -> onOpenAccountSection(AccountSection.DEVICES)
+                    OnboardingStep.AUDIO -> onOpenAudio()
+                    OnboardingStep.DEVICE_PAIRING -> utilitySection = AccountSection.DEVICES
                     OnboardingStep.PRIVACY -> showSafety = true
-                    OnboardingStep.TMDB,
-                    OnboardingStep.AUDIO,
                     OnboardingStep.WELCOME,
                     OnboardingStep.COMPLETE,
                     -> Unit
@@ -191,6 +220,16 @@ fun MyAstraWaveHub(
                 when (section) {
                     AccountSection.SUBSCRIPTION -> showSubscription = true
                     AccountSection.PARENTAL_CONTROLS, AccountSection.PRIVACY -> showSafety = true
+                    AccountSection.CLOUD_DEBRID -> showDebrid = true
+                    AccountSection.DIAGNOSTICS -> showDiagnostics = true
+                    AccountSection.PLAYBACK,
+                    AccountSection.SUBTITLES_AUDIO,
+                    AccountSection.DOWNLOADS_STORAGE,
+                    AccountSection.NOTIFICATIONS,
+                    AccountSection.APPEARANCE,
+                    AccountSection.BACKUP_SYNC,
+                    AccountSection.DEVICES,
+                    -> utilitySection = section
                     else -> onOpenAccountSection(section)
                 }
             }
@@ -207,6 +246,33 @@ fun MyAstraWaveHub(
                 createList = false
             },
         )
+    }
+}
+
+@Composable
+private fun TmdbSetupScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val settings = remember { AppSettingsStore(context) }
+    var token by remember { mutableStateOf(settings.tmdbBearerToken.orEmpty()) }
+    var message by remember { mutableStateOf(if (settings.effectiveTmdbBearerToken().isNotBlank()) "TMDB discovery is configured." else "Add a TMDB Read Access Token to enable full movie and TV discovery on this device.") }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(AstraWaveColors.Background).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) { AstraWavePageHeader("Movies & TV Discovery", "TMDB powers metadata, current catalog rails, title details and much of AstraWave discovery. The token stays in local app settings on this device.") }
+            Text("Back", color = AstraWaveColors.Accent, modifier = Modifier.clickable(onClick = onBack).padding(10.dp))
+        }
+        OutlinedTextField(
+            value = token,
+            onValueChange = { token = it },
+            label = { Text("TMDB Read Access Token") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        AstraWavePrimaryButton("Save TMDB", {
+            settings.tmdbBearerToken = token.trim().ifBlank { null }
+            message = if (settings.effectiveTmdbBearerToken().isNotBlank()) "TMDB discovery is configured." else "TMDB token cleared."
+        })
+        Text(message, color = AstraWaveColors.SecondaryText)
     }
 }
 
