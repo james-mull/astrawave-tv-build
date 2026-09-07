@@ -47,6 +47,9 @@ class BackendSportsChannelCloudRepository(
         val broadcasts: List<String>,
         val source: String,
         val channelMatches: List<ChannelMatch>,
+        val watchable: Boolean,
+        val candidateCount: Int,
+        val unwatchableReason: String? = null,
     )
 
     fun available(): Boolean = baseUrl.startsWith("http://") || baseUrl.startsWith("https://")
@@ -116,6 +119,11 @@ class BackendSportsChannelCloudRepository(
                         }
                     }
                 }.orEmpty()
+                val candidateCount = item.optInt(
+                    "candidateCount",
+                    channelMatches.sumOf { it.candidates.size },
+                )
+                val watchable = item.optBoolean("watchable", candidateCount > 0)
                 add(
                     CloudEvent(
                         id = item.optString("id"),
@@ -129,6 +137,9 @@ class BackendSportsChannelCloudRepository(
                         broadcasts = broadcasts,
                         source = item.optString("source").ifBlank { "AstraWave Sports Cloud" },
                         channelMatches = channelMatches,
+                        watchable = watchable,
+                        candidateCount = candidateCount,
+                        unwatchableReason = item.optString("unwatchableReason").takeIf(String::isNotBlank),
                     ),
                 )
             }
