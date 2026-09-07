@@ -39,6 +39,7 @@ import com.astrawave.app.core.LibraryMediaType
 import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LocalLibraryStore
 import com.astrawave.app.data.PersonalMediaPlaybackRepository
+import com.astrawave.app.data.RemoteCommandInbox
 import com.astrawave.app.data.SeriesPlaybackCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +78,7 @@ class PlayerActivity : ComponentActivity() {
     private var playbackSpeed = 1f
     private var introEndMs = 0L
     private var recapEndMs = 0L
+    private lateinit var remoteInbox: RemoteCommandInbox
 
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var nextPlan: SeriesPlaybackCoordinator.NextEpisodePlan? = null
@@ -88,6 +90,7 @@ class PlayerActivity : ComponentActivity() {
     private val progressTicker = object : Runnable {
         override fun run() {
             val active = player
+            consumeRemotePlaybackCommand(active)
             persistProgress(active, allowCloud = shouldCloudSync())
             updateSeriesControls(active)
             handler.postDelayed(this, UI_TICK_MS)
@@ -124,6 +127,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        remoteInbox = RemoteCommandInbox(this)
 
         profileId = intent.getStringExtra(EXTRA_PROFILE_ID).orEmpty().ifBlank { DEFAULT_PROFILE_ID }
         val primary = intent.getStringExtra(EXTRA_URL)
@@ -237,6 +241,25 @@ class PlayerActivity : ComponentActivity() {
                 playCurrent(exo, resumePositionMs)
             }
         handler.postDelayed(progressTicker, UI_TICK_MS)
+    }
+
+    private fun consumeRemotePlaybackCommand(exo: ExoPlayer?) {
+        val active = exo ?: return
+        val pending = remoteInbox.consumeIf(REMOTE_PLAYBACK_COMMANDS) ?: return
+        when (pending.command) {
+            "PLAY" -> active.play()
+            "PAUSE" -> active.pause()
+            "SEEK_FORWARD" -> seekRemote(active, REMOTE_SEEK_FORWARD_MS)
+            "SEEK_BACK" -> seekRemote(active, -REMOTE_SEEK_BACK_MS)
+        }
+    }
+
+    private fun seekRemote(exo: ExoPlayer, deltaMs: Long) {
+        val current = exo.currentPosition.coerceAtLeast(0L)
+        val duration = exo.duration.takeIf { it != C.TIME_UNSET && it > 0L }
+        val target = (current + deltaMs).coerceAtLeast(0L).let { if (duration != null) it.coerceAtMost(duration) else it }
+        exo.seekTo(target)
+        lastKnownPositionMs = target
     }
 
     private fun buildPlayerSurface() {
@@ -529,6 +552,9 @@ class PlayerActivity : ComponentActivity() {
         private const val MIN_LOCAL_PROGRESS_WRITE_MS = 10_000L
         private const val CLOUD_PROGRESS_INTERVAL_MS = 60_000L
         private const val UP_NEXT_WINDOW_MS = 45_000L
+        private const val REMOTE_SEEK_FORWARD_MS = 30_000L
+        private const val REMOTE_SEEK_BACK_MS = 15_000L
+        private val REMOTE_PLAYBACK_COMMANDS = setOf("PLAY", "PAUSE", "SEEK_FORWARD", "SEEK_BACK")
 
         fun isDirectMediaUrl(url: String): Boolean {
             val normalized = url.substringBefore('?').substringBefore('#').lowercase()
