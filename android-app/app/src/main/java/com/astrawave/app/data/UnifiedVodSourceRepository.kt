@@ -12,10 +12,12 @@ import kotlinx.coroutines.coroutineScope
  * Unified VOD resolver used by movie, series and episode detail surfaces.
  *
  * Catalog discovery stays separate from playback eligibility. Enabled addons may enrich metadata,
- * but only sources that pass AstraWave's explicit authorization policy and health checks are
- * returned as playable candidates. User-provided Xtream accounts are treated as customer-authorized
- * sources. An optional linked debrid account may optimize already-authorized links after discovery;
- * it never participates in title or file discovery.
+ * while direct playback candidates still must pass AstraWave's explicit authorization policy.
+ * Authorized candidates are surfaced immediately; lightweight health observations only influence
+ * ranking and never hide an otherwise authorized source. Final reachability/failover belongs to the
+ * playback planner when the user presses Play. User-provided Xtream accounts are treated as
+ * customer-authorized sources. An optional linked debrid account may optimize already-authorized
+ * links after discovery; it never participates in title or file discovery.
  */
 class UnifiedVodSourceRepository(context: Context) {
     private val appContext = context.applicationContext
@@ -104,38 +106,40 @@ class UnifiedVodSourceRepository(context: Context) {
                 .mapNotNull { stream ->
                     val url = stream.url?.takeIf { it.startsWith("https://") } ?: return@mapNotNull null
                     val health = healthFor(url)
-                    if (health?.reachable != true) return@mapNotNull null
                     val label = listOfNotNull(stream.title, stream.name).joinToString(" ")
                     val quality = inferQuality(label)
                     val qualityScore = qualityWeight(quality)
-                    val latencyBonus = when {
-                        health.latencyMs < 500 -> 90
-                        health.latencyMs < 900 -> 70
-                        health.latencyMs < 1_500 -> 45
-                        health.latencyMs < 2_500 -> 20
-                        else -> 0
-                    }
+                    val latencyBonus = health?.let {
+                        when {
+                            it.latencyMs < 500 -> 90
+                            it.latencyMs < 900 -> 70
+                            it.latencyMs < 1_500 -> 45
+                            it.latencyMs < 2_500 -> 20
+                            else -> 0
+                        }
+                    } ?: 0
                     val contentBonus = when {
-                        health.contentType?.contains("mpegurl", true) == true -> 35
-                        health.contentType?.contains("video", true) == true -> 30
+                        health?.contentType?.contains("mpegurl", true) == true -> 35
+                        health?.contentType?.contains("video", true) == true -> 30
                         else -> 0
                     }
+                    val reachabilityBonus = if (health?.reachable == true) 45 else 0
                     val publicDomain = isReviewedPublicDomainManifest(addon.manifestUrl)
                     val link = ScrapedLink(
                         url = url,
                         sourceName = stream.name.ifBlank { addon.manifest.name },
                         quality = quality,
-                        mimeType = health.contentType,
+                        mimeType = health?.contentType,
                         direct = true,
                         licenseLabel = if (publicDomain) "Reviewed public-domain source" else "Customer-authorized provider",
                         attribution = addon.manifest.name,
                     )
                     ResolvedSource(
                         link = link,
-                        reachable = true,
-                        latencyMs = health.latencyMs,
-                        contentType = health.contentType,
-                        score = 350 + qualityScore + latencyBonus + contentBonus,
+                        reachable = health?.reachable ?: true,
+                        latencyMs = health?.latencyMs,
+                        contentType = health?.contentType,
+                        score = 350 + qualityScore + latencyBonus + contentBonus + reachabilityBonus,
                     )
                 }
         }
