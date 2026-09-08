@@ -35,6 +35,7 @@ import com.astrawave.app.PremiumVodDetailActivity
 import com.astrawave.app.data.AstraWaveMetadataGateway
 import com.astrawave.app.data.DynamicCollectionRepository
 import com.astrawave.app.data.HouseholdProfileStore
+import com.astrawave.app.data.TraktCatalogRepository
 import com.astrawave.app.data.UltraMaxCatalogPreferences
 import com.astrawave.app.data.UltraMaxCatalogRegistry
 import kotlinx.coroutines.Dispatchers
@@ -142,6 +143,7 @@ private fun UltraCatalogRow(row: UltraMaxCatalogRegistry.Row, profileId: String)
     val context = LocalContext.current
     val dynamic = remember { DynamicCollectionRepository() }
     val metadata = remember { AstraWaveMetadataGateway() }
+    val trakt = remember { TraktCatalogRepository() }
     var loading by remember(row.id) { mutableStateOf(true) }
     var items by remember(row.id) { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
     var error by remember(row.id) { mutableStateOf<String?>(null) }
@@ -152,7 +154,19 @@ private fun UltraCatalogRow(row: UltraMaxCatalogRegistry.Row, profileId: String)
         items = runCatching {
             withContext(Dispatchers.IO) {
                 when {
-                    row.requiresTrakt -> emptyList()
+                    row.id == "trakt_watchlist" -> emptyList()
+                    row.id == "trakt_trending" -> (
+                        trakt.load(TraktCatalogRepository.Mode.TRENDING, TraktCatalogRepository.Kind.MOVIES) +
+                            trakt.load(TraktCatalogRepository.Mode.TRENDING, TraktCatalogRepository.Kind.SHOWS)
+                        )
+                    row.id == "trakt_popular" -> (
+                        trakt.load(TraktCatalogRepository.Mode.POPULAR, TraktCatalogRepository.Kind.MOVIES) +
+                            trakt.load(TraktCatalogRepository.Mode.POPULAR, TraktCatalogRepository.Kind.SHOWS)
+                        )
+                    row.id == "trakt_anticipated" -> (
+                        trakt.load(TraktCatalogRepository.Mode.ANTICIPATED, TraktCatalogRepository.Kind.MOVIES) +
+                            trakt.load(TraktCatalogRepository.Mode.ANTICIPATED, TraktCatalogRepository.Kind.SHOWS)
+                        )
                     row.genre != null -> {
                         val media = if (row.media == UltraMaxCatalogRegistry.Media.SERIES) DynamicCollectionRepository.Media.SERIES else DynamicCollectionRepository.Media.MOVIE
                         dynamic.genre(media, row.genre, pages = 2)
@@ -181,7 +195,7 @@ private fun UltraCatalogRow(row: UltraMaxCatalogRegistry.Row, profileId: String)
             row.badge?.let { Text(it, color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium) }
         }
         when {
-            row.requiresTrakt -> AstraWaveStatePanel("${row.title} • Trakt", "Connect Trakt to activate this personalized row.")
+            row.id == "trakt_watchlist" -> AstraWaveStatePanel("${row.title} • Trakt", "Connect Trakt to activate your personal watchlist here.")
             loading -> AstraWaveStatePanel("Loading ${row.title}…", "Building this collection.", loading = true)
             error != null -> AstraWaveStatePanel("${row.title} unavailable", error.orEmpty())
             items.isEmpty() -> AstraWaveStatePanel("No titles right now", "This row has no matching items yet.")
