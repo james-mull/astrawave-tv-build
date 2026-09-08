@@ -37,7 +37,7 @@ jobs:
           - name: Android-TV
             target: android-tv
             profile: tv_1080p
-            api: 35
+            api: 34
             mode: tv
 
     env:
@@ -87,7 +87,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           working-directory: android-app
           script: |
-            set -euo pipefail
+            set -eu
             gradle --no-daemon --stacktrace :app:assembleDebug
             APK="app/build/outputs/apk/debug/app-debug.apk"
             test -s "$APK"
@@ -99,7 +99,7 @@ jobs:
 
             assert_alive() {
               PID="$(adb shell pidof com.astrawave.app | tr -d '\r')"
-              if [[ -z "$PID" ]]; then
+              if [ -z "$PID" ]; then
                 echo "AstraWave process is not alive" >&2
                 adb logcat -d -v time >&2 || true
                 exit 1
@@ -109,7 +109,7 @@ jobs:
             assert_alive
             adb shell dumpsys activity activities | grep -q 'com.astrawave.app'
 
-            if [[ '${{ matrix.mode }}' == 'phone' ]]; then
+            if [ '${{ matrix.mode }}' = 'phone' ]; then
               adb shell settings put system accelerometer_rotation 0
               adb shell settings put system user_rotation 0
               sleep 2
@@ -118,7 +118,7 @@ jobs:
               sleep 3
               assert_alive
               adb shell settings put system user_rotation 0
-            elif [[ '${{ matrix.mode }}' == 'tablet' ]]; then
+            elif [ '${{ matrix.mode }}' = 'tablet' ]; then
               adb shell input keyevent KEYCODE_TAB || true
               adb shell input keyevent KEYCODE_BACK || true
               sleep 2
