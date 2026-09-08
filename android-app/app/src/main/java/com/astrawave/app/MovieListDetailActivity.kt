@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -103,14 +102,14 @@ private fun MovieListDetailScreen(
 
     fun openDetails(item: AstraWaveMetadataGateway.Item) {
         context.startActivity(
-            Intent(context, TitleDetailsActivity::class.java)
-                .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
-                .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "MOVIE")
+            Intent(context, PremiumVodDetailActivity::class.java)
+                .putExtra(PremiumVodDetailActivity.EXTRA_TITLE, item.name)
+                .putExtra(PremiumVodDetailActivity.EXTRA_MEDIA_TYPE, "MOVIE")
                 .putExtra(
-                    TitleDetailsActivity.EXTRA_SOURCE_ID,
+                    PremiumVodDetailActivity.EXTRA_SOURCE_ID,
                     if (item.id.startsWith("tt", true)) "stremio:cinemeta:movie:${item.id}" else "tmdb:${item.id}",
                 )
-                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+                .putExtra(PremiumVodDetailActivity.EXTRA_PROFILE_ID, profileId),
         )
     }
 
