@@ -47,7 +47,7 @@ fun StremioAddonScreen(profileId: String = "default") {
     val store = remember { StremioAddonStore(context) }
     val repoStore = remember { CloudStreamRepositoryPreferenceStore(context) }
     val aggregator = remember { StremioCatalogAggregator(context) }
-    var addons by remember(profileId) { mutableStateOf(store.loadAll()) }
+    var addons by remember(profileId) { mutableStateOf<List<InstalledAddon>>(emptyList()) }
     var repositories by remember(profileId) { mutableStateOf(repoStore.load(profileId)) }
     var catalogRows by remember(profileId) { mutableStateOf<List<StremioCatalogRow>>(emptyList()) }
     var installDialog by remember { mutableStateOf(false) }
@@ -55,6 +55,7 @@ fun StremioAddonScreen(profileId: String = "default") {
     var showDebrid by remember { mutableStateOf(false) }
     var showPlaybackDiagnostics by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
+    var bootstrapping by remember(profileId) { mutableStateOf(true) }
     var loadingCatalogs by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -82,7 +83,24 @@ fun StremioAddonScreen(profileId: String = "default") {
         loadingCatalogs = false
     }
 
-    LaunchedEffect(addons, profileId) { refreshCatalogs() }
+    LaunchedEffect(profileId) {
+        bootstrapping = true
+        error = null
+        val result = withContext(Dispatchers.IO) {
+            val report = store.bootstrapDefaults()
+            report to store.loadAll()
+        }
+        addons = result.second
+        repositories = repoStore.load(profileId)
+        bootstrapping = false
+        if (addons.isEmpty() && result.first.failures.isNotEmpty()) {
+            error = "Reviewed addon defaults could not be reached. AstraWave will retry automatically. Check network access and try Refresh."
+        }
+    }
+
+    LaunchedEffect(addons, profileId, bootstrapping) {
+        if (!bootstrapping) refreshCatalogs()
+    }
 
     val recommendedRepoIds = remember { RecommendedSourcePack.cloudStreamRepositoryIds }
     val advancedRepoIds = remember { RecommendedSourcePack.advancedCloudStreamRepositoryIds }
@@ -97,7 +115,7 @@ fun StremioAddonScreen(profileId: String = "default") {
     ) {
         AstraWavePageHeader(
             title = "Sources & Addons",
-            subtitle = "Recommended sources work out of the box. Your own connections stay separate, and community repositories remain clearly marked Advanced.",
+            subtitle = "Reviewed catalogs bootstrap automatically. Personal connections remain separate, and community repositories stay opt-in.",
         )
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -106,13 +124,17 @@ fun StremioAddonScreen(profileId: String = "default") {
             AstraWaveSecondaryButton(label = "Cloud & Debrid", onClick = { showDebrid = true })
             AstraWaveSecondaryButton(label = "Playback Diagnostics", onClick = { showPlaybackDiagnostics = true })
         }
-        error?.let { Spacer(Modifier.height(12.dp)); AstraWaveStatePanel("Addon error", it) }
+        if (bootstrapping) {
+            Spacer(Modifier.height(12.dp))
+            AstraWaveStatePanel("Restoring reviewed defaults…", "Checking AstraWave's reviewed catalog and subtitle manifests in the background.", loading = true)
+        }
+        error?.let { Spacer(Modifier.height(12.dp)); AstraWaveStatePanel("Source setup needs attention", it) }
         Spacer(Modifier.height(20.dp))
 
         AstraWaveSectionHeader("Recommended Pack", "$activeRecommendedCount/${recommendedRepos.size} reviewed repositories active")
         AstraWaveStatePanel(
-            title = if (activeRecommendedCount == recommendedRepos.size) "Ready out of the box" else "Recommended Pack needs attention",
-            message = "Official/reviewed Stremio catalogs, subtitles, free Live TV, radio, podcasts and provider-availability sources are AstraWave defaults. Advanced community repos are never silently enabled.",
+            title = if (!bootstrapping && activeRecommendedCount == recommendedRepos.size) "Recommended pack enabled" else "Recommended Pack",
+            message = "Official/reviewed Stremio catalogs, subtitles, free Live TV, radio, podcasts and provider-availability sources are AstraWave defaults. Advanced community repos are never silently authorized for playback.",
         )
         recommendedRepos.forEach { repo ->
             RepositoryCard(repo, tierLabel = "Recommended • reviewed default") {
@@ -122,9 +144,13 @@ fun StremioAddonScreen(profileId: String = "default") {
         }
 
         Spacer(Modifier.height(28.dp))
-        AstraWaveSectionHeader("Connected / Installed by You", "Personal addons and custom web-synced repositories")
+        AstraWaveSectionHeader("Connected / Installed", "Reviewed defaults plus addons installed by you")
         if (addons.isEmpty() && customRepos.isEmpty()) {
-            AstraWaveStatePanel("Nothing connected yet", "Optional personal Stremio addons and custom repositories will appear here.")
+            AstraWaveStatePanel(
+                if (bootstrapping) "Checking addons…" else "No compatible addon manifests loaded",
+                if (bootstrapping) "AstraWave is still checking its reviewed defaults." else "Use Refresh/return to this page to retry reviewed defaults, or install a compatible manifest you are authorized to use.",
+                loading = bootstrapping,
+            )
         } else {
             addons.sortedBy { it.sortOrder }.forEach { addon ->
                 AddonCard(
@@ -159,10 +185,10 @@ fun StremioAddonScreen(profileId: String = "default") {
 
         Spacer(Modifier.height(28.dp))
         AstraWaveSectionHeader("Enabled Addon Catalogs", "Metadata from active compatible addons")
-        if (loadingCatalogs) {
-            AstraWaveStatePanel("Loading addon catalogs…", "Refreshing metadata from enabled addons.", loading = true)
+        if (loadingCatalogs || bootstrapping) {
+            AstraWaveStatePanel("Loading addon catalogs…", "Refreshing metadata from enabled compatible addons.", loading = true)
         } else if (catalogRows.isEmpty()) {
-            AstraWaveStatePanel("No addon catalogs", "Enabled addons with catalog resources will appear here.")
+            AstraWaveStatePanel("No addon catalogs returned", "The enabled manifests did not return catalog rows. AstraWave's native TMDB/Ultra MAX discovery remains separate from addon playback sources.")
         } else {
             catalogRows.forEach { row -> AddonCatalogPreview(row) }
         }
@@ -232,7 +258,7 @@ private fun AddonCatalogPreview(row: StremioCatalogRow) {
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Text("Metadata only • playback remains authorization-gated", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
+            Text("Catalog metadata • playable streams remain authorization-gated", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
         }
     }
 }
