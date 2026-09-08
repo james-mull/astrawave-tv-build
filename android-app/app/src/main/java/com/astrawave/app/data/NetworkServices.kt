@@ -36,7 +36,7 @@ data class SportsEvent(
 class TheSportsDbClient(private val apiKey: String = "123") {
     fun eventsForDay(date: String, sport: String? = null): List<SportsEvent> {
         val sportParam = sport?.let { "&s=${URLEncoder.encode(it, StandardCharsets.UTF_8.name())}" } ?: ""
-        val json = SimpleHttp.getText("https://www.thesportsdb.com/api/v1/json/$apiKey/eventsday.php?d=$date$sportParam")
+        val json = AstraWaveHttp.getText("https://www.thesportsdb.com/api/v1/json/$apiKey/eventsday.php?d=$date$sportParam")
         val events = JSONObject(json).optJSONArray("events") ?: return emptyList()
         return buildList {
             for (i in 0 until events.length()) {
@@ -85,7 +85,7 @@ object StreamHealthChecker {
             conn.readTimeout = 6_000
             conn.requestMethod = "GET"
             conn.setRequestProperty("Range", "bytes=0-1")
-            conn.setRequestProperty("User-Agent", "AstraWave/0.1")
+            conn.setRequestProperty("User-Agent", "AstraWave/1.0 Android")
             val code = conn.responseCode
             StreamHealth(code in 200..399, code, System.currentTimeMillis() - started, conn.contentType)
         } catch (_: Exception) {
@@ -114,7 +114,7 @@ class RealDebridClient(private val accessToken: String) {
         connection.readTimeout = 15_000
         connection.requestMethod = method
         connection.setRequestProperty("Authorization", "Bearer $accessToken")
-        connection.setRequestProperty("User-Agent", "AstraWave/0.1")
+        connection.setRequestProperty("User-Agent", "AstraWave/1.0 Android")
         if (body != null) {
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
