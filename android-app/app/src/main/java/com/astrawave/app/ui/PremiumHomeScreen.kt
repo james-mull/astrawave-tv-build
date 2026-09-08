@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
+import com.astrawave.app.PremiumVodDetailActivity
 import com.astrawave.app.TitleDetailsActivity
 import com.astrawave.app.core.LibraryItemRef
 import com.astrawave.app.core.LibraryMediaType
@@ -152,12 +153,22 @@ fun PremiumHomeScreen(profileId: String = "default") {
     }
 
     fun openItem(item: LibraryItemRef) {
+        if (item.type == LibraryMediaType.EPISODE) {
+            context.startActivity(
+                Intent(context, TitleDetailsActivity::class.java)
+                    .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.title)
+                    .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, item.type.name)
+                    .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, item.sourceId)
+                    .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+            )
+            return
+        }
         context.startActivity(
-            Intent(context, TitleDetailsActivity::class.java)
-                .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.title)
-                .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, item.type.name)
-                .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, item.sourceId)
-                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+            Intent(context, PremiumVodDetailActivity::class.java)
+                .putExtra(PremiumVodDetailActivity.EXTRA_TITLE, item.title)
+                .putExtra(PremiumVodDetailActivity.EXTRA_MEDIA_TYPE, item.type.name)
+                .putExtra(PremiumVodDetailActivity.EXTRA_SOURCE_ID, item.sourceId)
+                .putExtra(PremiumVodDetailActivity.EXTRA_PROFILE_ID, profileId),
         )
     }
 
@@ -172,11 +183,11 @@ fun PremiumHomeScreen(profileId: String = "default") {
             else -> null
         }
         context.startActivity(
-            Intent(context, TitleDetailsActivity::class.java)
-                .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
-                .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, mediaType.name)
-                .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, sourceId)
-                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+            Intent(context, PremiumVodDetailActivity::class.java)
+                .putExtra(PremiumVodDetailActivity.EXTRA_TITLE, item.name)
+                .putExtra(PremiumVodDetailActivity.EXTRA_MEDIA_TYPE, mediaType.name)
+                .putExtra(PremiumVodDetailActivity.EXTRA_SOURCE_ID, sourceId)
+                .putExtra(PremiumVodDetailActivity.EXTRA_PROFILE_ID, profileId),
         )
     }
 
