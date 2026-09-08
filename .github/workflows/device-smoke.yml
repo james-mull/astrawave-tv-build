@@ -7,6 +7,7 @@ on:
       - feature/nuvio-core-rebuild
     paths:
       - '.github/workflows/device-smoke.yml'
+      - '.github/scripts/device-smoke.sh'
 
 permissions:
   contents: read
@@ -86,63 +87,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           working-directory: android-app
-          script: |
-            set -eu
-            gradle --no-daemon --stacktrace :app:assembleDebug
-            test -s app/build/outputs/apk/debug/app-debug.apk
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb logcat -c
-            adb shell am force-stop com.astrawave.app
-            adb shell am start -W -n com.astrawave.app/.AstraWaveEntryActivity
-            sleep 8
-
-            assert_alive() {
-              PID="$(adb shell pidof com.astrawave.app | tr -d '\r')"
-              if [ -z "$PID" ]; then
-                echo "AstraWave process is not alive" >&2
-                adb logcat -d -v time >&2 || true
-                exit 1
-              fi
-            }
-
-            assert_alive
-            adb shell dumpsys activity activities | grep -q 'com.astrawave.app'
-
-            if [ '${{ matrix.mode }}' = 'phone' ]; then
-              adb shell settings put system accelerometer_rotation 0
-              adb shell settings put system user_rotation 0
-              sleep 2
-              assert_alive
-              adb shell settings put system user_rotation 1
-              sleep 3
-              assert_alive
-              adb shell settings put system user_rotation 0
-            elif [ '${{ matrix.mode }}' = 'tablet' ]; then
-              adb shell input keyevent KEYCODE_TAB || true
-              adb shell input keyevent KEYCODE_BACK || true
-              sleep 2
-              assert_alive
-            else
-              adb shell input keyevent KEYCODE_DPAD_DOWN
-              adb shell input keyevent KEYCODE_DPAD_RIGHT
-              adb shell input keyevent KEYCODE_DPAD_CENTER
-              sleep 2
-              assert_alive
-              adb shell input keyevent KEYCODE_BACK
-              sleep 2
-              assert_alive
-            fi
-
-            mkdir -p ../device-smoke/${{ matrix.mode }}
-            adb shell uiautomator dump /sdcard/astrawave-window.xml || true
-            adb pull /sdcard/astrawave-window.xml ../device-smoke/${{ matrix.mode }}/window.xml || true
-            adb exec-out screencap -p > ../device-smoke/${{ matrix.mode }}/screen.png || true
-            adb logcat -d -v time > ../device-smoke/${{ matrix.mode }}/logcat.txt || true
-
-            if grep -E 'FATAL EXCEPTION|ANR in com\.astrawave\.app|Process: com\.astrawave\.app' ../device-smoke/${{ matrix.mode }}/logcat.txt; then
-              echo 'Crash/ANR signature found in AstraWave smoke log.' >&2
-              exit 1
-            fi
+          script: bash ../.github/scripts/device-smoke.sh '${{ matrix.mode }}'
 
       - name: Upload smoke evidence
         if: always()
