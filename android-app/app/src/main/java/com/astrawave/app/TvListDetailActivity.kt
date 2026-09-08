@@ -102,14 +102,14 @@ private fun TvListDetailScreen(
 
     fun openDetails(item: AstraWaveMetadataGateway.Item) {
         context.startActivity(
-            Intent(context, TitleDetailsActivity::class.java)
-                .putExtra(TitleDetailsActivity.EXTRA_TITLE, item.name)
-                .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, "SERIES")
+            Intent(context, PremiumVodDetailActivity::class.java)
+                .putExtra(PremiumVodDetailActivity.EXTRA_TITLE, item.name)
+                .putExtra(PremiumVodDetailActivity.EXTRA_MEDIA_TYPE, "SERIES")
                 .putExtra(
-                    TitleDetailsActivity.EXTRA_SOURCE_ID,
+                    PremiumVodDetailActivity.EXTRA_SOURCE_ID,
                     if (item.id.startsWith("tt", true)) "stremio:cinemeta:series:${item.id}" else "tmdb:${item.id}",
                 )
-                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+                .putExtra(PremiumVodDetailActivity.EXTRA_PROFILE_ID, profileId),
         )
     }
 
