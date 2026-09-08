@@ -2,13 +2,15 @@ package com.astrawave.app.data
 
 import com.astrawave.app.core.IptvSource
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * AstraWave Free TV client.
  *
  * Startup intentionally loads a small market-aware primary lineup so Live TV can render quickly.
- * The broader public inventory is available through [loadExpandedChannels] for explicit refresh,
- * diagnostics, or fallback use instead of blocking every initial Live/Guide/Sports screen load.
+ * Primary feeds are fetched concurrently; the broad public inventory is reserved for explicit
+ * fallback/diagnostic use and never blocks first paint.
  */
 class AstraWaveFreeTvRepository(
     private val marketCountry: String = defaultMarketCountry(),
@@ -19,55 +21,58 @@ class AstraWaveFreeTvRepository(
     private val iptvOrgPlaylistUrls: List<String> = DEFAULT_IPTV_ORG_PLAYLIST_URLS,
     private val worldIptvPlaylistUrl: String = DEFAULT_WORLD_IPTV_PLAYLIST_URL,
 ) {
+    private data class Feed(val url: String, val source: String, val priority: Int)
+
     /** Fast startup inventory: market lineup + Nexus US when relevant + AstraWave reviewed list. */
     fun loadChannels(): List<LiveChannel> {
-        val liveTv = LiveTvRepository()
         val market = sanitizeCountry(marketCountry)
-
-        fun load(url: String, source: String, priority: Int): List<LiveChannel> =
-            runCatching { liveTv.loadM3u(url = url, source = source, priority = priority) }
-                .getOrDefault(emptyList())
-
-        val marketChannels = load(
-            "https://iptv-org.github.io/iptv/countries/$market.m3u",
-            "IPTV.org ${market.uppercase(Locale.US)}",
-            2,
-        )
-        val nexus = if (market == "us") load(nexusUsPlaylistUrl, "AstraWave Nexus US", 4) else emptyList()
-        val reviewed = load(playlistUrl, "AstraWave Free TV", 5)
-
-        return (marketChannels + nexus + reviewed)
+        val feeds = buildList {
+            add(Feed("https://iptv-org.github.io/iptv/countries/$market.m3u", "IPTV.org ${market.uppercase(Locale.US)}", 2))
+            if (market == "us") add(Feed(nexusUsPlaylistUrl, "AstraWave Nexus US", 4))
+            add(Feed(playlistUrl, "AstraWave Free TV", 5))
+        }
+        return loadFeedsConcurrently(feeds)
             .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
             .distinctBy { "${it.normalizedName}:${it.url}" }
     }
 
     /** Broader fallback inventory. Never required for first paint. */
     fun loadExpandedChannels(): List<LiveChannel> {
-        val liveTv = LiveTvRepository()
         val primary = loadChannels()
-
-        fun load(url: String, source: String, priority: Int): List<LiveChannel> =
-            runCatching { liveTv.loadM3u(url = url, source = source, priority = priority) }
-                .getOrDefault(emptyList())
-
-        val publicBroadcasters = load(publicBroadcasterPlaylistUrl, "AstraWave Public TV", 8)
-        val freeTvPublic = load(freeTvPlaylistUrl, "Free-TV Public", 9)
-        val iptvOrg = iptvOrgPlaylistUrls.distinct().flatMapIndexed { index, url ->
-            load(url, iptvOrgSourceName(url), 10 + index.coerceAtMost(6))
+        val feeds = buildList {
+            add(Feed(publicBroadcasterPlaylistUrl, "AstraWave Public TV", 8))
+            add(Feed(freeTvPlaylistUrl, "Free-TV Public", 9))
+            iptvOrgPlaylistUrls.distinct().forEachIndexed { index, url ->
+                add(Feed(url, iptvOrgSourceName(url), 10 + index.coerceAtMost(6)))
+            }
+            add(Feed(worldIptvPlaylistUrl, "World IPTV Verified", 18))
         }
-        val worldIptv = load(worldIptvPlaylistUrl, "World IPTV Verified", 18)
-
+        val alternatesRaw = loadFeedsConcurrently(feeds, maxThreads = 6)
         val canonicalByName = primary.associateBy { it.normalizedName }
-        fun canonicalize(channel: LiveChannel): LiveChannel {
-            val canonical = canonicalByName[channel.normalizedName] ?: return channel
-            val canonicalTvgId = canonical.tvgId?.takeIf(String::isNotBlank) ?: return channel
-            return channel.copy(id = canonicalTvgId, tvgId = canonicalTvgId)
+        val alternates = alternatesRaw.map { channel ->
+            val canonical = canonicalByName[channel.normalizedName]
+            val canonicalTvgId = canonical?.tvgId?.takeIf(String::isNotBlank)
+            if (canonicalTvgId == null) channel else channel.copy(id = canonicalTvgId, tvgId = canonicalTvgId)
         }
-
-        val alternates = (publicBroadcasters + freeTvPublic + iptvOrg + worldIptv).map(::canonicalize)
         return (primary + alternates)
             .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
             .distinctBy { "${it.normalizedName}:${it.url}" }
+    }
+
+    private fun loadFeedsConcurrently(feeds: List<Feed>, maxThreads: Int = 3): List<LiveChannel> {
+        if (feeds.isEmpty()) return emptyList()
+        val pool = Executors.newFixedThreadPool(feeds.size.coerceAtMost(maxThreads).coerceAtLeast(1))
+        return try {
+            val liveTv = LiveTvRepository()
+            val futures = feeds.map { feed ->
+                pool.submit<List<LiveChannel>> {
+                    runCatching { liveTv.loadM3u(feed.url, feed.source, feed.priority) }.getOrDefault(emptyList())
+                }
+            }
+            futures.flatMap { future -> runCatching { future.get(22, TimeUnit.SECONDS) }.getOrDefault(emptyList()) }
+        } finally {
+            pool.shutdownNow()
+        }
     }
 
     private fun iptvOrgSourceName(url: String): String {
@@ -175,10 +180,7 @@ class CombinedLiveTvRepository(
         val programmes = if (includeEpg) {
             (publicProgrammes + userProgrammes).distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
         } else emptyList()
-        val baseGroups = liveTv.merge(
-            channelLists = listOf(free, userChannels),
-            programmes = programmes,
-        )
+        val baseGroups = liveTv.merge(channelLists = listOf(free, userChannels), programmes = programmes)
         val groups = if (includeEpg) applyEpgOverrides(baseGroups, programmes, epgOverrides) else baseGroups
         return CombinedLiveTvSnapshot(
             groups = groups,
