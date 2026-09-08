@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, CalendarDays, Compass, Film, Gauge, Home, Menu, Music2, Play,
   RadioTower, Search, SlidersHorizontal, Tv2, Trophy, UserCircle2, X
@@ -30,6 +30,47 @@ function Card({item,onPlay}:{item:CatalogItem;onPlay:(item:CatalogItem)=>void}){
 }
 
 function Row({rail,onPlay}:{rail:CatalogRail;onPlay:(item:CatalogItem)=>void}){if(!rail.items?.length)return null;return <section className="aw-row"><div className="row-head"><div><h3>{rail.title}</h3>{rail.source&&<small>{rail.source}</small>}</div><span>{rail.items.length}</span></div><div className="card-strip">{rail.items.map(x=><Card key={`${x.kind}:${x.id}`} item={x} onPlay={onPlay}/>)}</div></section>}
+
+function BrowserPlayerVideo({url,onFatal}:{url:string;onFatal:()=>void}){
+  const videoRef=useRef<HTMLVideoElement|null>(null);
+  const fatalRef=useRef(onFatal);
+  useEffect(()=>{fatalRef.current=onFatal},[onFatal]);
+  useEffect(()=>{
+    const video=videoRef.current;
+    if(!video)return;
+    let disposed=false;
+    let failed=false;
+    let hls:{destroy:()=>void}|null=null;
+    const fail=()=>{if(disposed||failed)return;failed=true;fatalRef.current()};
+    const nativeHls=video.canPlayType('application/vnd.apple.mpegurl')||video.canPlayType('application/x-mpegURL');
+    const isHls=/\.m3u8(?:$|\?)/i.test(url);
+    video.addEventListener('error',fail);
+    if(isHls&&!nativeHls){
+      import('hls.js').then(({default:Hls})=>{
+        if(disposed)return;
+        if(!Hls.isSupported()){fail();return;}
+        const instance=new Hls({enableWorker:true,lowLatencyMode:true,backBufferLength:30});
+        hls=instance;
+        instance.on(Hls.Events.ERROR,(_event,data)=>{if(data.fatal)fail()});
+        instance.loadSource(url);
+        instance.attachMedia(video);
+        instance.on(Hls.Events.MANIFEST_PARSED,()=>{video.play().catch(()=>{})});
+      }).catch(fail);
+    }else{
+      video.src=url;
+      video.play().catch(()=>{});
+    }
+    return()=>{
+      disposed=true;
+      video.removeEventListener('error',fail);
+      hls?.destroy();
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    };
+  },[url]);
+  return <video ref={videoRef} controls autoPlay playsInline/>;
+}
 
 export default function WebAppHome(){
   const [view,setView]=useState<View>('home');
@@ -138,7 +179,7 @@ export default function WebAppHome(){
     {!query.trim()&&view==='sources'&&registry&&<section>{(['stremio','cloudstream','live','providerCatalogs'] as const).map(group=><div className="sourceGroup" key={group}><h3>{group==='providerCatalogs'?'Provider Catalogs':group[0].toUpperCase()+group.slice(1)}</h3>{registry[group].map(s=>{const on=enabled[s.id]??s.enabledByDefault;return <article key={s.id}><div><b>{s.name}</b><small>{s.note}</small></div><button className={on?'active':''} onClick={()=>toggleRegistry(s.id,s.enabledByDefault)}>{on?'Enabled':'Disabled'}</button></article>})}</div>)}</section>}
     {!query.trim()&&view==='diagnostics'&&<section><button className="primaryBtn" onClick={runDiagnostics}><Activity size={16}/>Run diagnostics</button><div className="diagList">{Object.entries(diag).map(([k,v])=><article key={k}><b>{k}</b><span>{v}</span></article>)}</div></section>}
 
-    {playing&&<div className="playerPanel"><div className="row-head"><div><h3>{playing.title}</h3><small>{playing.subtitle}</small></div><button className="ghostBtn" onClick={()=>setPlaying(null)}>Close</button></div>{playing.streamUrl?<video key={playing.streamUrl} controls autoPlay src={playing.streamUrl} onError={handlePlayerError}/>:<p>No browser-playable source available.</p>}{playerError&&<p>{playerError}</p>}{playing.sources&&playing.sources.length>1&&<div className="sourceChips">{playing.sources.map((s,i)=><button className={i===sourceIndex?'active':''} key={s.id} onClick={()=>selectPlayerSource(i)}>{s.provider}</button>)}</div>}</div>}
+    {playing&&<div className="playerPanel"><div className="row-head"><div><h3>{playing.title}</h3><small>{playing.subtitle}</small></div><button className="ghostBtn" onClick={()=>setPlaying(null)}>Close</button></div>{playing.streamUrl?<BrowserPlayerVideo key={playing.streamUrl} url={playing.streamUrl} onFatal={handlePlayerError}/>:<p>No browser-playable source available.</p>}{playerError&&<p>{playerError}</p>}{playing.sources&&playing.sources.length>1&&<div className="sourceChips">{playing.sources.map((s,i)=><button className={i===sourceIndex?'active':''} key={s.id} onClick={()=>selectPlayerSource(i)}>{s.provider}</button>)}</div>}</div>}
     {loading&&<div className="setupNotice"><p>Loading AstraWave…</p></div>}
     </section>
   </main>
