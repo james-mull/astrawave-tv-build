@@ -32,7 +32,12 @@ class GuideRepository(private val combined: CombinedLiveTvRepository = CombinedL
         sources: List<IptvSource>,
         epgOverrides: Map<String, String> = emptyMap(),
     ): GuideSnapshot {
-        val live = combined.load(sources, epgOverrides)
+        val live = combined.load(
+            userSourcesConfig = sources,
+            epgOverrides = epgOverrides,
+            includeEpg = true,
+            expandedPublicInventory = false,
+        )
         val customerSourceNames = sources.filter { it.enabled }.map { it.name }.toSet()
         val directRows = live.groups.map { group ->
             val preferred = group.bestCandidate
