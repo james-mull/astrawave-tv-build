@@ -79,6 +79,18 @@ export default function WebAppHome(){
   async function switchSource(id:string){setActiveSource(id);setLiveData(d=>({...d,activeSource:id,channels:[]}));try{setLiveData(await AstraWaveApi.liveData(id))}catch{setLiveData(d=>({...d,channels:[]}))}}
   function play(item:CatalogItem){setSourceIndex(0);setPlayerError('');const url=item.sources?.[0]?.streamUrl||item.streamUrl;setPlaying({...item,streamUrl:url})}
   function selectPlayerSource(index:number){if(!playing?.sources?.[index])return;setSourceIndex(index);setPlayerError('');setPlaying({...playing,streamUrl:playing.sources[index].streamUrl})}
+  function handlePlayerError(){
+    if(!playing)return;
+    const sources=playing.sources||[];
+    const nextIndex=sourceIndex+1;
+    if(nextIndex<sources.length){
+      setSourceIndex(nextIndex);
+      setPlayerError(`Source ${sourceIndex+1} could not play in this browser. Trying backup ${nextIndex+1} of ${sources.length}…`);
+      setPlaying({...playing,streamUrl:sources[nextIndex].streamUrl});
+      return;
+    }
+    setPlayerError(sources.length>1?'All ranked browser sources failed. Choose a source manually or try the Android/TV app.':'This source could not be played in the browser. Try another source or the Android/TV app.');
+  }
   function toggleRegistry(id:string,defaultValue:boolean){const next={...enabled,[id]:!(enabled[id]??defaultValue)};setEnabled(next);localStorage.setItem('astrawave:registry-enabled',JSON.stringify(next))}
 
   const aiRails=useMemo(()=>{
@@ -126,7 +138,7 @@ export default function WebAppHome(){
     {!query.trim()&&view==='sources'&&registry&&<section>{(['stremio','cloudstream','live','providerCatalogs'] as const).map(group=><div className="sourceGroup" key={group}><h3>{group==='providerCatalogs'?'Provider Catalogs':group[0].toUpperCase()+group.slice(1)}</h3>{registry[group].map(s=>{const on=enabled[s.id]??s.enabledByDefault;return <article key={s.id}><div><b>{s.name}</b><small>{s.note}</small></div><button className={on?'active':''} onClick={()=>toggleRegistry(s.id,s.enabledByDefault)}>{on?'Enabled':'Disabled'}</button></article>})}</div>)}</section>}
     {!query.trim()&&view==='diagnostics'&&<section><button className="primaryBtn" onClick={runDiagnostics}><Activity size={16}/>Run diagnostics</button><div className="diagList">{Object.entries(diag).map(([k,v])=><article key={k}><b>{k}</b><span>{v}</span></article>)}</div></section>}
 
-    {playing&&<div className="playerPanel"><div className="row-head"><div><h3>{playing.title}</h3><small>{playing.subtitle}</small></div><button className="ghostBtn" onClick={()=>setPlaying(null)}>Close</button></div>{playing.streamUrl?<video key={playing.streamUrl} controls autoPlay src={playing.streamUrl} onError={()=>setPlayerError('This source could not be played in the browser.')}/>:<p>No browser-playable source available.</p>}{playerError&&<p>{playerError}</p>}{playing.sources&&playing.sources.length>1&&<div className="sourceChips">{playing.sources.map((s,i)=><button className={i===sourceIndex?'active':''} key={s.id} onClick={()=>selectPlayerSource(i)}>{s.provider}</button>)}</div>}</div>}
+    {playing&&<div className="playerPanel"><div className="row-head"><div><h3>{playing.title}</h3><small>{playing.subtitle}</small></div><button className="ghostBtn" onClick={()=>setPlaying(null)}>Close</button></div>{playing.streamUrl?<video key={playing.streamUrl} controls autoPlay src={playing.streamUrl} onError={handlePlayerError}/>:<p>No browser-playable source available.</p>}{playerError&&<p>{playerError}</p>}{playing.sources&&playing.sources.length>1&&<div className="sourceChips">{playing.sources.map((s,i)=><button className={i===sourceIndex?'active':''} key={s.id} onClick={()=>selectPlayerSource(i)}>{s.provider}</button>)}</div>}</div>}
     {loading&&<div className="setupNotice"><p>Loading AstraWave…</p></div>}
     </section>
   </main>
