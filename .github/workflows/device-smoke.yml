@@ -1,0 +1,150 @@
+name: AstraWave Device Smoke QA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astrawave-device-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: ${{ matrix.name }} smoke
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Phone
+            target: google_apis
+            profile: pixel_6
+            api: 35
+            mode: phone
+          - name: Tablet
+            target: google_apis
+            profile: pixel_c
+            api: 35
+            mode: tablet
+          - name: Android-TV
+            target: android-tv
+            profile: tv_1080p
+            api: 35
+            mode: tv
+
+    env:
+      ASTRAWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRAWAVE_FIREBASE_API_KEY }}
+      ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
+      ASTRAWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRAWAVE_FIREBASE_PROJECT_ID }}
+      ASTRAWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRAWAVE_FIREBASE_SENDER_ID }}
+      ASTRAWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRAWAVE_TMDB_BEARER_TOKEN }}
+      ASTRAWAVE_API_BASE_URL: ${{ secrets.ASTRAWAVE_API_BASE_URL }}
+      ASTRAWAVE_PREMIUM_PRODUCT_ID: ${{ secrets.ASTRAWAVE_PREMIUM_PRODUCT_ID }}
+      ASTRAWAVE_GIT_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot emulator and run AstraWave smoke checks
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          cores: 2
+          ram-size: 4096
+          heap-size: 512
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          working-directory: android-app
+          script: |
+            set -euo pipefail
+            gradle --no-daemon --stacktrace :app:assembleDebug
+            APK="app/build/outputs/apk/debug/app-debug.apk"
+            test -s "$APK"
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am force-stop com.astrawave.app
+            adb shell am start -W -n com.astrawave.app/.AstraWaveEntryActivity
+            sleep 8
+
+            assert_alive() {
+              PID="$(adb shell pidof com.astrawave.app | tr -d '\r')"
+              if [[ -z "$PID" ]]; then
+                echo "AstraWave process is not alive" >&2
+                adb logcat -d -v time >&2 || true
+                exit 1
+              fi
+            }
+
+            assert_alive
+            adb shell dumpsys activity activities | grep -q 'com.astrawave.app'
+
+            if [[ '${{ matrix.mode }}' == 'phone' ]]; then
+              adb shell settings put system accelerometer_rotation 0
+              adb shell settings put system user_rotation 0
+              sleep 2
+              assert_alive
+              adb shell settings put system user_rotation 1
+              sleep 3
+              assert_alive
+              adb shell settings put system user_rotation 0
+            elif [[ '${{ matrix.mode }}' == 'tablet' ]]; then
+              adb shell input keyevent KEYCODE_TAB || true
+              adb shell input keyevent KEYCODE_BACK || true
+              sleep 2
+              assert_alive
+            else
+              adb shell input keyevent KEYCODE_DPAD_DOWN
+              adb shell input keyevent KEYCODE_DPAD_RIGHT
+              adb shell input keyevent KEYCODE_DPAD_CENTER
+              sleep 2
+              assert_alive
+              adb shell input keyevent KEYCODE_BACK
+              sleep 2
+              assert_alive
+            fi
+
+            mkdir -p ../device-smoke/${{ matrix.mode }}
+            adb shell uiautomator dump /sdcard/astrawave-window.xml || true
+            adb pull /sdcard/astrawave-window.xml ../device-smoke/${{ matrix.mode }}/window.xml || true
+            adb exec-out screencap -p > ../device-smoke/${{ matrix.mode }}/screen.png || true
+            adb logcat -d -v time > ../device-smoke/${{ matrix.mode }}/logcat.txt || true
+
+            if grep -E 'FATAL EXCEPTION|ANR in com\.astrawave\.app|Process: com\.astrawave\.app' ../device-smoke/${{ matrix.mode }}/logcat.txt; then
+              echo 'Crash/ANR signature found in AstraWave smoke log.' >&2
+              exit 1
+            fi
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astrawave-device-smoke-${{ matrix.mode }}-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: device-smoke/${{ matrix.mode }}/
