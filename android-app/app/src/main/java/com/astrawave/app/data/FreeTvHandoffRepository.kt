@@ -20,7 +20,7 @@ class FreeTvHandoffRepository(
     private val registryUrl: String = DEFAULT_REGISTRY_URL,
 ) {
     fun load(): List<FreeTvHandoff> {
-        val root = JSONObject(SimpleHttp.getText(registryUrl))
+        val root = JSONObject(AstraWaveHttp.getText(registryUrl))
         val channels = root.optJSONArray("channels") ?: return emptyList()
         return buildList {
             for (index in 0 until channels.length()) {
