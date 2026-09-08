@@ -1,0 +1,147 @@
+name: Build AstraWave Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type RELEASE to build a promotable signed AstraWave v1.0 package'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astrawave-production-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  production-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android-app
+    env:
+      ASTRAWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRAWAVE_FIREBASE_API_KEY }}
+      ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
+      ASTRAWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRAWAVE_FIREBASE_PROJECT_ID }}
+      ASTRAWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRAWAVE_FIREBASE_SENDER_ID }}
+      ASTRAWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRAWAVE_TMDB_BEARER_TOKEN }}
+      ASTRAWAVE_API_BASE_URL: ${{ secrets.ASTRAWAVE_API_BASE_URL }}
+      ASTRAWAVE_PREMIUM_PRODUCT_ID: ${{ secrets.ASTRAWAVE_PREMIUM_PRODUCT_ID }}
+      ASTRAWAVE_RELEASE_KEYSTORE_B64: ${{ secrets.ASTRAWAVE_RELEASE_KEYSTORE_B64 }}
+      ASTRAWAVE_RELEASE_STORE_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_STORE_PASSWORD }}
+      ASTRAWAVE_RELEASE_KEY_ALIAS: ${{ secrets.ASTRAWAVE_RELEASE_KEY_ALIAS }}
+      ASTRAWAVE_RELEASE_KEY_PASSWORD: ${{ secrets.ASTRAWAVE_RELEASE_KEY_PASSWORD }}
+      ASTRAWAVE_GIT_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Require explicit production confirmation
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm }}" = "RELEASE"
+          test "${GITHUB_REF_NAME}" = "feature/nuvio-core-rebuild"
+
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Validate v1.0 release identity
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "1.0.0"' android-app/app/build.gradle.kts
+          grep -q 'versionCode = 36' android-app/app/build.gradle.kts
+          test -f docs/ASTRAWAVE_RELEASE_GATE.md
+          test -f docs/ASTRAWAVE_RELEASE_READINESS.md
+
+      - name: Require production signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ASTRAWAVE_RELEASE_KEYSTORE_B64 ASTRAWAVE_RELEASE_STORE_PASSWORD ASTRAWAVE_RELEASE_KEY_ALIAS ASTRAWAVE_RELEASE_KEY_PASSWORD; do
+            value="${!name:-}"
+            if [[ -z "$value" ]]; then
+              echo "Missing required production signing secret: $name" >&2
+              exit 1
+            fi
+          done
+          KEYSTORE_PATH="$RUNNER_TEMP/astrawave-release.jks"
+          printf '%s' "$ASTRAWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          echo "ASTRAWAVE_RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android components
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Compile and test
+        run: gradle --no-daemon --stacktrace :app:compileReleaseKotlin :app:testDebugUnitTest :app:lintRelease
+
+      - name: Free TV registry integrity
+        working-directory: .
+        run: python3 astrawave-free-tv/check_free_tv.py
+
+      - name: Build signed release APK and AAB
+        run: gradle --no-daemon --stacktrace :app:assembleRelease :app:bundleRelease
+
+      - name: Verify signed production artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          AAB="app/build/outputs/bundle/release/app-release.aab"
+          test -s "$APK"
+          test -s "$AAB"
+          test ! -e app/build/outputs/apk/release/app-release-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          jarsigner -verify -strict "$AAB"
+
+      - name: Generate promotable release metadata and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app/build/outputs
+          find . -type f \( -name '*.apk' -o -name '*.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          {
+            echo "version=1.0.0"
+            echo "version_code=36"
+            echo "git_sha=${GITHUB_SHA}"
+            echo "git_ref=${GITHUB_REF}"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "signed=true"
+            echo "promotion_eligible=true"
+            echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } > RELEASE_METADATA.txt
+          sha256sum -c SHA256SUMS.txt
+          cat RELEASE_METADATA.txt
+
+      - name: Upload production release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstraWave-v1.0-production-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            android-app/app/build/outputs/apk/release/app-release.apk
+            android-app/app/build/outputs/bundle/release/app-release.aab
+            android-app/app/build/outputs/SHA256SUMS.txt
+            android-app/app/build/outputs/RELEASE_METADATA.txt
+            android-app/app/build/reports/lint-results-release.html
+            android-app/app/build/reports/lint-results-release.xml
