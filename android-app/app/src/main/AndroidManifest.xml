@@ -21,6 +21,7 @@
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode" />
         <activity android:name=".MovieListDetailActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".TvListDetailActivity" android:exported="false" android:screenOrientation="unspecified" />
+        <activity android:name=".PremiumVodDetailActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".TitleDetailsActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".RebuildMainActivity" android:exported="false" android:screenOrientation="unspecified" />
         <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="unspecified" />
