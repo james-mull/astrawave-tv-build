@@ -7,6 +7,10 @@ function clientId() {
   return process.env.TRAKT_CLIENT_ID?.trim() || '';
 }
 
+function tmdbToken() {
+  return process.env.TMDB_BEARER_TOKEN?.trim() || '';
+}
+
 async function trakt(path: string) {
   const id = clientId();
   if (!id) return { ok: false as const, status: 503, error: 'Trakt is not configured.' };
@@ -25,8 +29,23 @@ async function trakt(path: string) {
   return { ok: true as const, body: await response.json() };
 }
 
-function mapItems(raw: any[], kind: TraktKind) {
-  return raw.slice(0, 30).map((entry: any) => {
+async function tmdbDetails(kind: TraktKind, tmdbId?: string | null) {
+  const token = tmdbToken();
+  if (!token || !tmdbId) return null;
+  const resource = kind === 'movies' ? 'movie' : 'tv';
+  const response = await fetch(`https://api.themoviedb.org/3/${resource}/${encodeURIComponent(tmdbId)}?language=en-US`, {
+    headers: { Authorization: `Bearer ${token}`, accept: 'application/json' },
+    cache: 'force-cache',
+    next: { revalidate: 21600 },
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+const image = (path?: string | null, size = 'w500') => path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
+
+async function mapItems(raw: any[], kind: TraktKind) {
+  const base = raw.slice(0, 30).map((entry: any) => {
     const node = entry.movie || entry.show || entry;
     const ids = node.ids || {};
     return {
@@ -41,6 +60,18 @@ function mapItems(raw: any[], kind: TraktKind) {
       listCount: entry.list_count ?? null,
     };
   }).filter((item: any) => item.id && item.title);
+
+  return Promise.all(base.map(async (item: any) => {
+    const detail = await tmdbDetails(kind, item.tmdbId);
+    return {
+      ...item,
+      title: detail?.title || detail?.name || item.title,
+      year: item.year || Number(String(detail?.release_date || detail?.first_air_date || '').slice(0, 4)) || null,
+      posterUrl: image(detail?.poster_path),
+      backdropUrl: image(detail?.backdrop_path, 'w1280'),
+      overview: detail?.overview || null,
+    };
+  }));
 }
 
 export async function GET(request: NextRequest) {
@@ -54,5 +85,5 @@ export async function GET(request: NextRequest) {
   }
   const result = await trakt(`/${kind}/${mode}?limit=30`);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  return NextResponse.json({ mode, kind, items: mapItems(result.body || [], kind) });
+  return NextResponse.json({ mode, kind, items: await mapItems(result.body || [], kind) });
 }
