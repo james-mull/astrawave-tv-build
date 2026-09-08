@@ -177,9 +177,14 @@ private fun RebuildRoot() {
     }
 
     val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    val isPhone = !isTv && configuration.screenWidthDp < 600
     val useRail = isTv || configuration.screenWidthDp >= 840
-    val primaryDestinations = remember(isTv, activeProfile.kidsMode) {
-        val contract = if (isTv) AstraWaveNavigationContract.tv else AstraWaveNavigationContract.mobileTablet
+    val primaryDestinations = remember(isTv, isPhone, activeProfile.kidsMode) {
+        val contract = when {
+            isTv -> AstraWaveNavigationContract.tv
+            isPhone -> AstraWaveNavigationContract.mobilePrimary
+            else -> AstraWaveNavigationContract.mobileTablet
+        }
         contract.mapNotNull { nav -> RebuildDestination.entries.firstOrNull { it.route == nav.route } }
             .filter { destination ->
                 !activeProfile.kidsMode || destination in setOf(
@@ -291,7 +296,7 @@ private fun RebuildRoot() {
         }
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            if (!useRail) SectionStrip(current, primaryDestinations) { current = it }
+            if (!useRail && !isPhone) SectionStrip(current, primaryDestinations) { current = it }
             when (current) {
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
@@ -386,16 +391,9 @@ private fun RebuildRoot() {
                 )
             }
 
-            if (!useRail && current != RebuildDestination.Profiles) {
+            if (isPhone && current != RebuildDestination.Profiles) {
                 NavigationBar(containerColor = AstraWaveColors.BackgroundRaised) {
-                    val mobileItems = listOf(
-                        RebuildDestination.Home,
-                        RebuildDestination.Movies,
-                        RebuildDestination.Shows,
-                        RebuildDestination.Live,
-                        RebuildDestination.My,
-                    ).filter { !activeProfile.kidsMode || it != RebuildDestination.Live }
-                    mobileItems.forEach { item ->
+                    primaryDestinations.forEach { item ->
                         NavigationBarItem(
                             selected = current == item,
                             onClick = { current = item },
