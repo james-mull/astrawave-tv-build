@@ -7,14 +7,23 @@ import android.media.AudioManager
 import com.astrawave.app.data.AstraWaveFirebase
 import com.astrawave.app.data.CloudDeviceSessionSync
 import com.astrawave.app.data.RemoteCommandInbox
+import com.astrawave.app.data.StremioAddonStore
 import com.google.firebase.auth.FirebaseAuth
+import kotlin.concurrent.thread
 
-/** Starts device presence/remote-command sync whenever an AstraWave user is signed in. */
+/** Starts public-source bootstrap and optional device sync without making Firebase a startup dependency. */
 class AstraWaveApplication : Application() {
     private var session: CloudDeviceSessionSync? = null
 
     override fun onCreate() {
         super.onCreate()
+
+        // Public/reviewed source bootstrap must work even when Firebase is intentionally unconfigured.
+        val appContext = applicationContext
+        thread(name = "astrawave-source-bootstrap", isDaemon = true) {
+            runCatching { StremioAddonStore(appContext).bootstrapDefaults() }
+        }
+
         if (!AstraWaveFirebase.initialize(this)) return
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             session?.stop()
