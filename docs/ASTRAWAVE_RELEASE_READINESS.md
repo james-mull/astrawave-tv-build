@@ -23,11 +23,12 @@ This file is the current go/no-go source of truth for AstraWave v1.0. Do not tag
 - Web playback supports native HLS where available and HLS.js fallback elsewhere.
 - Browser-only playback failure does not globally mark a backend source dead.
 - Android release metadata is versionName 1.0.0 and versionCode 36.
-- The final-version Android Build #631 completed successfully.
-- The final-version Release Candidate #370 completed successfully through compiler preflight, unit tests, Free TV integrity, debug/release lint, debug APK, release APK/AAB, checksum generation and artifact upload.
+- Final-version Android builds and release-candidate workflows are green through compiler preflight, unit tests, Free TV integrity, debug/release lint, APK/AAB generation, checksum generation and artifact upload.
 - The latest inspected v1.0 RC artifact contains APK, AAB, lint reports, SHA256SUMS.txt and RELEASE_METADATA.txt.
-- A dedicated manual-only production release workflow now exists and hard-fails unless all release-signing secrets are supplied and both APK/AAB signature checks succeed.
+- A dedicated manual-only production release workflow hard-fails unless all release-signing secrets are supplied and both APK/AAB signature checks succeed.
 - Navigation contract regression tests pin the phone, tablet and TV destination contracts to prevent late navigation regressions.
+- `docs/THIRD_PARTY_NOTICES.md` documents the principal release notices and GPL source obligation.
+- The production release workflow requires `docs/THIRD_PARTY_NOTICES.md`, verifies the pinned Nuvio GPL-3.0 baseline, requires `AstraWave-TV-source.zip`, and includes those materials in the production package.
 
 ## Release blockers
 
@@ -98,10 +99,6 @@ TV / Fire TV additionally require visible focus state, predictable Back behavior
 
 Create exactly one final Vercel checkpoint preview only after production Android signing and final device/playback QA are green. Do not create intermediate checkpoint previews.
 
-### 4. Final distribution notices still require release-package confirmation
-
-Before publication, verify the release bundle includes every required third-party notice/source-distribution item, including Nuvio/GPL obligations applicable to the distributed derivative and any other required attribution or source notices.
-
 ## Release decision rule
 
 AstraWave v1.0 is RELEASE READY only when all of the following are true at the same time:
@@ -115,6 +112,6 @@ AstraWave v1.0 is RELEASE READY only when all of the following are true at the s
 7. APK and AAB signatures validate successfully.
 8. Device/playback QA matrix has no critical blocker.
 9. Final Vercel checkpoint passes web QA.
-10. Required notices / licensing obligations are confirmed in the release package.
+10. Required notices / licensing obligations are included in the production release package.
 
 Until then, status remains NOT READY TO PUBLISH.
