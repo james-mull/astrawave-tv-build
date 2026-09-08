@@ -5,8 +5,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.astrawave.app.data.DynamicCollectionRepository
 import com.astrawave.app.data.HouseholdProfileStore
+import com.astrawave.app.data.UltraMaxCatalogRegistry
 
-/** TV Shows entry point; kids profiles receive the restricted Kids Mode discovery surface. */
+/** TV Shows entry point; kids profiles keep the restricted surface. */
 @Composable
 fun TvListsScreen(profileId: String = "default") {
     val context = LocalContext.current
@@ -15,6 +16,6 @@ fun TvListsScreen(profileId: String = "default") {
     if (isKids) {
         KidsDiscoveryScreen(profileId = profileId, media = DynamicCollectionRepository.Media.SERIES)
     } else {
-        DynamicTvListsScreen(profileId = profileId)
+        UltraMaxMediaHubScreen(profileId = profileId, media = UltraMaxCatalogRegistry.Media.SERIES)
     }
 }
