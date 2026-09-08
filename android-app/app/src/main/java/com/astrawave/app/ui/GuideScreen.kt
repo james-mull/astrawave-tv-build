@@ -298,6 +298,7 @@ private fun PhoneGuideCard(
         if (start == null || end == null) null else Triple(programme, start, end)
     }
     val currentProgram = parsed.firstOrNull { nowMs in it.second until it.third }
+    val previousProgram = parsed.lastOrNull { it.third <= nowMs }
     val nextProgram = parsed.firstOrNull { it.second > nowMs }
 
     Column(
@@ -332,9 +333,8 @@ private fun PhoneGuideCard(
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (row.playableUrls.isNotEmpty() || row.externalUrl != null) AstraWavePrimaryButton("Watch", onPlay)
-            if (currentProgram != null) {
-                val (programme, start, end) = currentProgram
-                if (catchUpCapabilities != null && DvrEligibility.canCatchUp(catchUpCapabilities) && end <= nowMs) {
+            previousProgram?.let { (programme, start, end) ->
+                if (catchUpCapabilities != null && DvrEligibility.canCatchUp(catchUpCapabilities)) {
                     AstraWaveSecondaryButton("Replay", { onCatchUp(programme.title, start, end) })
                 }
             }
