@@ -45,7 +45,6 @@ class AstraWaveFreeTvRepository(
     fun loadExpandedChannels(): List<LiveChannel> {
         val liveTv = LiveTvRepository()
         val primary = loadChannels()
-        val market = sanitizeCountry(marketCountry)
 
         fun load(url: String, source: String, priority: Int): List<LiveChannel> =
             runCatching { liveTv.loadM3u(url = url, source = source, priority = priority) }
@@ -159,7 +158,7 @@ class CombinedLiveTvRepository(
     fun load(
         userSourcesConfig: List<IptvSource>,
         epgOverrides: Map<String, String> = emptyMap(),
-        includeEpg: Boolean = true,
+        includeEpg: Boolean = false,
         expandedPublicInventory: Boolean = false,
     ): CombinedLiveTvSnapshot {
         val free = runCatching {
