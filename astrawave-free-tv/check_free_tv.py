@@ -5,10 +5,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "sources.json"
 OUT = ROOT / "status.json"
+M3U = ROOT / "astrawave-free-tv.m3u"
 ALLOWED = {"official", "public-domain", "creative-commons", "authorized-redistribution"}
 
 with SRC.open() as f:
     data = json.load(f)
+
+# Regression guard: provider webpages classified as external handoffs must never be
+# checked in as Media3-playable M3U entries. This catches the exact class of bug that
+# previously put NASA/city provider pages into the direct playlist.
+checked_in_m3u = M3U.read_text() if M3U.exists() else ""
+external_urls = {
+    ch.get("streamUrl", "").strip()
+    for ch in data.get("channels", [])
+    if ch.get("playbackMode") == "external"
+}
+leaked_external_urls = sorted(url for url in external_urls if url and url in checked_in_m3u)
+if leaked_external_urls:
+    raise SystemExit(
+        "External provider handoff URL(s) found in direct M3U: " + ", ".join(leaked_external_urls)
+    )
 
 results = []
 for ch in data.get("channels", []):
@@ -55,6 +71,9 @@ handoffs = [
     and ch.get("rightsEvidenceUrl")
 ]
 
+if not handoffs:
+    raise SystemExit("Free TV registry has no approved external handoffs")
+
 OUT.write_text(json.dumps({
     "checkedAt": int(time.time()),
     "results": results,
@@ -69,7 +88,7 @@ for ch in playlist:
     tvg = ch.get("tvgId", "")
     m3u.append(f'#EXTINF:-1 tvg-id="{tvg}" tvg-logo="{logo}" group-title="{group}",{ch["name"]}')
     m3u.append(ch["streamUrl"])
-(ROOT / "astrawave-free-tv.m3u").write_text("\n".join(m3u) + "\n")
+M3U.write_text("\n".join(m3u) + "\n")
 
 print(f"Healthy authorized direct channels: {len(playlist)}")
 print(f"Approved official handoffs: {len(handoffs)}")
