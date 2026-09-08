@@ -8,6 +8,8 @@ on:
     paths:
       - '.github/workflows/device-smoke.yml'
       - '.github/scripts/device-smoke.sh'
+      - 'android-app/app/src/main/**'
+      - 'android-app/app/build.gradle.kts'
 
 permissions:
   contents: read
