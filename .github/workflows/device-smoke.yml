@@ -35,9 +35,9 @@ jobs:
             api: 35
             mode: tablet
           - name: Android-TV
-            target: android-tv
+            target: google_apis
             profile: tv_1080p
-            api: 34
+            api: 35
             mode: tv
 
     env:
@@ -89,9 +89,8 @@ jobs:
           script: |
             set -eu
             gradle --no-daemon --stacktrace :app:assembleDebug
-            APK="app/build/outputs/apk/debug/app-debug.apk"
-            test -s "$APK"
-            adb install -r "$APK"
+            test -s app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb logcat -c
             adb shell am force-stop com.astrawave.app
             adb shell am start -W -n com.astrawave.app/.AstraWaveEntryActivity
