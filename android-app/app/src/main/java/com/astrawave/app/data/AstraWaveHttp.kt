@@ -17,8 +17,8 @@ import java.util.zip.GZIPInputStream
  * no longer makes an already-loaded session appear empty.
  */
 object AstraWaveHttp {
-    private const val CONNECT_TIMEOUT_MS = 7_000
-    private const val READ_TIMEOUT_MS = 15_000
+    private const val CONNECT_TIMEOUT_MS = 5_000
+    private const val READ_TIMEOUT_MS = 10_000
     private const val MAX_BYTES = 32 * 1024 * 1024
     private const val FRESH_TTL_MS = 15 * 60 * 1000L
     private const val STALE_FALLBACK_TTL_MS = 6 * 60 * 60 * 1000L
