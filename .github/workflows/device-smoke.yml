@@ -2,6 +2,11 @@ name: AstraWave Device Smoke QA
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/device-smoke.yml'
 
 permissions:
   contents: read
