@@ -48,7 +48,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
 
-      - name: Validate v1.0 release identity
+      - name: Validate v1.0 release identity and notices
         working-directory: .
         shell: bash
         run: |
@@ -57,6 +57,10 @@ jobs:
           grep -q 'versionCode = 36' android-app/app/build.gradle.kts
           test -f docs/ASTRAWAVE_RELEASE_GATE.md
           test -f docs/ASTRAWAVE_RELEASE_READINESS.md
+          test -f docs/THIRD_PARTY_NOTICES.md
+          test -s AstraWave-TV-source.zip
+          grep -q '9b09045f7af32073c8073893f7e324f135c8060a' NUVIO_BASELINE.md
+          grep -q 'GPL-3.0' NUVIO_BASELINE.md
 
       - name: Require production signing secrets
         shell: bash
@@ -127,6 +131,8 @@ jobs:
             echo "workflow_run_id=${GITHUB_RUN_ID}"
             echo "signed=true"
             echo "promotion_eligible=true"
+            echo "notices=docs/THIRD_PARTY_NOTICES.md"
+            echo "covered_source=AstraWave-TV-source.zip"
             echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } > RELEASE_METADATA.txt
           sha256sum -c SHA256SUMS.txt
@@ -145,3 +151,6 @@ jobs:
             android-app/app/build/outputs/RELEASE_METADATA.txt
             android-app/app/build/reports/lint-results-release.html
             android-app/app/build/reports/lint-results-release.xml
+            docs/THIRD_PARTY_NOTICES.md
+            NUVIO_BASELINE.md
+            AstraWave-TV-source.zip
