@@ -1,11 +1,8 @@
 package com.astrawave.app.data
 
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.zip.GZIPInputStream
 
 /** Unified live-TV pipeline for AstraWave-authorized feeds and user-provided M3U/Xtream sources. */
 data class LiveChannel(
@@ -33,7 +30,7 @@ data class LiveChannelGroup(
 
 class LiveTvRepository {
     fun loadM3u(url: String, source: String = "M3U", priority: Int = 20): List<LiveChannel> {
-        val text = SimpleHttp.getText(url)
+        val text = AstraWaveHttp.getText(url)
         return M3uParser.parse(text).mapIndexed { index, channel ->
             LiveChannel(
                 id = channel.tvgId?.takeIf { it.isNotBlank() } ?: "$source-$index",
@@ -52,17 +49,8 @@ class LiveTvRepository {
     fun loadXtream(server: String, username: String, password: String): List<LiveChannel> =
         loadM3u(XtreamEndpoints.liveM3u(server, username, password), "Xtream", 15)
 
-    fun loadXmlTv(url: String): List<XmlTvProgramme> {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 12_000
-        connection.readTimeout = 30_000
-        connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "AstraWave/0.3 EPG")
-        connection.inputStream.use { raw ->
-            val input = if (url.endsWith(".gz", ignoreCase = true)) GZIPInputStream(raw) else raw
-            input.use { return XmlTvParser.parse(it) }
-        }
-    }
+    fun loadXmlTv(url: String): List<XmlTvProgramme> =
+        AstraWaveHttp.openDecoded(url).use(XmlTvParser::parse)
 
     fun merge(channelLists: List<List<LiveChannel>>, programmes: List<XmlTvProgramme> = emptyList()): List<LiveChannelGroup> {
         val byTvg = programmes.groupBy { it.channelId }
