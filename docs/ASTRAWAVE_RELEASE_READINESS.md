@@ -22,25 +22,38 @@ This file is the current go/no-go source of truth for AstraWave v1.0. Do not tag
 - Web playback has ranked automatic source failover.
 - Web playback supports native HLS where available and HLS.js fallback elsewhere.
 - Browser-only playback failure does not globally mark a backend source dead.
-- Android release metadata is now versionName 1.0.0 and versionCode 36.
+- Android release metadata is versionName 1.0.0 and versionCode 36.
+- The final-version Android Build #631 completed successfully.
+- The final-version Release Candidate #370 completed successfully through compiler preflight, unit tests, Free TV integrity, debug/release lint, debug APK, release APK/AAB, checksum generation and artifact upload.
+- The latest inspected v1.0 RC artifact contains APK, AAB, lint reports, SHA256SUMS.txt and RELEASE_METADATA.txt.
+- A dedicated manual-only production release workflow now exists and hard-fails unless all release-signing secrets are supplied and both APK/AAB signature checks succeed.
+- Navigation contract regression tests pin the phone, tablet and TV destination contracts to prevent late navigation regressions.
 
 ## Release blockers
 
 ### 1. Production Android signing is not configured
 
-The latest inspected release-candidate metadata reported:
+The latest inspected v1.0 release-candidate metadata reports:
 
 - signed=false
 - promotion_eligible=false
+- APK output: app-release-unsigned.apk
 
-The release workflow already supports secure CI-only signing through these GitHub Actions secrets:
+This is acceptable for a test/QA release candidate, but it is not a publishable production package.
+
+Production promotion must use `.github/workflows/build-production-release.yml`, which requires all of these GitHub Actions secrets:
 
 - ASTRAWAVE_RELEASE_KEYSTORE_B64
 - ASTRAWAVE_RELEASE_STORE_PASSWORD
 - ASTRAWAVE_RELEASE_KEY_ALIAS
 - ASTRAWAVE_RELEASE_KEY_PASSWORD
 
-A production release must not be promoted until those credentials are configured and a new RC reports signed=true and promotion_eligible=true, with APK and AAB signature validation passing.
+The production workflow refuses to continue when any signing secret is absent. It also requires versionName 1.0.0 / versionCode 36, builds the signed APK and AAB, verifies the APK with apksigner, verifies the AAB with jarsigner, verifies SHA-256 checksums, and only then emits metadata with:
+
+- signed=true
+- promotion_eligible=true
+
+Do not use a normal RC artifact for public distribution.
 
 ### 2. Final device / playback QA is still required
 
@@ -83,7 +96,11 @@ TV / Fire TV additionally require visible focus state, predictable Back behavior
 
 ### 3. Final web checkpoint has not been created
 
-Create exactly one final Vercel checkpoint preview only after Android signing and final device/playback QA are green. Do not create intermediate checkpoint previews.
+Create exactly one final Vercel checkpoint preview only after production Android signing and final device/playback QA are green. Do not create intermediate checkpoint previews.
+
+### 4. Final distribution notices still require release-package confirmation
+
+Before publication, verify the release bundle includes every required third-party notice/source-distribution item, including Nuvio/GPL obligations applicable to the distributed derivative and any other required attribution or source notices.
 
 ## Release decision rule
 
@@ -92,10 +109,12 @@ AstraWave v1.0 is RELEASE READY only when all of the following are true at the s
 1. Latest Android build is green.
 2. Latest Release Candidate is green.
 3. Latest web build is green.
-4. RC metadata reports signed=true and promotion_eligible=true.
-5. APK and AAB signatures validate successfully.
-6. Device/playback QA matrix has no critical blocker.
-7. Final Vercel checkpoint passes web QA.
-8. Required notices / licensing obligations are included in the release package.
+4. Navigation regression tests are green.
+5. Production Release workflow completes successfully.
+6. Production metadata reports signed=true and promotion_eligible=true.
+7. APK and AAB signatures validate successfully.
+8. Device/playback QA matrix has no critical blocker.
+9. Final Vercel checkpoint passes web QA.
+10. Required notices / licensing obligations are confirmed in the release package.
 
 Until then, status remains NOT READY TO PUBLISH.
