@@ -9,9 +9,9 @@ import java.time.format.DateTimeFormatter
  * Sports command-center projection. Schedule metadata is kept separate from
  * broadcaster metadata so AstraWave never invents a playable source.
  *
- * AstraWave prefers the server-fed Sports Channel Cloud so TV, phone and web share
- * the same event/channel mapping. If the backend is unavailable, the existing local
- * TheSportsDB + combined Live TV resolver remains the automatic fallback.
+ * Initial Sports loading deliberately avoids EPG and stream-health probes. Events and
+ * broadcaster matches render first; SourceFusion validates the small matched candidate set
+ * only when the user presses Watch.
  */
 enum class SportsAvailabilityReason {
     READY,
@@ -63,12 +63,11 @@ class SportsGuideRepository(
             .filter { cloud -> sport.isNullOrBlank() || cloud.sport.equals(sport, ignoreCase = true) }
         if (cloudEvents.isNotEmpty()) return cloudSnapshot(dateText, cloudEvents, addonSportsChannelNames)
 
-        val live = combinedLiveTv.load(sources)
-        val healthCache = mutableMapOf<String, Boolean>()
-
-        fun reachable(url: String): Boolean = healthCache.getOrPut(url) {
-            runCatching { StreamHealthChecker.check(url).reachable }.getOrDefault(false)
-        }
+        val live = combinedLiveTv.load(
+            userSourcesConfig = sources,
+            includeEpg = false,
+            expandedPublicInventory = false,
+        )
 
         val events = sportsDb.eventsForDay(dateText, sport).map { event ->
             val broadcasters = (
@@ -93,8 +92,7 @@ class SportsGuideRepository(
                     startTimeEpochMs = 0L,
                     broadcasterNames = broadcasters,
                 )
-                val matched = resolver.resolve(guideEvent, live.groups)
-                matched.copy(candidates = matched.candidates.filter { reachable(it.streamUrl) })
+                resolver.resolve(guideEvent, live.groups)
             }
 
             val addonMatches = if (broadcasters.isEmpty()) emptyList() else addonSportsChannelNames.filter { addonName ->
@@ -104,8 +102,7 @@ class SportsGuideRepository(
             val availability = when {
                 resolution?.best != null -> SportsAvailabilityReason.READY
                 broadcasters.isEmpty() -> SportsAvailabilityReason.NO_BROADCAST_METADATA
-                resolution == null -> SportsAvailabilityReason.NO_CHANNEL_MATCH
-                resolution.candidates.isEmpty() -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+                resolution == null || resolution.candidates.isEmpty() -> SportsAvailabilityReason.NO_CHANNEL_MATCH
                 else -> SportsAvailabilityReason.NO_CHANNEL_MATCH
             }
             SportsGuideItem(event, broadcasters, resolution, addonMatches, availabilityReason = availability)
