@@ -20,7 +20,7 @@ class StremioHttpGateway(
 
     override fun loadManifest(manifestUrl: String): StremioAddonManifest {
         val normalizedManifestUrl = normalizeManifestUrl(manifestUrl)
-        val root = JSONObject(SimpleHttp.getText(normalizedManifestUrl))
+        val root = JSONObject(AstraWaveHttp.getText(normalizedManifestUrl))
         val baseUrl = normalizedManifestUrl.substringBeforeLast("/manifest.json").trimEnd('/')
 
         return StremioAddonManifest(
@@ -42,18 +42,18 @@ class StremioHttpGateway(
     ): List<StremioMetaItem> {
         val extras = if (extra.isEmpty()) "" else "/${extra.entries.joinToString("&") { "${encode(it.key)}=${encode(it.value)}" }}"
         val url = "${addon.manifest.baseUrl}/catalog/${encodePath(catalog.type)}/${encodePath(catalog.id)}$extras.json"
-        return parseMetaArray(JSONObject(SimpleHttp.getText(url)).optJSONArray("metas"))
+        return parseMetaArray(JSONObject(AstraWaveHttp.getText(url)).optJSONArray("metas"))
     }
 
     override fun loadMeta(addon: InstalledAddon, type: String, id: String): StremioMetaItem? {
         val url = "${addon.manifest.baseUrl}/meta/${encodePath(type)}/${encodePath(id)}.json"
-        val obj = JSONObject(SimpleHttp.getText(url)).optJSONObject("meta") ?: return null
+        val obj = JSONObject(AstraWaveHttp.getText(url)).optJSONObject("meta") ?: return null
         return parseMeta(obj)
     }
 
     override fun loadStreams(addon: InstalledAddon, type: String, id: String): List<StremioStreamCandidate> {
         val url = "${addon.manifest.baseUrl}/stream/${encodePath(type)}/${encodePath(id)}.json"
-        val streams = JSONObject(SimpleHttp.getText(url)).optJSONArray("streams") ?: return emptyList()
+        val streams = JSONObject(AstraWaveHttp.getText(url)).optJSONArray("streams") ?: return emptyList()
         return buildList {
             for (index in 0 until streams.length()) {
                 val obj = streams.optJSONObject(index) ?: continue
@@ -75,7 +75,7 @@ class StremioHttpGateway(
 
     override fun loadSubtitles(addon: InstalledAddon, type: String, id: String): List<StremioSubtitleCandidate> {
         val url = "${addon.manifest.baseUrl}/subtitles/${encodePath(type)}/${encodePath(id)}.json"
-        val subtitles = JSONObject(SimpleHttp.getText(url)).optJSONArray("subtitles") ?: return emptyList()
+        val subtitles = JSONObject(AstraWaveHttp.getText(url)).optJSONArray("subtitles") ?: return emptyList()
         return buildList {
             for (index in 0 until subtitles.length()) {
                 val obj = subtitles.optJSONObject(index) ?: continue
