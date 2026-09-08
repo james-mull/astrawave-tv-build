@@ -1,7 +1,4 @@
 #EXTM3U
-#EXTINF:-1 tvg-id="OneAlbuquerqueMedia.us" tvg-logo="" group-title="Local Government",One Albuquerque Media
-https://www.cabq.gov/artsculture/govtv
-#EXTINF:-1 tvg-id="ScottsdaleVideoNetwork.us" tvg-logo="" group-title="Local Government",Scottsdale Video Network
-https://www.scottsdaleaz.gov/scottsdale-video-network/live-stream
-#EXTINF:-1 tvg-id="NASALive.us" tvg-logo="" group-title="Science & Public",NASA Live / NASA+
-https://www.nasa.gov/live/
+# AstraWave-owned direct stream registry intentionally contains no webpage handoffs.
+# Official provider pages live in sources.json with playbackMode=external.
+# Direct public channels are supplied by the reviewed IPTV.org/Nexus inventories.
