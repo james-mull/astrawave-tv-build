@@ -6,9 +6,9 @@ import java.util.Locale
 /**
  * AstraWave Free TV client.
  *
- * The public lineup is market-aware: the device country is prioritized first, while
- * U.S. and worldwide/public category sources remain available as fallbacks. This keeps
- * AstraWave useful for a commercial audience without hard-coding Albuquerque or one country.
+ * Startup intentionally loads a small market-aware primary lineup so Live TV can render quickly.
+ * The broader public inventory is available through [loadExpandedChannels] for explicit refresh,
+ * diagnostics, or fallback use instead of blocking every initial Live/Guide/Sports screen load.
  */
 class AstraWaveFreeTvRepository(
     private val marketCountry: String = defaultMarketCountry(),
@@ -19,6 +19,7 @@ class AstraWaveFreeTvRepository(
     private val iptvOrgPlaylistUrls: List<String> = DEFAULT_IPTV_ORG_PLAYLIST_URLS,
     private val worldIptvPlaylistUrl: String = DEFAULT_WORLD_IPTV_PLAYLIST_URL,
 ) {
+    /** Fast startup inventory: market lineup + Nexus US when relevant + AstraWave reviewed list. */
     fun loadChannels(): List<LiveChannel> {
         val liveTv = LiveTvRepository()
         val market = sanitizeCountry(marketCountry)
@@ -34,6 +35,22 @@ class AstraWaveFreeTvRepository(
         )
         val nexus = if (market == "us") load(nexusUsPlaylistUrl, "AstraWave Nexus US", 4) else emptyList()
         val reviewed = load(playlistUrl, "AstraWave Free TV", 5)
+
+        return (marketChannels + nexus + reviewed)
+            .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
+            .distinctBy { "${it.normalizedName}:${it.url}" }
+    }
+
+    /** Broader fallback inventory. Never required for first paint. */
+    fun loadExpandedChannels(): List<LiveChannel> {
+        val liveTv = LiveTvRepository()
+        val primary = loadChannels()
+        val market = sanitizeCountry(marketCountry)
+
+        fun load(url: String, source: String, priority: Int): List<LiveChannel> =
+            runCatching { liveTv.loadM3u(url = url, source = source, priority = priority) }
+                .getOrDefault(emptyList())
+
         val publicBroadcasters = load(publicBroadcasterPlaylistUrl, "AstraWave Public TV", 8)
         val freeTvPublic = load(freeTvPlaylistUrl, "Free-TV Public", 9)
         val iptvOrg = iptvOrgPlaylistUrls.distinct().flatMapIndexed { index, url ->
@@ -41,18 +58,15 @@ class AstraWaveFreeTvRepository(
         }
         val worldIptv = load(worldIptvPlaylistUrl, "World IPTV Verified", 18)
 
-        val canonicalRows = if (nexus.isNotEmpty()) nexus else marketChannels
-        val canonicalByName = canonicalRows.associateBy { it.normalizedName }
+        val canonicalByName = primary.associateBy { it.normalizedName }
         fun canonicalize(channel: LiveChannel): LiveChannel {
             val canonical = canonicalByName[channel.normalizedName] ?: return channel
             val canonicalTvgId = canonical.tvgId?.takeIf(String::isNotBlank) ?: return channel
             return channel.copy(id = canonicalTvgId, tvgId = canonicalTvgId)
         }
 
-        val alternates = (reviewed + publicBroadcasters + freeTvPublic + iptvOrg + worldIptv)
-            .map(::canonicalize)
-
-        return (marketChannels + nexus + alternates)
+        val alternates = (publicBroadcasters + freeTvPublic + iptvOrg + worldIptv).map(::canonicalize)
+        return (primary + alternates)
             .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
             .distinctBy { "${it.normalizedName}:${it.url}" }
     }
@@ -145,23 +159,28 @@ class CombinedLiveTvRepository(
     fun load(
         userSourcesConfig: List<IptvSource>,
         epgOverrides: Map<String, String> = emptyMap(),
+        includeEpg: Boolean = true,
+        expandedPublicInventory: Boolean = false,
     ): CombinedLiveTvSnapshot {
-        val free = runCatching { freeTv.loadChannels() }.getOrDefault(emptyList())
+        val free = runCatching {
+            if (expandedPublicInventory) freeTv.loadExpandedChannels() else freeTv.loadChannels()
+        }.getOrDefault(emptyList())
         val handoffs = runCatching { handoffRepository.load() }.getOrDefault(emptyList())
         val enabled = userSourcesConfig.filter { it.enabled }
         val userChannels = enabled.flatMap { source ->
             runCatching { userSources.loadChannels(source) }.getOrDefault(emptyList())
         }
-        val userProgrammes = enabled.flatMap { source ->
+        val userProgrammes = if (includeEpg) enabled.flatMap { source ->
             runCatching { userSources.loadGuide(source) }.getOrDefault(emptyList())
-        }
-        val programmes = (publicProgrammes + userProgrammes)
-            .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+        } else emptyList()
+        val programmes = if (includeEpg) {
+            (publicProgrammes + userProgrammes).distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+        } else emptyList()
         val baseGroups = liveTv.merge(
             channelLists = listOf(free, userChannels),
             programmes = programmes,
         )
-        val groups = applyEpgOverrides(baseGroups, programmes, epgOverrides)
+        val groups = if (includeEpg) applyEpgOverrides(baseGroups, programmes, epgOverrides) else baseGroups
         return CombinedLiveTvSnapshot(
             groups = groups,
             handoffs = handoffs,
