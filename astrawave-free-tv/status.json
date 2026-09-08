@@ -1,39 +1,235 @@
 {
-  "checkedAt": 1788441925,
+  "checkedAt": 1788896858,
   "results": [
     {
       "id": "one-albuquerque-media",
       "name": "One Albuquerque Media",
+      "playbackMode": "external",
       "rightsStatus": "official",
       "rightsVerified": true,
       "healthy": true,
       "httpStatus": 206,
-      "latencyMs": 378,
+      "latencyMs": 457,
       "error": null,
-      "checkedAt": 1788441925
+      "checkedAt": 1788896844
     },
     {
       "id": "scottsdale-video-network",
       "name": "Scottsdale Video Network",
+      "playbackMode": "external",
       "rightsStatus": "official",
       "rightsVerified": true,
       "healthy": true,
       "httpStatus": 200,
-      "latencyMs": 308,
+      "latencyMs": 1064,
       "error": null,
-      "checkedAt": 1788441925
+      "checkedAt": 1788896845
     },
     {
       "id": "nasa-live",
       "name": "NASA Live / NASA+",
+      "playbackMode": "external",
       "rightsStatus": "official",
       "rightsVerified": true,
       "healthy": true,
       "httpStatus": 200,
-      "latencyMs": 143,
+      "latencyMs": 306,
       "error": null,
-      "checkedAt": 1788441925
+      "checkedAt": 1788896845
+    },
+    {
+      "id": "nfl-channel",
+      "name": "NFL Channel",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 206,
+      "latencyMs": 255,
+      "error": null,
+      "checkedAt": 1788896846
+    },
+    {
+      "id": "fox-sports-tubi",
+      "name": "FOX Sports on Tubi",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 781,
+      "error": null,
+      "checkedAt": 1788896846
+    },
+    {
+      "id": "cbs-sports-hq",
+      "name": "CBS Sports HQ",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 1702,
+      "error": null,
+      "checkedAt": 1788896848
+    },
+    {
+      "id": "cbs-news-247",
+      "name": "CBS News 24/7",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 206,
+      "latencyMs": 430,
+      "error": null,
+      "checkedAt": 1788896849
+    },
+    {
+      "id": "mlb-tubi",
+      "name": "MLB",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 700,
+      "error": null,
+      "checkedAt": 1788896849
+    },
+    {
+      "id": "nhl-tubi",
+      "name": "NHL",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 722,
+      "error": null,
+      "checkedAt": 1788896850
+    },
+    {
+      "id": "pga-tour-tubi",
+      "name": "PGA TOUR",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 803,
+      "error": null,
+      "checkedAt": 1788896851
+    },
+    {
+      "id": "nascar-tubi",
+      "name": "NASCAR",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 811,
+      "error": null,
+      "checkedAt": 1788896852
+    },
+    {
+      "id": "bein-sports-xtra-tubi",
+      "name": "beIN Sports XTRA",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 816,
+      "error": null,
+      "checkedAt": 1788896852
+    },
+    {
+      "id": "fubo-sports-network-tubi",
+      "name": "Fubo Sports Network",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 752,
+      "error": null,
+      "checkedAt": 1788896853
+    },
+    {
+      "id": "stadium-tubi",
+      "name": "Stadium",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 951,
+      "error": null,
+      "checkedAt": 1788896854
+    },
+    {
+      "id": "accdn-tubi",
+      "name": "ACCDN",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 893,
+      "error": null,
+      "checkedAt": 1788896855
+    },
+    {
+      "id": "pac12-insider-tubi",
+      "name": "Pac-12 Insider",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 821,
+      "error": null,
+      "checkedAt": 1788896856
+    },
+    {
+      "id": "dazn-ringside-tubi",
+      "name": "DAZN Ringside",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 729,
+      "error": null,
+      "checkedAt": 1788896857
+    },
+    {
+      "id": "womens-sports-network-tubi",
+      "name": "Women\u2019s Sports Network",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 902,
+      "error": null,
+      "checkedAt": 1788896858
+    },
+    {
+      "id": "motortrend-fast-tubi",
+      "name": "MotorTrend FAST TV",
+      "playbackMode": "external",
+      "rightsStatus": "official",
+      "rightsVerified": true,
+      "healthy": true,
+      "httpStatus": 200,
+      "latencyMs": 687,
+      "error": null,
+      "checkedAt": 1788896858
     }
   ],
-  "healthyChannelCount": 3
+  "healthyDirectChannelCount": 0,
+  "approvedExternalHandoffCount": 19
 }
