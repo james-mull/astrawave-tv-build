@@ -92,6 +92,7 @@ import com.astrawave.app.ui.PersonalMediaScreen
 import com.astrawave.app.ui.PremiumHomeScreen
 import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.TvListsScreen
+import com.astrawave.app.ui.UltraMaxDiscoveryScreen
 import com.astrawave.app.ui.UniversalSearchScreen
 import com.astrawave.app.ui.toLibraryItemRef
 import kotlinx.coroutines.Dispatchers
@@ -361,7 +362,7 @@ private fun RebuildRoot() {
                 RebuildDestination.Audio -> AudioLibraryScreen(profileId = activeProfileId)
                 RebuildDestination.PersonalMedia -> PersonalMediaScreen(profileId = activeProfileId)
                 RebuildDestination.Addons -> StremioAddonScreen(profileId = activeProfileId)
-                RebuildDestination.Discover -> CombinedDiscoverScreen(profileId = activeProfileId)
+                RebuildDestination.Discover -> UltraMaxDiscoveryScreen(profileId = activeProfileId)
                 RebuildDestination.Search -> UniversalSearchScreen(profileId = activeProfileId)
                 RebuildDestination.Profiles -> HouseholdProfilesScreen(
                     activeProfileId = activeProfileId,
