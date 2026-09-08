@@ -3,6 +3,8 @@ import './globals.css';
 import './premium-overrides.css';
 import './app-polish.css';
 import './control-polish.css';
+import './mobile-primary-nav.css';
+import MobilePrimaryNav from './MobilePrimaryNav';
 
 export const metadata: Metadata = {
   title: 'AstraWave — All Your Entertainment. One Place.',
@@ -31,7 +33,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <MobilePrimaryNav />
+      </body>
     </html>
   );
 }
