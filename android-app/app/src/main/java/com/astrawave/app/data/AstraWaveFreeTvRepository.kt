@@ -23,7 +23,6 @@ class AstraWaveFreeTvRepository(
 ) {
     private data class Feed(val url: String, val source: String, val priority: Int)
 
-    /** Fast startup inventory: market lineup + Nexus US when relevant + AstraWave reviewed list. */
     fun loadChannels(): List<LiveChannel> {
         val market = sanitizeCountry(marketCountry)
         val feeds = buildList {
@@ -36,7 +35,6 @@ class AstraWaveFreeTvRepository(
             .distinctBy { "${it.normalizedName}:${it.url}" }
     }
 
-    /** Broader fallback inventory. Never required for first paint. */
     fun loadExpandedChannels(): List<LiveChannel> {
         val primary = loadChannels()
         val feeds = buildList {
@@ -69,7 +67,7 @@ class AstraWaveFreeTvRepository(
                     runCatching { liveTv.loadM3u(feed.url, feed.source, feed.priority) }.getOrDefault(emptyList())
                 }
             }
-            futures.flatMap { future -> runCatching { future.get(22, TimeUnit.SECONDS) }.getOrDefault(emptyList()) }
+            futures.flatMap { future -> runCatching { future.get(12, TimeUnit.SECONDS) }.getOrDefault(emptyList()) }
         } finally {
             pool.shutdownNow()
         }
@@ -155,9 +153,17 @@ class CombinedLiveTvRepository(
     }
 
     private val publicProgrammes: List<XmlTvProgramme> by lazy {
-        publicEpgUrls
-            .flatMap { url -> runCatching { liveTv.loadXmlTv(url) }.getOrDefault(emptyList()) }
-            .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+        if (publicEpgUrls.isEmpty()) emptyList() else {
+            val pool = Executors.newFixedThreadPool(publicEpgUrls.size.coerceAtMost(3))
+            try {
+                publicEpgUrls
+                    .map { url -> pool.submit<List<XmlTvProgramme>> { runCatching { liveTv.loadXmlTv(url) }.getOrDefault(emptyList()) } }
+                    .flatMap { future -> runCatching { future.get(12, TimeUnit.SECONDS) }.getOrDefault(emptyList()) }
+                    .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+            } finally {
+                pool.shutdownNow()
+            }
+        }
     }
 
     fun load(
