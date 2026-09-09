@@ -16,6 +16,10 @@ import java.nio.charset.StandardCharsets
  * Xtream credentials are loaded from IptvSourceStore, where passwords are encrypted with Android
  * Keystore. AstraWave never discovers accounts or ships credentials; only enabled customer sources
  * participate. Stream URLs are kept in memory for playback and are not synced to Firestore.
+ *
+ * Discovery deliberately does not require a stream preflight to succeed. Many Xtream/CDN endpoints
+ * reject Range/health-probe requests while still playing normally in Media3. Candidates are surfaced
+ * immediately and PlayerActivity performs real playback/failover when the user presses Play.
  */
 class XtreamVodSourceResolver(context: Context) {
     private val sourceStore = IptvSourceStore(context.applicationContext)
@@ -52,7 +56,7 @@ class XtreamVodSourceResolver(context: Context) {
                 if (yearScore < 0) continue
                 add(Triple(item, titleScore, yearScore))
             }
-        }.sortedByDescending { (_, title, year) -> title + year }.take(MAX_MATCHES_TO_HEALTH_CHECK)
+        }.sortedByDescending { (_, title, year) -> title + year }.take(MAX_MATCHES)
 
         return matches.mapNotNull { (item, titleScore, yearScore) ->
             val streamId = item.optString("stream_id")
@@ -105,9 +109,8 @@ class XtreamVodSourceResolver(context: Context) {
         return null
     }
 
-    private fun resolved(source: IptvSource, url: String, label: String, matchScore: Int): ResolvedSource? {
-        val health = runCatching { StreamHealthChecker.check(url) }.getOrNull() ?: return null
-        if (!health.reachable) return null
+    private fun resolved(source: IptvSource, url: String, label: String, matchScore: Int): ResolvedSource {
+        val health = runCatching { StreamHealthChecker.check(url) }.getOrNull()
         val quality = inferQuality(label)
         val qualityScore = when (quality) {
             "4K" -> 520
@@ -117,11 +120,12 @@ class XtreamVodSourceResolver(context: Context) {
             "480p" -> 180
             else -> 100
         }
-        val latencyBonus = when {
-            health.latencyMs < 500 -> 90
-            health.latencyMs < 900 -> 70
-            health.latencyMs < 1_500 -> 45
-            health.latencyMs < 2_500 -> 20
+        val latencyBonus = when (val latency = health?.latencyMs) {
+            null -> 0
+            in 0..499 -> 90
+            in 500..899 -> 70
+            in 900..1_499 -> 45
+            in 1_500..2_499 -> 20
             else -> 0
         }
         return ResolvedSource(
@@ -129,14 +133,14 @@ class XtreamVodSourceResolver(context: Context) {
                 url = url,
                 sourceName = source.name,
                 quality = quality,
-                mimeType = health.contentType,
+                mimeType = health?.contentType,
                 direct = true,
                 licenseLabel = "Customer-authorized Xtream source",
                 attribution = source.name,
             ),
-            reachable = true,
-            latencyMs = health.latencyMs,
-            contentType = health.contentType,
+            reachable = health?.reachable == true,
+            latencyMs = health?.latencyMs,
+            contentType = health?.contentType,
             score = 430 + matchScore + qualityScore + latencyBonus - source.priority.coerceAtLeast(0),
         )
     }
@@ -197,7 +201,7 @@ class XtreamVodSourceResolver(context: Context) {
     companion object {
         private const val CACHE_TTL_MS = 10L * 60L * 1000L
         private const val MAX_CACHE_ENTRIES = 24
-        private const val MAX_MATCHES_TO_HEALTH_CHECK = 6
+        private const val MAX_MATCHES = 8
         private const val MAX_SERIES_MATCHES = 3
     }
 }
