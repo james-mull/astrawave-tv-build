@@ -6,9 +6,10 @@ import android.content.Context
  * Converts eligible live/source candidates into a learned, predictive failover order.
  * Only candidates already supplied by an authorized/reviewed connector are considered.
  *
- * Health probes rank candidates; they do not veto playback. Many IPTV/CDN endpoints reject
- * lightweight probe requests while still playing correctly in Media3, so uncertain candidates
- * remain in the ordered failover plan after healthier alternatives.
+ * Historical health ranks candidates; it does not veto playback. Unknown streams are not probed
+ * synchronously on the watch path because many IPTV/CDN endpoints reject lightweight probes while
+ * still playing correctly in Media3. The player receives the ordered candidates immediately and
+ * performs real playback/failover.
  */
 class SourceFusionPlaybackPlanner(context: Context) {
     private val fusion = SourceFusionRepository(context)
@@ -63,7 +64,7 @@ class SourceFusionPlaybackPlanner(context: Context) {
     ) ?: Plan(emptyList(), null, null, 0)
 
     /** Generic route for Guide, Sports and provider-specific adapters. */
-    fun plan(inputs: List<Input>, probeUnknown: Boolean = true): Plan? {
+    fun plan(inputs: List<Input>, probeUnknown: Boolean = false): Plan? {
         if (inputs.isEmpty()) return null
         val now = System.currentTimeMillis()
         val ranked = fusion.rank(
