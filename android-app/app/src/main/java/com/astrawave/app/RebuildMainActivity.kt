@@ -77,19 +77,19 @@ import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.ui.AstraWaveArtwork
 import com.astrawave.app.ui.AstraWaveColors
 import com.astrawave.app.ui.AstraWaveFocusableCard
-import com.astrawave.app.ui.AstraWaveGuideScreen
 import com.astrawave.app.ui.AstraWaveNavigationContract
-import com.astrawave.app.ui.AstraWaveSportsScreen
 import com.astrawave.app.ui.AstraWaveTheme
 import com.astrawave.app.ui.AudioLibraryScreen
 import com.astrawave.app.ui.HouseholdProfilesScreen
 import com.astrawave.app.ui.LibraryActionRow
-import com.astrawave.app.ui.LiveTvHubScreen
 import com.astrawave.app.ui.MovieListsScreen
 import com.astrawave.app.ui.MultiviewScreen
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.PersonalMediaScreen
+import com.astrawave.app.ui.PremiumGuideScreen
 import com.astrawave.app.ui.PremiumHomeScreen
+import com.astrawave.app.ui.PremiumLiveTvScreen
+import com.astrawave.app.ui.PremiumSportsScreen
 import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.TvListsScreen
 import com.astrawave.app.ui.UltraMaxDiscoveryScreen
@@ -114,15 +114,15 @@ class RebuildMainActivity : ComponentActivity() {
 
 private enum class RebuildDestination(val route: String, val label: String, val icon: ImageVector) {
     Home("home", "Home", Icons.Default.Home),
-    Movies("movies", "Movies", Icons.Default.Movie),
-    Shows("tv", "TV", Icons.Default.Tv),
+    Movies("movies", "VOD", Icons.Default.Movie),
+    Shows("tv", "TV Series", Icons.Default.Tv),
     Live("live", "Live TV", Icons.Default.LiveTv),
     Guide("guide", "Guide", Icons.Default.CalendarMonth),
     Sports("sports", "Sports", Icons.Default.SportsFootball),
     Multiview("multiview", "Multiview", Icons.Default.Tv),
     Audio("audio", "Music & Podcasts", Icons.Default.MusicNote),
     PersonalMedia("personal-media", "Personal Media", Icons.Default.Tv),
-    Addons("addons", "Addons", Icons.Default.Explore),
+    Addons("addons", "Content Sources", Icons.Default.Explore),
     Discover("discover", "Discover", Icons.Default.Explore),
     Search("search", "Search", Icons.Default.Search),
     My("my", "My AstraWave", Icons.Default.AccountCircle),
@@ -269,9 +269,9 @@ private fun RebuildRoot() {
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         if (useRail) {
             val railWidth = when {
-                isTv && tvRailExpanded -> 216.dp
-                isTv -> 72.dp
-                else -> 108.dp
+                isTv && tvRailExpanded -> 232.dp
+                isTv -> 68.dp
+                else -> 116.dp
             }
             NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(railWidth)) {
                 Spacer(Modifier.height(14.dp))
@@ -302,23 +302,17 @@ private fun RebuildRoot() {
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
                 RebuildDestination.Shows -> TvListsScreen(profileId = activeProfileId)
-                RebuildDestination.Live -> LiveTvHubScreen(
+                RebuildDestination.Live -> PremiumLiveTvScreen(
                     sources = iptvSources,
                     onSourcesChanged = { iptvSources = it },
-                    multiviewCount = multiviewPanes.size,
-                    onAddToMultiview = ::addToMultiview,
-                    onOpenMultiview = ::openMultiview,
                     profileId = activeProfileId,
                 )
-                RebuildDestination.Guide -> AstraWaveGuideScreen(
+                RebuildDestination.Guide -> PremiumGuideScreen(
                     sources = iptvSources,
                     profileId = activeProfileId,
                 )
-                RebuildDestination.Sports -> AstraWaveSportsScreen(
+                RebuildDestination.Sports -> PremiumSportsScreen(
                     sources = iptvSources,
-                    multiviewCount = multiviewPanes.size,
-                    onAddToMultiview = ::addToMultiview,
-                    onOpenMultiview = ::openMultiview,
                     profileId = activeProfileId,
                 )
                 RebuildDestination.Multiview -> {
