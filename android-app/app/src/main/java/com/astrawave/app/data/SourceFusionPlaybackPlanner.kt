@@ -5,6 +5,10 @@ import android.content.Context
 /**
  * Converts eligible live/source candidates into a learned, predictive failover order.
  * Only candidates already supplied by an authorized/reviewed connector are considered.
+ *
+ * Health probes rank candidates; they do not veto playback. Many IPTV/CDN endpoints reject
+ * lightweight probe requests while still playing correctly in Media3, so uncertain candidates
+ * remain in the ordered failover plan after healthier alternatives.
  */
 class SourceFusionPlaybackPlanner(context: Context) {
     private val fusion = SourceFusionRepository(context)
@@ -26,7 +30,6 @@ class SourceFusionPlaybackPlanner(context: Context) {
         val backupProvider: String? = null,
         val preemptiveFailoverRecommended: Boolean = false,
     ) {
-        /** Alias used by UI callers that want to emphasize failover ordering. */
         val orderedUrls: List<String> get() = urls
     }
 
@@ -74,11 +77,9 @@ class SourceFusionPlaybackPlanner(context: Context) {
                 )
             },
             probeUnknown = probeUnknown,
-        ).mapNotNull { candidate ->
+        ).map { candidate ->
             val samples = fusion.samples(candidate.candidate.sourceKey)
             val latest = samples.lastOrNull()
-            if (latest?.reachable == false || candidate.health.score < MIN_PLAYABLE_SCORE) return@mapNotNull null
-
             val recent = samples.takeLast(5)
             val recentFailures = recent.count { !it.reachable }
             val recentSuccesses = recent.count { it.reachable }
@@ -98,7 +99,12 @@ class SourceFusionPlaybackPlanner(context: Context) {
                 candidate.health.medianLatencyMs > 1_000L -> 3
                 else -> 0
             }
-            val predictiveScore = (candidate.finalScore + trendAdjustment - stalePenalty - latencyPenalty)
+            val preflightPenalty = when {
+                latest?.reachable == false -> 35
+                candidate.health.score < MIN_PLAYABLE_SCORE -> 20
+                else -> 0
+            }
+            val predictiveScore = (candidate.finalScore + trendAdjustment - stalePenalty - latencyPenalty - preflightPenalty)
                 .coerceIn(0, 130)
             val confidence = when {
                 samples.size >= 20 -> 95
