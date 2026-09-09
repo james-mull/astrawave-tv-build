@@ -13,6 +13,7 @@ class AstraWaveNavigationContractTest {
         assertEquals(listOf("home", "live", "sports", "movies", "my"), routes)
         assertEquals(5, routes.size)
         assertEquals(routes.size, routes.distinct().size)
+        assertEquals("VOD", AstraWaveNavigationContract.mobilePrimary.first { it.route == "movies" }.label)
     }
 
     @Test
@@ -32,25 +33,22 @@ class AstraWaveNavigationContractTest {
     }
 
     @Test
-    fun tabletKeepsHighValueDestinationsVisibleWithoutUtilitySprawl() {
+    fun tabletUsesDedicatedTvClientOrderWithoutUtilitySprawl() {
         val routes = AstraWaveNavigationContract.mobileTablet.map { it.route }
-        assertEquals(listOf("home", "live", "sports", "movies"), routes.take(4))
-        assertTrue("tv" in routes)
-        assertTrue("guide" in routes)
-        assertTrue("discover" in routes)
-        assertTrue("search" in routes)
-        assertTrue("my" in routes)
+        assertEquals(listOf("home", "live", "guide", "movies", "tv", "sports", "search", "my"), routes)
+        assertFalse("discover" in routes)
+        assertFalse("multiview" in routes)
+        assertFalse("audio" in routes)
+        assertFalse("personal-media" in routes)
         assertFalse("addons" in routes)
-        assertFalse("settings" in routes)
     }
 
     @Test
-    fun tvRailPrioritizesLiveSportsAndGuideAndRetainsPowerFeatures() {
+    fun tvRailMatchesTvFirstLiveGuideVodSeriesMentalModel() {
         val routes = AstraWaveNavigationContract.tv.map { it.route }
-        assertEquals(listOf("home", "live", "sports", "guide"), routes.take(4))
-        listOf("movies", "tv", "discover", "search", "multiview", "audio", "personal-media", "addons", "my").forEach { route ->
-            assertTrue(route in routes)
-        }
+        assertEquals(listOf("home", "live", "guide", "movies", "tv", "sports", "search", "my"), routes)
+        assertEquals("VOD", AstraWaveNavigationContract.tv.first { it.route == "movies" }.label)
+        assertEquals("TV Series", AstraWaveNavigationContract.tv.first { it.route == "tv" }.label)
         assertEquals(routes.size, routes.distinct().size)
     }
 }
