@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic='force-dynamic';
 
+const COOKIE_NAME='astrawave_rd_access';
 type Candidate={id:string;provider:string;url?:string;quality?:string;codec?:string;hdr?:string;bitrateKbps?:number;latencyMs?:number;uptimePercent?:number;direct?:boolean;licenseLabel?:string};
 
 function safeHttpUrl(value:string){
@@ -34,8 +35,8 @@ async function optimizeOne(accessToken:string,source:Candidate){
 export async function POST(request:NextRequest){
   try{
     const body=await request.json() as {accessToken?:string;sources?:Candidate[]};
-    const accessToken=String(body.accessToken||'').trim();
-    if(!accessToken)return NextResponse.json({error:'Missing access token'},{status:400});
+    const accessToken=String(body.accessToken||request.cookies.get(COOKIE_NAME)?.value||'').trim();
+    if(!accessToken)return NextResponse.json({error:'Real-Debrid is not connected in this session'},{status:401});
     const sources=(body.sources||[]).filter(source=>source&&typeof source==='object').slice(0,8);
     const optimized=await Promise.all(sources.map(source=>optimizeOne(accessToken,source)));
     const seen=new Set<string>();
