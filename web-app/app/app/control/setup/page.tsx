@@ -23,6 +23,7 @@ export default function EasySetupPage(){
   useEffect(()=>firebaseAuth?onAuthStateChanged(firebaseAuth,setUser):undefined,[]);
   useEffect(()=>{setProbeOk(false);setMessage('');setName('');setUrl('');setExtraUrl('');setUsername('');setPassword('')},[kind]);
   const selected=useMemo(()=>options.find(x=>x[0]===kind)!,[kind]);
+  const SelectedIcon=selected[3];
   const canProbe=['stremio','cloudstream','m3u'].includes(kind)&&/^https?:\/\//i.test(url.trim());
 
   async function probe(){
@@ -50,7 +51,7 @@ export default function EasySetupPage(){
 
   return <main className="easySetup"><header><small>ASTRAWAVE EASY CONTENT SETUP</small><h1>Add content without the technical mess.</h1><p>Choose how you already access content, paste the one URL you were given, and AstraWave handles the configuration. Playback still requires sources you are authorized to use.</p></header>
     <section className="choices">{options.map(([id,label,desc,Icon])=><button key={id} className={kind===id?'active':''} onClick={()=>setKind(id)}><Icon/><b>{label}</b><span>{desc}</span></button>)}</section>
-    <section className="wizard"><div className="wizardHead"><selected[3]/><div><small>STEP 1 OF 2</small><h2>{selected[1]}</h2><p>{selected[2]}</p></div></div>
+    <section className="wizard"><div className="wizardHead"><SelectedIcon/><div><small>STEP 1 OF 2</small><h2>{selected[1]}</h2><p>{selected[2]}</p></div></div>
       <div className="fields"><label>Display name <input value={name} onChange={e=>setName(e.target.value)} placeholder={`My ${selected[1]}`}/></label><label>{kind==='stremio'?'Manifest URL':kind==='cloudstream'?'Repository URL':kind==='m3u'?'M3U playlist URL':'Server / provider URL'} <input value={url} onChange={e=>{setUrl(e.target.value);setProbeOk(false)}} placeholder={kind==='stremio'?'https://.../manifest.json':kind==='cloudstream'?'https://.../repo.json':'https://...'}/></label>
       {kind==='m3u'&&<label>XMLTV guide URL <input value={extraUrl} onChange={e=>setExtraUrl(e.target.value)} placeholder="Optional"/></label>}
       {kind==='xtream'&&<><label>Username <input value={username} onChange={e=>setUsername(e.target.value)}/></label><label>Password <input type="password" value={password} onChange={e=>setPassword(e.target.value)}/></label></>}
