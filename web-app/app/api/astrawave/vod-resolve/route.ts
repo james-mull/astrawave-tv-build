@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic='force-dynamic';
 
+const RD_COOKIE='astrawave_rd_access';
 type ManifestInput={name?:string;url:string};
 type ResolveBody={kind?:'movie'|'series'|'episode';tmdbId?:string;imdbId?:string;season?:number;episode?:number;manifests?:ManifestInput[]};
 type SourceCandidate={id:string;provider:string;url:string;quality?:string;codec?:string;hdr?:string;bitrateKbps?:number;direct:boolean;licenseLabel:string};
@@ -51,6 +52,15 @@ function infer(text:string){
   return{quality,codec,hdr,bitrateKbps};
 }
 
+function inferQuality(label:string){
+  if(/2160|4k|uhd/i.test(label))return'2160p';
+  if(/1440/i.test(label))return'1440p';
+  if(/1080|fhd/i.test(label))return'1080p';
+  if(/720|\bhd\b/i.test(label))return'720p';
+  if(/480/i.test(label))return'480p';
+  return undefined;
+}
+
 function streamEndpoint(manifest:URL,type:'movie'|'series',id:string){
   const base=new URL(manifest.toString());
   base.pathname=base.pathname.replace(/\/manifest\.json$/,'')+`/stream/${type}/${id}.json`;
@@ -82,6 +92,21 @@ async function resolveManifest(input:ManifestInput,type:'movie'|'series',stremio
   }
 }
 
+async function debridOptimize(accessToken:string,source:SourceCandidate):Promise<SourceCandidate>{
+  const original=safeRemoteUrl(source.url);if(!original)return source;
+  try{
+    const response=await fetch('https://api.real-debrid.com/rest/1.0/unrestrict/link',{
+      method:'POST',cache:'no-store',signal:AbortSignal.timeout(10000),headers:{Authorization:`Bearer ${accessToken}`,'content-type':'application/x-www-form-urlencoded',accept:'application/json'},
+      body:new URLSearchParams({link:original.toString()}),
+    });
+    if(!response.ok)return source;
+    const body=await response.json() as {download?:string;filename?:string};
+    const optimized=safeRemoteUrl(String(body.download||''));
+    if(!optimized||optimized.toString()===original.toString())return source;
+    return{...source,id:`rd:${source.id}`,provider:`Real-Debrid • ${source.provider}`,url:optimized.toString(),quality:inferQuality(body.filename||'')||source.quality,direct:true,licenseLabel:'User-linked debrid optimization'};
+  }catch{return source}
+}
+
 export async function POST(request:NextRequest){
   try{
     const body=await request.json() as ResolveBody;
@@ -99,7 +124,15 @@ export async function POST(request:NextRequest){
     }
     const settled=await Promise.all(manifests.map(input=>resolveManifest(input,type,stremioId)));
     const seen=new Set<string>();
-    const sources=settled.flatMap(x=>x.sources).filter(source=>{if(seen.has(source.url))return false;seen.add(source.url);return true}).slice(0,80);
-    return NextResponse.json({kind,tmdbId:body.tmdbId||null,imdbId,season:body.season||null,episode:body.episode||null,sources,diagnostics:settled.map(x=>({provider:x.provider,count:x.sources.length,error:x.error})),policy:'Only direct HTTP(S) streams returned by user-enabled Stremio addons are admitted here. Redirects, local/private hosts, torrent/info-hash results and non-direct entries are intentionally excluded.'});
+    let sources=settled.flatMap(x=>x.sources).filter(source=>{if(seen.has(source.url))return false;seen.add(source.url);return true}).slice(0,80);
+    const rdToken=request.cookies.get(RD_COOKIE)?.value?.trim()||'';
+    let debridOptimized=0;
+    if(rdToken&&sources.length){
+      const optimized=await Promise.all(sources.slice(0,8).map(source=>debridOptimize(rdToken,source)));
+      debridOptimized=optimized.filter(source=>source.provider.startsWith('Real-Debrid •')).length;
+      const optimizedById=new Map(optimized.map(source=>[source.id.replace(/^rd:/,''),source]));
+      sources=sources.map(source=>optimizedById.get(source.id)||source);
+    }
+    return NextResponse.json({kind,tmdbId:body.tmdbId||null,imdbId,season:body.season||null,episode:body.episode||null,sources,diagnostics:settled.map(x=>({provider:x.provider,count:x.sources.length,error:x.error})),debridOptimized,policy:'Only direct HTTP(S) streams returned by user-enabled Stremio addons are admitted here. Redirects, local/private hosts, torrent/info-hash results and non-direct entries are excluded. When a same-origin Real-Debrid session exists, AstraWave may optimize only these already-accepted candidates.'});
   }catch(error){console.error('AstraWave VOD resolver error',error);return NextResponse.json({error:'VOD resolution failed'},{status:500})}
 }
