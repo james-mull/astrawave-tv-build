@@ -45,6 +45,33 @@ fun interface SportsBroadcasterProvider {
     fun broadcastersFor(event: SportsEvent): List<String>
 }
 
+internal fun cloudSportsResolution(cloud: BackendSportsChannelCloudRepository.CloudEvent): SportsResolution {
+    val guideEvent = SportsGuideEvent(
+        id = cloud.id,
+        league = cloud.league,
+        homeTeam = cloud.homeTeam.orEmpty(),
+        awayTeam = cloud.awayTeam.orEmpty(),
+        startTimeEpochMs = 0L,
+        broadcasterNames = cloud.broadcasts,
+    )
+    // Sports Channel Cloud already health-ranks channel matches and each match's source candidates.
+    // Flatten without a second local score sort so the first candidate remains the cloud's best
+    // authorized/reviewed stream and PlayerActivity receives backups in the same failover order.
+    val candidates = cloud.channelMatches.flatMapIndexed { matchIndex, match ->
+        match.candidates.mapIndexed { candidateIndex, candidate ->
+            SportsWatchCandidate(
+                eventId = cloud.id,
+                channelName = match.name,
+                source = candidate.provider,
+                streamUrl = candidate.streamUrl,
+                broadcasterMatchScore = match.matchScore,
+                priority = (matchIndex * 1_000) + candidateIndex,
+            )
+        }
+    }.distinctBy { it.streamUrl }
+    return SportsResolution(guideEvent, candidates)
+}
+
 class SportsGuideRepository(
     private val sportsDb: TheSportsDbClient = TheSportsDbClient(),
     private val combinedLiveTv: CombinedLiveTvRepository = CombinedLiveTvRepository(),
@@ -135,29 +162,8 @@ class SportsGuideRepository(
                 status = cloud.status,
                 network = cloud.broadcasts.joinToString(" • ").takeIf(String::isNotBlank),
             )
-            val guideEvent = SportsGuideEvent(
-                id = cloud.id,
-                league = cloud.league,
-                homeTeam = cloud.homeTeam.orEmpty(),
-                awayTeam = cloud.awayTeam.orEmpty(),
-                startTimeEpochMs = 0L,
-                broadcasterNames = cloud.broadcasts,
-            )
-            val candidates = cloud.channelMatches.flatMapIndexed { matchIndex, match ->
-                match.candidates.mapIndexed { candidateIndex, candidate ->
-                    SportsWatchCandidate(
-                        eventId = cloud.id,
-                        channelName = match.name,
-                        source = candidate.provider,
-                        streamUrl = candidate.streamUrl,
-                        broadcasterMatchScore = match.matchScore,
-                        priority = (matchIndex * 1_000) + candidateIndex,
-                    )
-                }
-            }
-                .distinctBy { "${it.streamUrl}:${it.channelName}" }
-                .sortedWith(compareByDescending<SportsWatchCandidate> { it.broadcasterMatchScore }.thenBy { it.priority })
-            val resolution = SportsResolution(guideEvent, candidates)
+            val resolution = cloudSportsResolution(cloud)
+            val candidates = resolution.candidates
             val addonMatches = cloud.broadcasts.flatMap { broadcaster ->
                 addonSportsChannelNames.filter { channelNamesLikelyMatch(it, broadcaster) }
             }.distinct().take(8)
