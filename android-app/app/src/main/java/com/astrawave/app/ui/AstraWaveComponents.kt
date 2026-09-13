@@ -48,12 +48,12 @@ fun AstraWavePageHeader(
     Column(modifier.fillMaxWidth()) {
         Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
         if (!subtitle.isNullOrBlank()) {
-            Spacer(Modifier.height(if (device == AstraWaveDeviceClass.TV) 8.dp else 5.dp))
+            Spacer(Modifier.height(if (device == AstraWaveDeviceClass.TV) 7.dp else 5.dp))
             Text(
                 subtitle,
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.fillMaxWidth(if (device == AstraWaveDeviceClass.TV) 0.72f else 1f),
+                modifier = Modifier.fillMaxWidth(if (device == AstraWaveDeviceClass.TV) 0.68f else 1f),
             )
         }
     }
@@ -132,11 +132,13 @@ fun AstraWaveFocusableCard(
     content: @Composable () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val device = LocalAstraWaveDeviceClass.current
     val sizing = LocalAstraWaveSizing.current
     val elevationTokens = LocalAstraWaveElevation.current
     val motion = LocalAstraWaveMotion.current
+    val focusedScale = if (device == AstraWaveDeviceClass.TV) 1.012f else sizing.focusScale
     val scale by animateFloatAsState(
-        targetValue = if (focused) sizing.focusScale else 1f,
+        targetValue = if (focused) focusedScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-focus-scale",
     )
@@ -163,8 +165,8 @@ fun AstraWaveFocusableCard(
                 elevation = elevation,
                 shape = MaterialTheme.shapes.large,
                 clip = false,
-                ambientColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.52f) else Color.Black,
-                spotColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.62f) else Color.Black,
+                ambientColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.54f) else Color.Black,
+                spotColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.66f) else Color.Black,
             )
             .border(
                 width = if (focused) 2.dp else 1.dp,
@@ -175,7 +177,7 @@ fun AstraWaveFocusableCard(
             .background(surfaceColor)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .padding(if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.TV) 17.dp else 16.dp),
+            .padding(if (device == AstraWaveDeviceClass.TV) 12.dp else 16.dp),
     ) { content() }
 }
 
@@ -216,10 +218,12 @@ fun AstraWavePrimaryButton(
     enabled: Boolean = true,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val device = LocalAstraWaveDeviceClass.current
     val sizing = LocalAstraWaveSizing.current
     val motion = LocalAstraWaveMotion.current
+    val focusedScale = if (device == AstraWaveDeviceClass.TV) 1.012f else sizing.focusScale
     val scale by animateFloatAsState(
-        targetValue = if (focused && enabled) sizing.focusScale else 1f,
+        targetValue = if (focused && enabled) focusedScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-primary-action-focus-scale",
     )
@@ -249,7 +253,10 @@ fun AstraWavePrimaryButton(
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
         shape = MaterialTheme.shapes.medium,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp, vertical = 13.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = if (device == AstraWaveDeviceClass.TV) 18.dp else 22.dp,
+            vertical = if (device == AstraWaveDeviceClass.TV) 10.dp else 13.dp,
+        ),
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
 
@@ -267,10 +274,12 @@ fun AstraWaveSecondaryButton(
     enabled: Boolean = true,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val device = LocalAstraWaveDeviceClass.current
     val sizing = LocalAstraWaveSizing.current
     val motion = LocalAstraWaveMotion.current
+    val focusedScale = if (device == AstraWaveDeviceClass.TV) 1.012f else sizing.focusScale
     val scale by animateFloatAsState(
-        targetValue = if (focused && enabled) sizing.focusScale else 1f,
+        targetValue = if (focused && enabled) focusedScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-secondary-action-focus-scale",
     )
@@ -298,7 +307,10 @@ fun AstraWaveSecondaryButton(
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
         shape = MaterialTheme.shapes.medium,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = if (device == AstraWaveDeviceClass.TV) 17.dp else 20.dp,
+            vertical = if (device == AstraWaveDeviceClass.TV) 9.dp else 12.dp,
+        ),
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
 
