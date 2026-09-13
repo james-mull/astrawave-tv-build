@@ -1,6 +1,7 @@
 package com.astrawave.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.astrawave.app.data.ArtworkRegistry
 
@@ -35,8 +38,9 @@ fun AstraWaveArtwork(
         modifier = modifier
             .aspectRatio(kind.aspectRatio)
             .clip(MaterialTheme.shapes.large)
+            .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.58f), MaterialTheme.shapes.large)
             .background(
-                Brush.verticalGradient(
+                Brush.linearGradient(
                     listOf(AstraWaveColors.SurfaceFocus, AstraWaveColors.BackgroundRaised),
                 ),
             ),
@@ -60,14 +64,41 @@ fun AstraWaveArtwork(
             }
             else -> AstraWaveArtworkFallback(title)
         }
+
+        // A restrained cinematic vignette gives poster/backdrop rows consistent contrast without
+        // baking text into the artwork component or obscuring the image itself.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color.Transparent,
+                            AstraWaveColors.Background.copy(alpha = if (kind == AstraWaveArtworkKind.Poster) 0.34f else 0.22f),
+                        ),
+                    ),
+                ),
+        )
     }
 }
 
 @Composable
 private fun AstraWaveArtworkFallback(title: String) {
-    Text(
-        text = title.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "AW",
-        color = AstraWaveColors.SecondaryText,
-        style = MaterialTheme.typography.headlineMedium,
-    )
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    listOf(AstraWaveColors.AccentSoft.copy(alpha = 0.28f), Color.Transparent),
+                ),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = title.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "AW",
+            color = AstraWaveColors.AccentStrong.copy(alpha = 0.78f),
+            style = MaterialTheme.typography.headlineMedium,
+        )
+    }
 }
