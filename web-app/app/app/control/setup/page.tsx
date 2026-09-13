@@ -17,6 +17,9 @@ const options:[SetupKind,string,string,React.ComponentType<any>][]=[
 ];
 
 function hash(value:string){let h=0;for(let i=0;i<value.length;i++)h=((h<<5)-h)+value.charCodeAt(i)|0;return Math.abs(h)}
+function mirrorStremio(addons:CloudAddon[]){
+  try{const rows=addons.filter(x=>x.kind==='stremio'&&x.enabled&&x.url).map(x=>({name:x.name,url:String(x.url),enabled:true}));localStorage.setItem('astrawave:vod-stremio-manifests',JSON.stringify(rows))}catch{}
+}
 
 export default function EasySetupPage(){
   const [user,setUser]=useState<User|null>(null),[kind,setKind]=useState<SetupKind>('stremio'),[name,setName]=useState(''),[url,setUrl]=useState(''),[extraUrl,setExtraUrl]=useState(''),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[message,setMessage]=useState(''),[probing,setProbing]=useState(false),[probeOk,setProbeOk]=useState(false),[saving,setSaving]=useState(false);
@@ -39,7 +42,7 @@ export default function EasySetupPage(){
       if(kind==='stremio'||kind==='cloudstream'){
         const current=await FirebaseData.getAppConfig(user.uid)||({version:1,addons:[]} as CloudAppConfig);
         const id=`custom-${kind}-${hash(url.trim())}`;const addon:CloudAddon={id,name:name.trim()||(`${kind==='stremio'?'Stremio Addon':'CloudStream Repo'}`),kind,url:url.trim(),enabled:true,reviewed:false,custom:true};
-        const addons=[...(current.addons||[]).filter(x=>x.id!==id),addon];await FirebaseData.saveAppConfig(user.uid,{...current,addons,version:(current.version||0)+1});
+        const addons=[...(current.addons||[]).filter(x=>x.id!==id),addon];await FirebaseData.saveAppConfig(user.uid,{...current,addons,version:(current.version||0)+1});if(kind==='stremio')mirrorStremio(addons);
       }else{
         const type=kind==='m3u'?'M3U':kind==='xtream'?'XTREAM':kind==='plex'?'PLEX':'JELLYFIN';
         const id=`source-${kind}-${hash(url.trim())}`;const config:Record<string,unknown>=kind==='m3u'?{m3uUrl:url.trim(),xmlTvUrl:extraUrl.trim()||null}:kind==='xtream'?{baseUrl:url.trim(),username:username.trim(),password}: {baseUrl:url.trim(),token:password||null};
