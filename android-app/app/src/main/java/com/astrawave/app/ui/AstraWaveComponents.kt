@@ -1,5 +1,6 @@
 package com.astrawave.app.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -52,7 +53,7 @@ fun AstraWavePageHeader(
                 subtitle,
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.fillMaxWidth(if (device == AstraWaveDeviceClass.TV) 0.78f else 1f),
+                modifier = Modifier.fillMaxWidth(if (device == AstraWaveDeviceClass.TV) 0.72f else 1f),
             )
         }
     }
@@ -104,7 +105,7 @@ fun AstraWaveStatePanel(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(AstraWaveColors.SurfaceRaised)
-            .border(1.dp, accent.copy(alpha = 0.16f), MaterialTheme.shapes.large)
+            .border(1.dp, accent.copy(alpha = 0.18f), MaterialTheme.shapes.large)
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -144,21 +145,37 @@ fun AstraWaveFocusableCard(
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-focus-elevation",
     )
+    val borderColor by animateColorAsState(
+        targetValue = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Divider.copy(alpha = 0.48f),
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-focus-border",
+    )
+    val surfaceColor by animateColorAsState(
+        targetValue = if (focused) AstraWaveColors.SurfaceFocus else AstraWaveColors.SurfaceRaised,
+        animationSpec = tween(durationMillis = motion.focusMs),
+        label = "astrawave-focus-surface",
+    )
 
     Box(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(elevation = elevation, shape = MaterialTheme.shapes.large, clip = false)
+            .shadow(
+                elevation = elevation,
+                shape = MaterialTheme.shapes.large,
+                clip = false,
+                ambientColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.52f) else Color.Black,
+                spotColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.62f) else Color.Black,
+            )
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Divider.copy(alpha = 0.55f),
+                color = borderColor,
                 shape = MaterialTheme.shapes.large,
             )
             .clip(MaterialTheme.shapes.large)
-            .background(if (focused) AstraWaveColors.SurfaceFocus else AstraWaveColors.SurfaceRaised)
+            .background(surfaceColor)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .padding(16.dp),
+            .padding(if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.TV) 17.dp else 16.dp),
     ) { content() }
 }
 
@@ -212,6 +229,13 @@ fun AstraWavePrimaryButton(
         enabled = enabled,
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(
+                elevation = if (focused && enabled) 16.dp else 0.dp,
+                shape = MaterialTheme.shapes.medium,
+                clip = false,
+                ambientColor = AstraWaveColors.Accent.copy(alpha = 0.45f),
+                spotColor = AstraWaveColors.Accent.copy(alpha = 0.62f),
+            )
             .border(
                 width = if (focused && enabled) 2.dp else 0.dp,
                 color = AstraWaveColors.FocusRing,
@@ -219,13 +243,13 @@ fun AstraWavePrimaryButton(
             )
             .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.buttonColors(
-            containerColor = AstraWaveColors.Accent,
+            containerColor = if (focused && enabled) AstraWaveColors.AccentStrong else AstraWaveColors.Accent,
             contentColor = AstraWaveColors.PrimaryText,
             disabledContainerColor = AstraWaveColors.SurfaceRaised,
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
         shape = MaterialTheme.shapes.medium,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 13.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp, vertical = 13.dp),
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
 
@@ -256,6 +280,13 @@ fun AstraWaveSecondaryButton(
         enabled = enabled,
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(
+                elevation = if (focused && enabled) 12.dp else 0.dp,
+                shape = MaterialTheme.shapes.medium,
+                clip = false,
+                ambientColor = AstraWaveColors.Accent.copy(alpha = 0.34f),
+                spotColor = AstraWaveColors.Accent.copy(alpha = 0.44f),
+            )
             .border(
                 width = if (focused && enabled) 2.dp else 1.dp,
                 color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.Divider,
@@ -267,7 +298,7 @@ fun AstraWaveSecondaryButton(
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
         shape = MaterialTheme.shapes.medium,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 19.dp, vertical = 12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 12.dp),
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
 
