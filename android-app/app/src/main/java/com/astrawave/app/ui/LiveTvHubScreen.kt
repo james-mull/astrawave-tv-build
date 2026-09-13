@@ -98,6 +98,7 @@ fun LiveTvHubScreen(
     val channelStore = remember { ChannelCustomizationStore(context) }
     val channelProjection = remember { ChannelCustomizationProjection(context) }
     var mode by remember { mutableStateOf(LiveTvMode.CHANNELS) }
+    var providerOrder by remember { mutableStateOf(preferences.providerOrderEnabled()) }
     var filter by remember { mutableStateOf(LiveTvFilter.ALL) }
     var query by remember { mutableStateOf("") }
     var selectedGroup by remember { mutableStateOf<String?>(null) }
@@ -106,23 +107,36 @@ fun LiveTvHubScreen(
     var recentIds by remember { mutableStateOf(preferences.recentIds()) }
     var lastChannel by remember { mutableStateOf(playbackStore.last()) }
     var refreshKey by remember { mutableStateOf(0) }
-    var state by remember(sources, profileId) { mutableStateOf<LiveTvLoadState>(LiveTvLoadState.Loading) }
+    var state by remember(sources, profileId, providerOrder) { mutableStateOf<LiveTvLoadState>(LiveTvLoadState.Loading) }
 
     DisposableEffect(channelStore, profileId) {
         val registration = channelStore.addChangeListener(profileId) { refreshKey += 1 }
         onDispose { registration.close() }
     }
 
-    LaunchedEffect(sources, profileId, refreshKey) {
+    LaunchedEffect(sources, profileId, refreshKey, providerOrder) {
         state = LiveTvLoadState.Loading
         state = try {
             val edits = channelStore.load(profileId)
             val epgOverrides = edits.mapNotNull { edit -> edit.epgIdOverride?.takeIf(String::isNotBlank)?.let { edit.channelId to it } }.toMap()
-            val snapshot = withContext(Dispatchers.IO) { repository.load(sources, epgOverrides) }
-            LiveTvLoadState.Ready(snapshot, channelProjection.live(profileId, snapshot.groups), edits.size, epgOverrides.size)
+            val snapshot = withContext(Dispatchers.IO) { repository.load(sources, epgOverrides, providerOrder = providerOrder) }
+            LiveTvLoadState.Ready(
+                snapshot,
+                channelProjection.live(profileId, snapshot.groups, preserveInputOrder = providerOrder),
+                edits.size,
+                epgOverrides.size,
+            )
         } catch (error: Exception) {
             LiveTvLoadState.Error(error.message ?: "Unable to load Live TV")
         }
+    }
+
+    fun setProviderOrder(enabled: Boolean) {
+        providerOrder = enabled
+        preferences.setProviderOrderEnabled(enabled)
+        selectedGroup = null
+        selectedChannelId = null
+        filter = LiveTvFilter.ALL
     }
 
     fun launchPlayer(channel: LastLiveChannel) {
@@ -176,7 +190,8 @@ fun LiveTvHubScreen(
             Text("ASTRAWAVE LIVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
             Text("Live TV", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
             Text(
-                if (isPhone) "Watch live channels fast. AstraWave picks the healthiest eligible source and keeps backups ready."
+                if (providerOrder) "Provider Order keeps every channel in source order and avoids AstraWave channel consolidation."
+                else if (isPhone) "Watch live channels fast. AstraWave picks the healthiest eligible source and keeps backups ready."
                 else "Fast TV-first browsing with Smart Source Fusion, profile channel maps, catch-up-ready guide data and six-screen Multiview.",
                 color = AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.bodyMedium,
@@ -184,6 +199,8 @@ fun LiveTvHubScreen(
             )
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LiveModeButton("Unified", !providerOrder) { setProviderOrder(false) }
+                LiveModeButton("Provider Order", providerOrder) { setProviderOrder(true) }
                 LiveModeButton("Watch", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
                 if (!isPhone) LiveModeButton("Sources & Editor", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
                 lastChannel?.let { channel -> LiveModeButton("▶ ${channel.name}", false, ::resumeLast) }
@@ -195,7 +212,7 @@ fun LiveTvHubScreen(
         when (mode) {
             LiveTvMode.SOURCES -> MyIptvScreen(sources = sources, onSourcesChanged = onSourcesChanged)
             LiveTvMode.CHANNELS -> when (val current = state) {
-                LiveTvLoadState.Loading -> Box(Modifier.fillMaxSize().padding(24.dp)) { AstraWaveLoadingState("Getting Live TV ready", "Loading channels, guide mappings and healthy source candidates.") }
+                LiveTvLoadState.Loading -> Box(Modifier.fillMaxSize().padding(24.dp)) { AstraWaveLoadingState("Getting Live TV ready", if (providerOrder) "Loading original provider channel order." else "Loading channels, guide mappings and healthy source candidates.") }
                 is LiveTvLoadState.Error -> Box(Modifier.fillMaxSize().padding(24.dp)) { AstraWaveErrorState("Live TV unavailable", current.message, retryLabel = "Refresh", onRetry = { refreshKey += 1 }) }
                 is LiveTvLoadState.Ready -> {
                     val normalizedQuery = query.trim().lowercase()
@@ -235,7 +252,7 @@ fun LiveTvHubScreen(
                     } else {
                         Row(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Column(Modifier.width(205.dp).fillMaxSize().background(AstraWaveColors.BackgroundRaised, MaterialTheme.shapes.large).padding(10.dp)) {
-                                Text("GROUPS", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                                Text(if (providerOrder) "PROVIDER GROUPS" else "GROUPS", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
                                 Spacer(Modifier.height(8.dp))
                                 LiveGroupRow("All Channels", selectedGroup == null && filter == LiveTvFilter.ALL) { selectedGroup = null; filter = LiveTvFilter.ALL }
                                 LiveGroupRow("★ Favorites", filter == LiveTvFilter.FAVORITES) { selectedGroup = null; filter = LiveTvFilter.FAVORITES }
@@ -246,7 +263,7 @@ fun LiveTvHubScreen(
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 Text("${current.presentations.size} channels", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
-                                Text("${current.customizedCount} customized • ${current.epgOverrideCount} EPG maps", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                                Text(if (providerOrder) "Original source ordering" else "${current.customizedCount} customized • ${current.epgOverrideCount} EPG maps", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
                             }
 
                             ChannelListPane(filtered, selected, query, { query = it }, favoriteIds, { favoriteIds = preferences.toggleFavorite(it) }, { selectedChannelId = it })
