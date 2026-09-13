@@ -16,7 +16,9 @@ function safePublicUrl(raw:string){
 
 function looksLikeCloudStreamEntry(value:any){
   if(!value||typeof value!=='object')return false;
-  return Boolean(value.url||value.repoUrl||value.repositoryUrl||value.pluginUrl||value.internalName||value.name||value.id);
+  const name=String(value.name||value.internalName||value.id||'').trim();
+  const location=String(value.url||value.repoUrl||value.repositoryUrl||value.pluginUrl||'').trim();
+  return Boolean(name&&location&&/^https?:\/\//i.test(location));
 }
 
 export async function GET(request:NextRequest){
@@ -39,10 +41,15 @@ export async function GET(request:NextRequest){
       return NextResponse.json({ok:valid,kind,name:json?.name||null,id:json?.id||null,resources:Array.isArray(json?.resources)?json.resources.length:0,catalogs:Array.isArray(json?.catalogs)?json.catalogs.length:0,summary:valid?`${json.name} • ${Array.isArray(json.catalogs)?json.catalogs.length:0} catalogs`:'This does not look like a Stremio manifest'});
     }
     const explicitRows=Array.isArray(json)?json:Array.isArray(json?.plugins)?json.plugins:Array.isArray(json?.repos)?json.repos:null;
-    const hasRecognizedList=Array.isArray(explicitRows)&&explicitRows.some(looksLikeCloudStreamEntry);
-    const hasRepoIdentity=Boolean(typeof json?.name==='string'&&(typeof json?.id==='string'||typeof json?.description==='string'||typeof json?.url==='string'));
-    const valid=hasRecognizedList||hasRepoIdentity;
-    const entries=Array.isArray(explicitRows)?explicitRows.filter(looksLikeCloudStreamEntry).length:0;
-    return NextResponse.json({ok:valid,kind,name:json?.name||json?.id||null,entries,summary:valid?`${json?.name||'CloudStream repository'} • ${entries} recognizable entr${entries===1?'y':'ies'}`:'This JSON does not match a recognizable CloudStream repository structure'});
+    const recognized=Array.isArray(explicitRows)?explicitRows.filter(looksLikeCloudStreamEntry):[];
+    const valid=recognized.length>0;
+    return NextResponse.json({
+      ok:valid,
+      kind,
+      name:typeof json?.name==='string'?json.name:null,
+      entries:recognized.length,
+      summary:valid?`${json?.name||'CloudStream repository'} • ${recognized.length} recognizable entr${recognized.length===1?'y':'ies'}`:'This JSON does not contain a recognizable CloudStream plugin/repository list',
+      policy:'Validation checks repository structure only. Community plugin execution remains separately policy-gated on Android.',
+    });
   }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:'Could not reach source'})}
 }
