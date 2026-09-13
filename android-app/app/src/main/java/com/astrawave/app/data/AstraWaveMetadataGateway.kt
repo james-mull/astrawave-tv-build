@@ -53,14 +53,43 @@ class AstraWaveMetadataGateway(
             }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
         }
 
-        val encoded = URLEncoder.encode(q, StandardCharsets.UTF_8.name())
+        val exact = searchCinemeta(q)
+        if (exact.isNotEmpty()) return exact
+
+        // Large editorial collections are built from human-friendly labels/titles. A literal search
+        // can legitimately miss because of punctuation or filler such as "Part", "Saga", or
+        // "Collection". Try only conservative simplifications before allowing the row to be empty.
+        val simplified = q
+            .replace(Regex("[^A-Za-z0-9 ]+"), " ")
+            .replace(
+                Regex("\\b(part|chapter|saga|universe|collection|in order|the complete|complete)\\b", RegexOption.IGNORE_CASE),
+                " ",
+            )
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        val fallbackQueries = buildList {
+            if (simplified.length >= 3 && !simplified.equals(q, ignoreCase = true)) add(simplified)
+            val words = simplified.split(' ').filter { it.length >= 3 }
+            if (words.size >= 3) add(words.take(3).joinToString(" "))
+            if (words.size >= 2) add(words.take(2).joinToString(" "))
+        }.distinctBy { it.lowercase() }
+
+        return fallbackQueries
+            .asSequence()
+            .map(::searchCinemeta)
+            .firstOrNull { it.isNotEmpty() }
+            .orEmpty()
+    }
+
+    private fun searchCinemeta(query: String): List<Item> {
+        val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
         val movie = runCatching {
             parseCinemeta(JSONObject(SimpleHttp.getText("https://v3-cinemeta.strem.io/catalog/movie/top/search=$encoded.json")))
         }.getOrDefault(emptyList())
         val series = runCatching {
             parseCinemeta(JSONObject(SimpleHttp.getText("https://v3-cinemeta.strem.io/catalog/series/top/search=$encoded.json")))
         }.getOrDefault(emptyList())
-
         return (movie + series).distinctBy { "${it.type}:${it.id}" }
     }
 
