@@ -10,6 +10,10 @@ import android.content.Context
  * synchronously on the watch path because many IPTV/CDN endpoints reject lightweight probes while
  * still playing correctly in Media3. The player receives the ordered candidates immediately and
  * performs real playback/failover.
+ *
+ * Sports Channel Cloud is authoritative for sports ordering because it already combines source
+ * health, broadcaster matching and trust. Sports inputs therefore keep their incoming order unless
+ * AstraWave has meaningful local failure evidence for a candidate.
  */
 class SourceFusionPlaybackPlanner(context: Context) {
     private val fusion = SourceFusionRepository(context)
@@ -41,6 +45,15 @@ class SourceFusionPlaybackPlanner(context: Context) {
         val recentFailures: Int,
     )
 
+    private data class AuthoritativeRank(
+        val input: Input,
+        val originalIndex: Int,
+        val health: com.astrawave.app.core.SourceHealthScore,
+        val recentFailures: Int,
+        val confidence: Int,
+        val demoted: Boolean,
+    )
+
     fun live(group: LiveChannelGroup): Plan = plan(
         group.candidates.map { candidate ->
             Input(
@@ -66,9 +79,14 @@ class SourceFusionPlaybackPlanner(context: Context) {
     /** Generic route for Guide, Sports and provider-specific adapters. */
     fun plan(inputs: List<Input>, probeUnknown: Boolean = false): Plan? {
         if (inputs.isEmpty()) return null
+        val distinctInputs = inputs.distinctBy { it.url }
+        if (distinctInputs.all { it.sourceKey.startsWith("sports:") }) {
+            return authoritativeSportsPlan(distinctInputs)
+        }
+
         val now = System.currentTimeMillis()
         val ranked = fusion.rank(
-            inputs.distinctBy { it.url }.map { input ->
+            distinctInputs.map { input ->
                 SourceFusionRepository.Candidate(
                     sourceKey = input.sourceKey,
                     url = input.url,
@@ -107,13 +125,7 @@ class SourceFusionPlaybackPlanner(context: Context) {
             }
             val predictiveScore = (candidate.finalScore + trendAdjustment - stalePenalty - latencyPenalty - preflightPenalty)
                 .coerceIn(0, 130)
-            val confidence = when {
-                samples.size >= 20 -> 95
-                samples.size >= 10 -> 85
-                samples.size >= 5 -> 72
-                samples.size >= 2 -> 58
-                else -> 40
-            }
+            val confidence = confidenceFor(samples.size)
             BrainRank(candidate, predictiveScore, confidence, recentFailures)
         }.sortedWith(
             compareByDescending<BrainRank> { it.predictiveScore }
@@ -137,6 +149,49 @@ class SourceFusionPlaybackPlanner(context: Context) {
             backupProvider = backup?.ranked?.candidate?.provider,
             preemptiveFailoverRecommended = preemptiveFailover,
         )
+    }
+
+    private fun authoritativeSportsPlan(inputs: List<Input>): Plan? {
+        if (inputs.isEmpty()) return null
+        val ranked = inputs.mapIndexed { index, input ->
+            val samples = fusion.samples(input.sourceKey)
+            val health = fusion.score(input.sourceKey)
+            val recentFailures = samples.takeLast(5).count { !it.reachable }
+            val demoted = samples.isNotEmpty() && (
+                recentFailures >= 2 || (samples.size >= 3 && health.score < MIN_PLAYABLE_SCORE)
+            )
+            AuthoritativeRank(
+                input = input,
+                originalIndex = index,
+                health = health,
+                recentFailures = recentFailures,
+                confidence = confidenceFor(samples.size),
+                demoted = demoted,
+            )
+        }.sortedWith(
+            compareBy<AuthoritativeRank> { it.demoted }
+                .thenBy { it.originalIndex },
+        )
+
+        val best = ranked.firstOrNull() ?: return null
+        val backup = ranked.getOrNull(1)
+        return Plan(
+            urls = ranked.map { it.input.url },
+            bestProvider = best.input.provider,
+            bestHealthScore = best.health.score,
+            backupCount = (ranked.size - 1).coerceAtLeast(0),
+            predictiveConfidence = best.confidence,
+            backupProvider = backup?.input?.provider,
+            preemptiveFailoverRecommended = best.demoted || best.recentFailures >= 2,
+        )
+    }
+
+    private fun confidenceFor(sampleCount: Int): Int = when {
+        sampleCount >= 20 -> 95
+        sampleCount >= 10 -> 85
+        sampleCount >= 5 -> 72
+        sampleCount >= 2 -> 58
+        else -> 40
     }
 
     companion object {
