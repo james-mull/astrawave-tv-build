@@ -3,6 +3,7 @@ import { firestore } from './firebase';
 
 export type CloudProfile = { displayName?: string; avatarUrl?: string; kidsMode?: boolean };
 export type CloudProgress = { mediaId: string; kind: string; title: string; positionMs: number; durationMs: number; updatedAt?: unknown };
+export type CloudWatchlistItem = { mediaId:string; kind?:string; title?:string; posterUrl?:string|null; updatedAt?:unknown };
 export type CloudAddon = { id:string; name:string; kind:'stremio'|'cloudstream'|'provider-catalog'; url?:string|null; enabled:boolean; reviewed?:boolean; custom?:boolean };
 export type CloudSource = { id:string; name:string; type:'M3U'|'XTREAM'|'XMLTV'|'PUBLIC'|'STALKER'|'JELLYFIN'|'PLEX'|'HDHOMERUN'|'TVHEADEND'|'ENIGMA2'; enabled:boolean; priority?:number; config?:Record<string,unknown> };
 export type CloudAppConfig = { version:number; activeLiveSource?:string; theme?:'dark'|'system'; homeDensity?:'comfortable'|'compact'; autoplayTrailers?:boolean; aiDiscovery?:boolean; preferredLanguage?:string; preferredRegion?:string; addons?:CloudAddon[]; updatedAt?:unknown };
@@ -42,6 +43,7 @@ export const FirebaseData={
   async saveProfile(uid:string,profile:CloudProfile){await setDoc(doc(requireDb(),'profiles',uid),{...profile,updatedAt:serverTimestamp()},{merge:true})},
   async addWatchlist(uid:string,mediaId:string,payload:Record<string,unknown>){await setDoc(doc(requireDb(),'users',uid,'watchlist',mediaId),{...payload,mediaId,updatedAt:serverTimestamp()},{merge:true})},
   async removeWatchlist(uid:string,mediaId:string){await deleteDoc(doc(requireDb(),'users',uid,'watchlist',mediaId))},
+  async listWatchlist(uid:string):Promise<CloudWatchlistItem[]>{const snaps=await getDocs(userCollection(uid,'watchlist'));return snaps.docs.map(x=>({mediaId:x.id,...(x.data() as Omit<CloudWatchlistItem,'mediaId'>)}))},
   async saveProgress(uid:string,progress:CloudProgress){await setDoc(doc(requireDb(),'users',uid,'progress',progress.mediaId),{...progress,updatedAt:serverTimestamp()},{merge:true})},
   async listProgress(uid:string):Promise<CloudProgress[]>{const snaps=await getDocs(userCollection(uid,'progress'));return snaps.docs.map(x=>x.data() as CloudProgress)},
   async listPlaybackDiagnostics(uid:string,profileId:string):Promise<CloudPlaybackDiagnostic[]>{const snaps=await getDocs(profileCollection(uid,profileId,'playbackDiagnostics'));return snaps.docs.map(x=>({id:x.id,...(x.data() as Omit<CloudPlaybackDiagnostic,'id'>)})).sort((a,b)=>b.resolvedAtEpochMs-a.resolvedAtEpochMs)},
