@@ -171,6 +171,7 @@ class CombinedLiveTvRepository(
         epgOverrides: Map<String, String> = emptyMap(),
         includeEpg: Boolean = false,
         expandedPublicInventory: Boolean = false,
+        providerOrder: Boolean = false,
     ): CombinedLiveTvSnapshot {
         val free = runCatching {
             if (expandedPublicInventory) freeTv.loadExpandedChannels() else freeTv.loadChannels()
@@ -186,7 +187,8 @@ class CombinedLiveTvRepository(
         val programmes = if (includeEpg) {
             (publicProgrammes + userProgrammes).distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
         } else emptyList()
-        val baseGroups = liveTv.merge(channelLists = listOf(free, userChannels), programmes = programmes)
+        val orderedChannels = free + userChannels
+        val baseGroups = if (providerOrder) providerGroups(orderedChannels, programmes) else liveTv.merge(channelLists = listOf(free, userChannels), programmes = programmes)
         val groups = if (includeEpg) applyEpgOverrides(baseGroups, programmes, epgOverrides) else baseGroups
         return CombinedLiveTvSnapshot(
             groups = groups,
@@ -196,6 +198,36 @@ class CombinedLiveTvRepository(
             userChannelCount = userChannels.size,
             totalChannelGroups = groups.size + handoffs.size,
         )
+    }
+
+    private fun providerGroups(
+        channels: List<LiveChannel>,
+        programmes: List<XmlTvProgramme>,
+    ): List<LiveChannelGroup> {
+        val byTvg = programmes.groupBy { it.channelId }
+        val now = System.currentTimeMillis()
+        return channels.filter { it.url.isNotBlank() }.mapIndexed { index, channel ->
+            val schedule = channel.tvgId?.takeIf(String::isNotBlank)?.let { byTvg[it] }.orEmpty()
+                .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+                .sortedBy { LiveTvRepository.parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
+            val current = schedule.firstOrNull { programme ->
+                val start = LiveTvRepository.parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                val stop = LiveTvRepository.parseXmlTvEpochMs(programme.stop) ?: return@firstOrNull false
+                now in start until stop
+            }
+            val next = schedule.firstOrNull { programme ->
+                val start = LiveTvRepository.parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
+                start > now && programme != current
+            }
+            LiveChannelGroup(
+                canonicalName = "provider:${channel.source.lowercase(Locale.US)}:${channel.id}:$index",
+                displayName = channel.name,
+                candidates = listOf(channel),
+                currentProgram = current,
+                nextProgram = next,
+                schedule = schedule,
+            )
+        }
     }
 
     private fun applyEpgOverrides(
