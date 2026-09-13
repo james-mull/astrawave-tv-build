@@ -32,10 +32,17 @@ class LiveTvPreferenceStore(context: Context) {
         return updated
     }
 
+    fun providerOrderEnabled(): Boolean = prefs.getBoolean(KEY_PROVIDER_ORDER, false)
+
+    fun setProviderOrderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PROVIDER_ORDER, enabled).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "astrawave_live_tv_preferences"
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_RECENTS = "recents"
+        private const val KEY_PROVIDER_ORDER = "provider_order"
         private const val MAX_RECENTS = 30
     }
 }
