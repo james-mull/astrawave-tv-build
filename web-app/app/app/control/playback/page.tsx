@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { Headphones, Languages, Subtitles, Tv2 } from 'lucide-react';
-import { firebaseAuth } from '../../../../../lib/firebase';
-import { CloudAppConfig, FirebaseData } from '../../../../../lib/firebase-data';
+import { firebaseAuth } from '../../../../lib/firebase';
+import { CloudAppConfig, FirebaseData } from '../../../../lib/firebase-data';
 
 const languageOptions=[['en','English'],['es','Spanish'],['fr','French'],['de','German'],['it','Italian'],['pt','Portuguese'],['ja','Japanese'],['ko','Korean']];
 
