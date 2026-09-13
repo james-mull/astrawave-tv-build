@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './premium-overrides.css';
 import './app-polish.css';
+import './ui-premium-v2.css';
 import './control-polish.css';
 import './mobile-primary-nav.css';
 import MobilePrimaryNav from './MobilePrimaryNav';
