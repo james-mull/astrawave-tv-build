@@ -24,9 +24,13 @@ class ChannelCustomizationProjection(context: Context) {
     fun guide(profileId: String, snapshot: GuideSnapshot): GuideSnapshot =
         snapshot.copy(rows = store.visible(profileId, snapshot.rows))
 
-    fun live(profileId: String, groups: List<LiveChannelGroup>): List<LivePresentation> {
+    fun live(
+        profileId: String,
+        groups: List<LiveChannelGroup>,
+        preserveInputOrder: Boolean = false,
+    ): List<LivePresentation> {
         val edits = store.load(profileId).associateBy { it.channelId }
-        return groups.mapNotNull { group ->
+        val projected = groups.mapNotNull { group ->
             val edit = edits[group.canonicalName]
             if (edit?.hidden == true) return@mapNotNull null
             val best = group.bestCandidate
@@ -40,7 +44,9 @@ class ChannelCustomizationProjection(context: Context) {
                 epgIdOverride = edit?.epgIdOverride,
                 customized = edit != null,
             )
-        }.sortedWith(
+        }
+        if (preserveInputOrder) return projected
+        return projected.sortedWith(
             compareBy<LivePresentation> { presentation ->
                 edits[presentation.channelId]?.sortOrder?.takeIf { it != 0 } ?: Int.MAX_VALUE
             }.thenBy { it.channelNumber ?: Int.MAX_VALUE }
