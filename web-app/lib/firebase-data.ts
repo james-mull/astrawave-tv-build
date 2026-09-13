@@ -6,7 +6,7 @@ export type CloudProgress = { mediaId: string; kind: string; title: string; posi
 export type CloudWatchlistItem = { mediaId:string; kind?:string; title?:string; posterUrl?:string|null; updatedAt?:unknown };
 export type CloudAddon = { id:string; name:string; kind:'stremio'|'cloudstream'|'provider-catalog'; url?:string|null; enabled:boolean; reviewed?:boolean; custom?:boolean };
 export type CloudSource = { id:string; name:string; type:'M3U'|'XTREAM'|'XMLTV'|'PUBLIC'|'STALKER'|'JELLYFIN'|'PLEX'|'HDHOMERUN'|'TVHEADEND'|'ENIGMA2'; enabled:boolean; priority?:number; config?:Record<string,unknown> };
-export type CloudAppConfig = { version:number; activeLiveSource?:string; theme?:'dark'|'system'; homeDensity?:'comfortable'|'compact'; autoplayTrailers?:boolean; aiDiscovery?:boolean; preferredLanguage?:string; preferredRegion?:string; addons?:CloudAddon[]; updatedAt?:unknown };
+export type CloudAppConfig = { version:number; activeLiveSource?:string; theme?:'dark'|'system'; homeDensity?:'comfortable'|'compact'; autoplayTrailers?:boolean; aiDiscovery?:boolean; preferredLanguage?:string; preferredRegion?:string; preferredSubtitleLanguage?:string; preferredAudioLanguage?:string; subtitlesEnabled?:boolean; preferForcedSubtitles?:boolean; preferHearingImpairedSubtitles?:boolean; autoplayNextEpisode?:boolean; preferSurroundAudio?:boolean; addons?:CloudAddon[]; updatedAt?:unknown };
 export type CloudChannelCustomization = {
   id:string; profileId:string; channelId:string; customName?:string|null; customNumber?:number|null;
   customGroup?:string|null; hidden:boolean; sortOrder?:number; epgIdOverride?:string|null;
