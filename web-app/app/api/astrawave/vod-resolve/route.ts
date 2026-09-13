@@ -60,16 +60,14 @@ function streamEndpoint(manifest:URL,type:'movie'|'series',id:string){
 async function resolveManifest(input:ManifestInput,type:'movie'|'series',stremioId:string){
   const manifest=manifestUrl(input.url);if(!manifest)return{provider:input.name||'Stremio',sources:[] as SourceCandidate[],error:'Blocked or invalid manifest URL'};
   try{
-    const manifestResponse=await fetch(manifest,{cache:'no-store',redirect:'follow',signal:AbortSignal.timeout(8000)});
+    const manifestResponse=await fetch(manifest,{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(8000)});
     if(!manifestResponse.ok)return{provider:input.name||manifest.hostname,sources:[] as SourceCandidate[],error:`Manifest ${manifestResponse.status}`};
-    const finalManifestUrl=safeRemoteUrl(manifestResponse.url);if(!finalManifestUrl)return{provider:input.name||manifest.hostname,sources:[] as SourceCandidate[],error:'Manifest redirected to a blocked address'};
     const body=await manifestResponse.json() as Manifest;
-    const provider=String(input.name||body.name||body.id||finalManifestUrl.hostname).slice(0,100);
+    const provider=String(input.name||body.name||body.id||manifest.hostname).slice(0,100);
     if(!supportsStream(body,type))return{provider,sources:[] as SourceCandidate[],error:`Addon does not advertise ${type} stream resources`};
-    const endpoint=streamEndpoint(finalManifestUrl,type,stremioId);
-    const response=await fetch(endpoint,{cache:'no-store',redirect:'follow',signal:AbortSignal.timeout(12000)});
+    const endpoint=streamEndpoint(manifest,type,stremioId);
+    const response=await fetch(endpoint,{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(12000)});
     if(!response.ok)return{provider,sources:[] as SourceCandidate[],error:`Stream resource ${response.status}`};
-    const finalStreamUrl=safeRemoteUrl(response.url);if(!finalStreamUrl)return{provider,sources:[] as SourceCandidate[],error:'Stream resource redirected to a blocked address'};
     const payload=await response.json() as {streams?:Stream[]};
     const sources=(payload.streams||[]).flatMap((stream,index)=>{
       const direct=safeRemoteUrl(String(stream.url||''));
@@ -100,6 +98,6 @@ export async function POST(request:NextRequest){
     const settled=await Promise.all(manifests.map(input=>resolveManifest(input,type,stremioId)));
     const seen=new Set<string>();
     const sources=settled.flatMap(x=>x.sources).filter(source=>{if(seen.has(source.url))return false;seen.add(source.url);return true}).slice(0,80);
-    return NextResponse.json({kind,tmdbId:body.tmdbId||null,imdbId,season:body.season||null,episode:body.episode||null,sources,diagnostics:settled.map(x=>({provider:x.provider,count:x.sources.length,error:x.error})),policy:'Only direct HTTP(S) streams returned by user-enabled Stremio addons are admitted here. Torrent/info-hash results are intentionally excluded until resolved through an explicitly authorized debrid account.'});
+    return NextResponse.json({kind,tmdbId:body.tmdbId||null,imdbId,season:body.season||null,episode:body.episode||null,sources,diagnostics:settled.map(x=>({provider:x.provider,count:x.sources.length,error:x.error})),policy:'Only direct HTTP(S) streams returned by user-enabled Stremio addons are admitted here. Redirects, local/private hosts, torrent/info-hash results and non-direct entries are intentionally excluded.'});
   }catch(error){console.error('AstraWave VOD resolver error',error);return NextResponse.json({error:'VOD resolution failed'},{status:500})}
 }
