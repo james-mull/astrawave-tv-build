@@ -4,16 +4,28 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { firebaseAuth } from '../../../../lib/firebase';
-import { FirebaseData, type CloudPlaybackDiagnostic } from '../../../../lib/firebase-data';
+import { FirebaseData, type CloudAppConfig, type CloudPlaybackDiagnostic } from '../../../../lib/firebase-data';
+
+type DebridState={connected:boolean;username?:string;type?:string;expiration?:string;error?:string};
 
 export default function PlaybackDiagnosticsPage(){
   const [user,setUser]=useState<User|null>(null);
   const [profileId,setProfileId]=useState('default');
   const [items,setItems]=useState<CloudPlaybackDiagnostic[]>([]);
+  const [config,setConfig]=useState<CloudAppConfig|null>(null);
+  const [debrid,setDebrid]=useState<DebridState>({connected:false});
   const [status,setStatus]=useState('Loading playback diagnostics…');
   const [busy,setBusy]=useState(false);
 
   useEffect(()=>{
+    try{
+      const token=sessionStorage.getItem('astrawave:debrid:real-debrid:access-token')||'';
+      if(token){
+        fetch('/api/astrawave/debrid/real-debrid/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({accessToken:token}),cache:'no-store'})
+          .then(async response=>{const body=await response.json();setDebrid(response.ok?{connected:true,username:body.username,type:body.type,expiration:body.expiration}:{connected:false,error:body.error||'Verification failed'})})
+          .catch(()=>setDebrid({connected:false,error:'Verification failed'}));
+      }
+    }catch{}
     if(!firebaseAuth){setStatus('Firebase is not configured for this deployment.');return;}
     return onAuthStateChanged(firebaseAuth,next=>{
       setUser(next);
@@ -25,10 +37,10 @@ export default function PlaybackDiagnosticsPage(){
     if(!user)return;
     let cancelled=false;
     setBusy(true);
-    FirebaseData.listPlaybackDiagnostics(user.uid,profileId)
-      .then(values=>{
+    Promise.all([FirebaseData.listPlaybackDiagnostics(user.uid,profileId),FirebaseData.getAppConfig(user.uid)])
+      .then(([values,appConfig])=>{
         if(cancelled)return;
-        setItems(values);
+        setItems(values);setConfig(appConfig);
         setStatus(`${values.length} Play Best decision${values.length===1?'':'s'} synced for ${profileId}`);
       })
       .catch(error=>{if(!cancelled)setStatus(error instanceof Error?error.message:'Unable to load playback diagnostics');})
@@ -37,11 +49,12 @@ export default function PlaybackDiagnosticsPage(){
   },[user,profileId]);
 
   const summary=useMemo(()=>{
-    const debrid=items.filter(x=>x.debridOptimized).length;
+    const debridCount=items.filter(x=>x.debridOptimized).length;
     const personal=items.filter(x=>x.personalMedia).length;
-    const averageLatency=Math.round(items.filter(x=>typeof x.latencyMs==='number').reduce((sum,x)=>sum+(x.latencyMs||0),0)/Math.max(1,items.filter(x=>typeof x.latencyMs==='number').length));
+    const latencyItems=items.filter(x=>typeof x.latencyMs==='number');
+    const averageLatency=Math.round(latencyItems.reduce((sum,x)=>sum+(x.latencyMs||0),0)/Math.max(1,latencyItems.length));
     const averageBackups=(items.reduce((sum,x)=>sum+x.backupCount,0)/Math.max(1,items.length)).toFixed(1);
-    return {debrid,personal,averageLatency,averageBackups};
+    return {debridCount,personal,averageLatency,averageBackups};
   },[items]);
 
   return <main style={{minHeight:'100vh',background:'#06070b',color:'#f6f3f9',padding:'28px',fontFamily:'Inter,system-ui,sans-serif'}}>
@@ -50,7 +63,7 @@ export default function PlaybackDiagnosticsPage(){
         <div>
           <div style={{color:'#c38bff',fontWeight:800,letterSpacing:1}}>ASTRAWAVE CONTROL CENTER</div>
           <h1 style={{fontSize:'clamp(34px,5vw,64px)',margin:'8px 0'}}>Playback Diagnostics</h1>
-          <p style={{color:'#a39caa',maxWidth:820,fontSize:18}}>See why Play Best chose a source across signed-in AstraWave devices. This history contains provider, quality, latency and failover metadata only—never stream URLs, tokens, passwords or request headers.</p>
+          <p style={{color:'#a39caa',maxWidth:820,fontSize:18}}>See why Play Best chose a source across signed-in AstraWave devices, plus the active player preferences and session debrid state. Diagnostics never expose stream URLs, tokens, passwords or request headers.</p>
         </div>
         <Link href="/app/control" style={{color:'#fff',background:'#19151f',padding:'12px 16px',borderRadius:14,textDecoration:'none'}}>← Control Center</Link>
       </div>
@@ -60,11 +73,18 @@ export default function PlaybackDiagnosticsPage(){
         <span style={{padding:'10px 14px',borderRadius:99,background:'#121018',color:'#a39caa'}}>{busy?'Refreshing…':status}</span>
       </div>
 
+      <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:12,marginBottom:18}}>
+        <Metric label="Real-Debrid session" value={debrid.connected?(debrid.username||'Connected'):'Not connected'}/>
+        <Metric label="Subtitle default" value={config?.subtitlesEnabled===false?'Off':(config?.preferredSubtitleLanguage||'en').toUpperCase()}/>
+        <Metric label="Audio language" value={(config?.preferredAudioLanguage||config?.preferredLanguage||'en').toUpperCase()}/>
+        <Metric label="AutoNext" value={config?.autoplayNextEpisode===false?'Off':'On'}/>
+      </section>
+
       {!user?<section style={panel}><h2>Sign in required</h2><p style={{color:'#a39caa'}}>Open Control Center and sign in. Playback diagnostics are private account data.</p></section>:
       <>
         <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:12,marginBottom:18}}>
           <Metric label="Decisions" value={String(items.length)}/>
-          <Metric label="Debrid optimized" value={String(summary.debrid)}/>
+          <Metric label="Debrid optimized" value={String(summary.debridCount)}/>
           <Metric label="Owned media" value={String(summary.personal)}/>
           <Metric label="Avg latency" value={items.length?`${summary.averageLatency} ms`:'—'}/>
           <Metric label="Avg backups" value={items.length?summary.averageBackups:'—'}/>
