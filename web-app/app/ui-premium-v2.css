@@ -33,7 +33,7 @@ body>.shell>.side{background:linear-gradient(180deg,rgba(7,10,15,.97),rgba(7,10,
 .score{border:1px solid rgba(255,255,255,.08);background:rgba(5,8,13,.76)}
 
 /* Search & notices */
-.setupNotice,.searchResults{border-color:rgba(255,255,255,.085);background:linear-gradient(145deg,rgba(18,24,36,.83),rgba(10,14,22,.78));backdrop-filter:blur(18px);box-shadow:0 16px 45px rgba(0,0,0,.12)}
+.setupNotice,.searchResults{border-color:rgba(255,255,255,.085);background:linear-gradient(145deg,rgba(18,24,36,.9),rgba(10,14,22,.82));backdrop-filter:blur(20px);box-shadow:0 16px 45px rgba(0,0,0,.14)}
 .liveSearch{background:rgba(13,17,25,.82);box-shadow:inset 0 1px rgba(255,255,255,.02)}
 .sourceChips button,.dateChips button{background:rgba(13,17,25,.72);backdrop-filter:blur(10px);transition:.15s ease}
 .sourceChips button:hover,.dateChips button:hover{border-color:rgba(184,174,255,.28);background:rgba(24,30,44,.86)}
@@ -70,15 +70,65 @@ body>.shell>.side{background:linear-gradient(180deg,rgba(7,10,15,.97),rgba(7,10,
 .playerPanel .sourceChips{margin-top:10px}.playerPanel .sourceChips button{height:auto;min-height:44px;padding:8px 11px;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
 .playerPanel .sourceChips button span{font-size:9px;color:#808b9d;margin-top:3px}
 
+/* Premium title / VOD detail */
+body .title-shell{max-width:1680px;margin:0 auto;padding-top:28px!important;background:radial-gradient(circle at 82% 4%,rgba(139,124,255,.08),transparent 27%)}
+body .title-shell .back{position:sticky;top:14px;z-index:20;width:max-content;padding:9px 12px;border-radius:11px;border:1px solid rgba(255,255,255,.08);background:rgba(8,11,17,.72);backdrop-filter:blur(16px);color:#c2b9ff!important}
+body .title-shell .title-hero{min-height:600px!important;border-radius:30px!important;border-color:rgba(255,255,255,.1)!important;box-shadow:0 42px 120px rgba(0,0,0,.48)!important;position:relative;isolation:isolate}
+body .title-shell .title-hero:after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:linear-gradient(0deg,rgba(5,7,12,.82),transparent 48%),radial-gradient(circle at 82% 22%,transparent,rgba(5,7,12,.18) 68%)}
+body .title-shell .hero-poster,body .title-shell .hero-copy{position:relative;z-index:1}
+body .title-shell .hero-poster{width:min(255px,24vw)!important;border-radius:20px!important;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 90px rgba(0,0,0,.62)!important}
+body .title-shell .hero-copy h1{font-size:clamp(44px,6.4vw,88px)!important;max-width:900px;text-shadow:0 18px 48px rgba(0,0,0,.48)}
+body .title-shell .eyebrow{display:inline-flex;padding:7px 10px;border:1px solid rgba(139,124,255,.22);border-radius:999px;background:rgba(139,124,255,.12);backdrop-filter:blur(10px)}
+body .title-shell .meta span,body .title-shell .genres span{background:rgba(10,14,21,.7)!important;border-color:rgba(255,255,255,.1)!important;backdrop-filter:blur(12px)}
+body .title-shell .hero-actions{gap:10px!important}
+body .title-shell .hero-actions .primary,body .title-shell .hero-actions .secondary{min-height:46px;border-radius:13px!important;padding:0 17px!important}
+body .title-shell .hero-actions .primary{background:linear-gradient(145deg,#f8f8ff,#d9d5ff)!important;box-shadow:0 12px 34px rgba(0,0,0,.28)}
+body .title-shell .hero-actions .secondary{background:rgba(14,19,28,.72)!important;border-color:rgba(255,255,255,.11)!important;backdrop-filter:blur(14px)}
+body .title-shell .section{margin-top:42px!important}
+body .title-shell .section-head h2{font-size:28px;letter-spacing:-.035em}
+body .title-shell .section-head small{font-size:10px;font-weight:800;letter-spacing:.16em}
+body .title-shell .smart-summary{border-radius:18px!important;border-color:rgba(139,124,255,.2)!important;background:radial-gradient(circle at 0% 0%,rgba(139,124,255,.13),transparent 45%),linear-gradient(145deg,#171329,#0c1118)!important;box-shadow:0 14px 38px rgba(0,0,0,.16)}
+body .title-shell .source-list{gap:10px!important}
+body .title-shell .source-list button{min-height:72px;border-radius:15px!important;background:linear-gradient(145deg,#101620,#0b0f15)!important;border-color:rgba(255,255,255,.085)!important;transition:.16s ease}
+body .title-shell .source-list button:hover{transform:translateY(-2px);border-color:rgba(169,154,255,.34)!important;background:#151b26!important}
+body .title-shell .source-list button.active{background:radial-gradient(circle at 100% 0%,rgba(139,124,255,.18),transparent 46%),linear-gradient(145deg,#201944,#121725)!important;border-color:rgba(169,154,255,.55)!important;box-shadow:0 16px 38px rgba(64,48,145,.18)}
+body .title-shell .player{border-radius:22px!important;border-color:rgba(255,255,255,.11)!important;box-shadow:0 28px 80px rgba(0,0,0,.38)}
+body .title-shell .player video{max-height:72vh!important}
+body .title-shell .detail-grid>article,body .title-shell .detail-grid>aside{border-radius:21px!important;background:linear-gradient(145deg,rgba(15,20,29,.94),rgba(9,13,20,.94))!important;border-color:rgba(255,255,255,.08)!important;box-shadow:0 12px 34px rgba(0,0,0,.12)}
+body .title-shell .people>div{padding:9px;border-radius:14px;transition:.15s ease}
+body .title-shell .people>div:hover{background:rgba(255,255,255,.035)}
+body .title-shell .trailers a{border-radius:17px!important;background:linear-gradient(145deg,#111723,#0b0f16)!important;transition:.16s ease}
+body .title-shell .trailers a:hover{transform:translateY(-3px);border-color:rgba(169,154,255,.32)!important}
+
+/* Binge / episode browser */
+body .title-shell .binge{padding:24px;border:1px solid rgba(255,255,255,.08);border-radius:24px;background:linear-gradient(145deg,rgba(13,18,27,.9),rgba(8,12,18,.82));box-shadow:0 20px 60px rgba(0,0,0,.18)}
+body .title-shell .season-tabs{padding:4px 0 10px!important}
+body .title-shell .season-tabs button{min-height:40px;border-radius:12px!important;background:rgba(14,19,28,.78)!important;border-color:rgba(255,255,255,.08)!important}
+body .title-shell .season-tabs button.active{background:linear-gradient(145deg,#8d7df3,#6e5bd8)!important;border-color:rgba(255,255,255,.12)!important;color:#fff!important;box-shadow:0 10px 26px rgba(90,72,205,.22)}
+body .title-shell .episode-list{gap:11px!important}
+body .title-shell .episode-list article{min-height:126px;border-radius:17px!important;padding:12px!important;background:linear-gradient(145deg,rgba(17,23,34,.96),rgba(11,15,23,.96))!important;border-color:rgba(255,255,255,.075)!important;transition:.16s ease;cursor:pointer}
+body .title-shell .episode-list article:hover{transform:translateY(-2px);border-color:rgba(169,154,255,.3)!important;box-shadow:0 14px 34px rgba(0,0,0,.18)}
+body .title-shell .episode-list img,body .title-shell .episode-fallback{border-radius:13px!important}
+body .title-shell .episode-list h3{font-size:16px!important}
+
+/* Easy setup polish */
+.easySetup .choices button{box-shadow:0 10px 30px rgba(0,0,0,.1);transition:.16s ease}
+.easySetup .choices button:hover{transform:translateY(-3px);border-color:rgba(169,154,255,.32)}
+.easySetup .choices button.active{box-shadow:0 18px 46px rgba(72,54,160,.16)}
+.easySetup .wizard{box-shadow:0 22px 70px rgba(0,0,0,.2);background:radial-gradient(circle at 100% 0%,rgba(139,124,255,.09),transparent 35%),linear-gradient(145deg,#101620,#0b0f15)!important}
+.easySetup .fields input:focus{box-shadow:0 0 0 3px rgba(139,124,255,.08)}
+
 /* Focus accessibility / TV feel */
-body>.shell button:focus-visible,body>.shell a:focus-visible,body>.shell input:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(169,154,255,.35),0 0 0 6px rgba(139,124,255,.08)}
+body>.shell button:focus-visible,body>.shell a:focus-visible,body>.shell input:focus-visible,.title-shell button:focus-visible,.title-shell a:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(169,154,255,.35),0 0 0 6px rgba(139,124,255,.08)}
 .aw-card:focus-within .aw-poster{transform:translateY(-5px) scale(1.02);border-color:rgba(184,174,255,.5);box-shadow:0 24px 55px rgba(0,0,0,.36)}
 
+@media(max-width:900px){body .title-shell .title-hero{min-height:500px!important;padding:28px!important}body .title-shell .hero-copy h1{font-size:clamp(40px,8vw,68px)!important}body .title-shell .binge{padding:18px}}
 @media(max-width:680px){
   .appHero{min-height:330px;border-radius:20px}.heroShade{padding:26px 21px}.heroShade h2{font-size:38px}
   .aw-card{width:146px}.aw-poster{height:211px}.aw-card>strong,.aw-card>small{max-width:146px}
   .liveTile{min-height:104px;border-radius:16px}.sportsGrid>article{min-height:190px}
   .playerPanel{left:8px;right:8px;bottom:calc(77px + env(safe-area-inset-bottom));width:auto;padding:10px!important;border-radius:18px!important}
+  body .title-shell{padding-top:14px!important}body .title-shell .back{top:8px}body .title-shell .title-hero{min-height:430px!important;border-radius:20px!important;padding:22px!important}body .title-shell .hero-copy h1{font-size:42px!important}.easySetup .choices button:hover{transform:none}
 }
-@media(max-width:420px){.aw-card{width:134px}.aw-poster{height:194px}.aw-card>strong,.aw-card>small{max-width:134px}}
-@media(hover:none){.aw-card:hover .aw-poster,.liveTile:hover,.sportsGrid>article:hover{transform:none}}
+@media(max-width:420px){.aw-card{width:134px}.aw-poster{height:194px}.aw-card>strong,.aw-card>small{max-width:134px}body .title-shell .binge{padding:14px;border-radius:18px}}
+@media(hover:none){.aw-card:hover .aw-poster,.liveTile:hover,.sportsGrid>article:hover,body .title-shell .episode-list article:hover,body .title-shell .source-list button:hover,body .title-shell .trailers a:hover{transform:none}}
