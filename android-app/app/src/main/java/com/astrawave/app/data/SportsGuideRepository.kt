@@ -88,13 +88,19 @@ class SportsGuideRepository(
         val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val cloudEvents = runCatching { sportsCloud.events(date, days = 1) }.getOrDefault(emptyList())
             .filter { cloud -> sport.isNullOrBlank() || cloud.sport.equals(sport, ignoreCase = true) }
-        if (cloudEvents.isNotEmpty()) return cloudSnapshot(dateText, cloudEvents, addonSportsChannelNames)
 
+        // Always build the authorized local channel inventory. The cloud is excellent for schedules
+        // and pre-ranked matches, but a cloud event with no match must still get a second chance
+        // against the user's own M3U/Xtream/public Live TV sources before AstraWave calls it unavailable.
         val live = combinedLiveTv.load(
             userSourcesConfig = sources,
             includeEpg = false,
             expandedPublicInventory = false,
         )
+
+        if (cloudEvents.isNotEmpty()) {
+            return cloudSnapshot(dateText, cloudEvents, addonSportsChannelNames, live)
+        }
 
         val events = sportsDb.eventsForDay(dateText, sport).map { event ->
             val broadcasters = (
@@ -130,10 +136,11 @@ class SportsGuideRepository(
                 resolution?.best != null -> SportsAvailabilityReason.READY
                 broadcasters.isEmpty() -> SportsAvailabilityReason.NO_BROADCAST_METADATA
                 resolution == null || resolution.candidates.isEmpty() -> SportsAvailabilityReason.NO_CHANNEL_MATCH
-                else -> SportsAvailabilityReason.NO_CHANNEL_MATCH
+                else -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
             }
             SportsGuideItem(event, broadcasters, resolution, addonMatches, availabilityReason = availability)
-        }
+        }.sortedWith(sportsDisplayOrder())
+
         return SportsGuideSnapshot(
             date = dateText,
             events = events,
@@ -146,6 +153,7 @@ class SportsGuideRepository(
         dateText: String,
         cloudEvents: List<BackendSportsChannelCloudRepository.CloudEvent>,
         addonSportsChannelNames: List<String>,
+        live: CombinedLiveTvSnapshot,
     ): SportsGuideSnapshot {
         val items = cloudEvents.map { cloud ->
             val startDate = cloud.startTime.take(10).takeIf { it.length == 10 } ?: dateText
@@ -162,30 +170,49 @@ class SportsGuideRepository(
                 status = cloud.status,
                 network = cloud.broadcasts.joinToString(" • ").takeIf(String::isNotBlank),
             )
-            val resolution = cloudSportsResolution(cloud)
-            val candidates = resolution.candidates
+
+            val cloudResolution = cloudSportsResolution(cloud)
+            val localResolution = if (cloud.broadcasts.isEmpty()) {
+                null
+            } else {
+                resolver.resolve(cloudResolution.event, live.groups)
+            }
+            val mergedCandidates = (cloudResolution.candidates + localResolution?.candidates.orEmpty())
+                .distinctBy { it.streamUrl }
+            val resolution = SportsResolution(cloudResolution.event, mergedCandidates)
+
             val addonMatches = cloud.broadcasts.flatMap { broadcaster ->
                 addonSportsChannelNames.filter { channelNamesLikelyMatch(it, broadcaster) }
             }.distinct().take(8)
+
             val availability = when {
-                cloud.watchable && candidates.isNotEmpty() -> SportsAvailabilityReason.READY
-                cloud.unwatchableReason == "NO_BROADCAST_METADATA" -> SportsAvailabilityReason.NO_BROADCAST_METADATA
-                cloud.unwatchableReason == "NO_CHANNEL_MATCH" -> SportsAvailabilityReason.NO_CHANNEL_MATCH
-                cloud.unwatchableReason == "NO_HEALTHY_CANDIDATE" -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+                resolution.best != null -> SportsAvailabilityReason.READY
                 cloud.broadcasts.isEmpty() -> SportsAvailabilityReason.NO_BROADCAST_METADATA
-                cloud.channelMatches.isEmpty() -> SportsAvailabilityReason.NO_CHANNEL_MATCH
-                else -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+                cloud.unwatchableReason == "NO_HEALTHY_CANDIDATE" && cloud.channelMatches.isNotEmpty() -> SportsAvailabilityReason.NO_HEALTHY_CANDIDATE
+                else -> SportsAvailabilityReason.NO_CHANNEL_MATCH
             }
             SportsGuideItem(event, cloud.broadcasts, resolution, addonMatches, availabilityReason = availability)
-        }
-        val channelCount = cloudEvents.flatMap { it.channelMatches }.map { it.id }.distinct().size
+        }.sortedWith(sportsDisplayOrder())
+
+        val matchedChannelCount = items.flatMap { it.resolution?.candidates.orEmpty() }
+            .map { it.channelName.lowercase() }
+            .distinct()
+            .size
+
         return SportsGuideSnapshot(
             date = dateText,
             events = items,
-            combinedChannelGroups = channelCount,
+            combinedChannelGroups = maxOf(matchedChannelCount, live.totalChannelGroups),
             addonSportsChannelCount = addonSportsChannelNames.distinct().size,
         )
     }
+
+    private fun sportsDisplayOrder(): Comparator<SportsGuideItem> =
+        compareByDescending<SportsGuideItem> { it.event.isLive && it.watchCandidate != null }
+            .thenByDescending { it.watchCandidate != null }
+            .thenByDescending { it.event.isLive }
+            .thenBy { it.event.time.orEmpty() }
+            .thenBy { it.event.name }
 
     private fun channelNamesLikelyMatch(left: String, right: String): Boolean {
         fun normalized(value: String) = value.lowercase()
