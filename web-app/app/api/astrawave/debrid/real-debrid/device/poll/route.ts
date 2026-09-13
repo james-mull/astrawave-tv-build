@@ -4,6 +4,7 @@ export const dynamic='force-dynamic';
 
 const CLIENT_ID='X245A4XAIBGVM';
 const DEVICE_GRANT='http://oauth.net/grant_type/device/1.0';
+const COOKIE_NAME='astrawave_rd_access';
 
 export async function POST(request:NextRequest){
   try{
@@ -28,6 +29,9 @@ export async function POST(request:NextRequest){
     });
     const token=await tokenResponse.json().catch(()=>({})) as {access_token?:string;refresh_token?:string;expires_in?:number;token_type?:string;error?:string};
     if(!tokenResponse.ok||!token.access_token)return NextResponse.json({error:token.error||`Real-Debrid token ${tokenResponse.status}`},{status:502});
-    return NextResponse.json({connected:true,accessToken:token.access_token,refreshToken:token.refresh_token||null,expiresIn:Number(token.expires_in||0),tokenType:token.token_type||'Bearer'});
+    const expiresIn=Math.max(60,Math.min(Number(token.expires_in||3600),60*60*24*30));
+    const response=NextResponse.json({connected:true,accessToken:token.access_token,refreshToken:token.refresh_token||null,expiresIn,tokenType:token.token_type||'Bearer'});
+    response.cookies.set(COOKIE_NAME,token.access_token,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:expiresIn});
+    return response;
   }catch(error){console.error('Real-Debrid device poll error',error);return NextResponse.json({error:'Could not finish Real-Debrid authorization'},{status:500})}
 }
