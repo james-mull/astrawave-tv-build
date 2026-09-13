@@ -16,6 +16,8 @@ body>.shell>.main{padding-bottom:88px}
 .aw-poster:after{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(3,5,9,.45));opacity:.72}
 .poster-play{z-index:2}
 .score{z-index:2;font-weight:800;letter-spacing:.02em}
+.progress-bar{position:absolute;z-index:3;left:9px;right:9px;bottom:8px;height:4px;border-radius:999px;background:rgba(255,255,255,.18);overflow:hidden;box-shadow:0 1px 8px rgba(0,0,0,.35)}
+.progress-bar>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8b7cff,#b8aeff);box-shadow:0 0 12px rgba(139,124,255,.6)}
 
 /* Distinct first content rail below hero */
 .appHero+.aw-row{margin-top:30px;padding-top:5px}
