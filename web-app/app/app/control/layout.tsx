@@ -6,6 +6,7 @@ export default function ControlCenterLayout({ children }: { children: ReactNode 
     <nav className="controlNav" aria-label="AstraWave Control Center">
       <Link href="/app" className="controlBrand"><span>AW</span><div><b>AstraWave</b><small>Control Center</small></div></Link>
       <div className="controlLinks">
+        <ControlLink href="/app/control/setup">Easy Setup</ControlLink>
         <ControlLink href="/app/control">Sources</ControlLink>
         <ControlLink href="/app/control/channels">Channels</ControlLink>
         <ControlLink href="/app/control/trakt">Trakt</ControlLink>
