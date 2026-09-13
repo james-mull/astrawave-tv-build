@@ -5,7 +5,7 @@ export const dynamic='force-dynamic';
 const RD_COOKIE='astrawave_rd_access';
 type ManifestInput={name?:string;url:string};
 type ResolveBody={kind?:'movie'|'series'|'episode';tmdbId?:string;imdbId?:string;season?:number;episode?:number;manifests?:ManifestInput[]};
-type SourceCandidate={id:string;provider:string;url:string;quality?:string;codec?:string;hdr?:string;bitrateKbps?:number;direct:boolean;licenseLabel:string};
+type SourceCandidate={id:string;provider:string;url:string;quality?:string;codec?:string;hdr?:string;bitrateKbps?:number;audioCodec?:string;fileSizeBytes?:number;language?:string;releaseType?:string;direct:boolean;licenseLabel:string};
 
 type Manifest={id?:string;name?:string;resources?:Array<string|{name?:string;types?:string[];idPrefixes?:string[]}>;types?:string[]};
 type Stream={url?:string;externalUrl?:string;ytId?:string;infoHash?:string;name?:string;title?:string;description?:string;behaviorHints?:Record<string,unknown>};
@@ -44,12 +44,18 @@ function supportsStream(manifest:Manifest,type:'movie'|'series'){
 
 function infer(text:string){
   const t=text.toLowerCase();
-  const quality=/\b(2160p|4k|uhd)\b/i.test(text)?'2160p':/\b1080p\b/i.test(text)?'1080p':/\b720p\b/i.test(text)?'720p':/\b480p\b/i.test(text)?'480p':undefined;
+  const quality=/\b(2160p|4k|uhd)\b/i.test(text)?'2160p':/\b1440p\b/i.test(text)?'1440p':/\b1080p\b/i.test(text)?'1080p':/\b720p\b/i.test(text)?'720p':/\b480p\b/i.test(text)?'480p':undefined;
   const codec=/\b(av1)\b/i.test(text)?'AV1':/\b(hevc|h\.?265|x265)\b/i.test(text)?'HEVC':/\b(h\.?264|x264|avc)\b/i.test(text)?'H.264':undefined;
-  const hdr=/dolby[ .-]?vision|\bdv\b/i.test(text)?'Dolby Vision':/hdr10\+?/i.test(text)?'HDR10':/\bhdr\b/i.test(text)?'HDR':undefined;
+  const hdr=/dolby[ .-]?vision|\bdv\b/i.test(text)?'Dolby Vision':/hdr10\+?/i.test(text)?'HDR10+':/\bhdr10\b/i.test(text)?'HDR10':/\bhdr\b/i.test(text)?'HDR':undefined;
+  const audioCodec=/\batmos\b/i.test(text)?'Atmos':/true[ .-]?hd/i.test(text)?'TrueHD':/dts[ .-]?hd/i.test(text)?'DTS-HD':/\bdts\b/i.test(text)?'DTS':/(e-?ac-?3|dd\+)/i.test(text)?'E-AC-3':/(ac-?3|dolby digital)/i.test(text)?'AC-3':/\baac\b/i.test(text)?'AAC':undefined;
   const bitrateMatch=t.match(/(\d+(?:\.\d+)?)\s*(mbps|mb\/s|kbps|kb\/s)/i);
   const bitrateKbps=bitrateMatch?Math.round(Number(bitrateMatch[1])*(bitrateMatch[2].toLowerCase().startsWith('m')?1000:1)):undefined;
-  return{quality,codec,hdr,bitrateKbps};
+  const sizeMatch=text.match(/\b(\d+(?:\.\d+)?)\s*(gib|gb|mib|mb)\b/i);
+  const fileSizeBytes=sizeMatch?Math.round(Number(sizeMatch[1])*(sizeMatch[2].toLowerCase().startsWith('g')?1024**3:1024**2)):undefined;
+  const releaseType=/\bremux\b/i.test(text)?'REMUX':/blu[ .-]?ray|bdrip/i.test(text)?'BluRay':/web[ .-]?dl/i.test(text)?'WEB-DL':/web[ .-]?rip/i.test(text)?'WEBRip':/\bhdtv\b/i.test(text)?'HDTV':undefined;
+  const languageMatch=text.match(/\b(english|spanish|french|german|italian|portuguese|japanese|korean|hindi)\b/i);
+  const language=languageMatch?languageMatch[1][0].toUpperCase()+languageMatch[1].slice(1).toLowerCase():undefined;
+  return{quality,codec,hdr,bitrateKbps,audioCodec,fileSizeBytes,releaseType,language};
 }
 
 function inferQuality(label:string){
@@ -100,10 +106,11 @@ async function debridOptimize(accessToken:string,source:SourceCandidate):Promise
       body:new URLSearchParams({link:original.toString()}),
     });
     if(!response.ok)return source;
-    const body=await response.json() as {download?:string;filename?:string};
+    const body=await response.json() as {download?:string;filename?:string;filesize?:number};
     const optimized=safeRemoteUrl(String(body.download||''));
     if(!optimized||optimized.toString()===original.toString())return source;
-    return{...source,id:`rd:${source.id}`,provider:`Real-Debrid • ${source.provider}`,url:optimized.toString(),quality:inferQuality(body.filename||'')||source.quality,direct:true,licenseLabel:'User-linked debrid optimization'};
+    const inferred=infer(body.filename||'');
+    return{...source,...Object.fromEntries(Object.entries(inferred).filter(([,value])=>value!==undefined)),id:`rd:${source.id}`,provider:`Real-Debrid • ${source.provider}`,url:optimized.toString(),quality:inferQuality(body.filename||'')||source.quality,fileSizeBytes:Number(body.filesize||0)||source.fileSizeBytes,direct:true,licenseLabel:'User-linked debrid optimization'};
   }catch{return source}
 }
 
