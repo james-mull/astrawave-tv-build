@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 type Def={id:string;name:string;url:string};
-type Raw={id:string;tvgId?:string;name:string;group?:string;logoUrl?:string;streamUrl:string;sourceId:string;sourceName:string;sourceIndex:number;channelIndex:number};
+type HealthMeta={rank?:number;healthScore?:number;uptimePercent?:number;latencyMs?:number;quality?:string};
+type Raw={id:string;tvgId?:string;name:string;group?:string;logoUrl?:string;streamUrl:string;sourceId:string;sourceName:string;sourceIndex:number;channelIndex:number;health?:HealthMeta};
 type Program={title:string;start:number;stop:number;category?:string};
 type GuideIndex={channels?:Array<{tvgId?:string;id?:string;title?:string}>;programs?:Record<string,Program[]>;generatedAt?:string;scheduledChannels?:number};
+type NexusStream={url?:string;quality?:string|null;referrer?:string|null;user_agent?:string|null;rank?:number;health?:{status?:string;score?:number;uptime?:number;latency_ms?:number}};
+type NexusChannel={id?:string;online?:boolean;score?:number;streams?:NexusStream[]};
 
 const core:Def[]=[
   {id:'astrawave-free',name:'AstraWave Free TV',url:'https://raw.githubusercontent.com/james-mull/astrawave-tv-build/feature/nuvio-core-rebuild/astrawave-free-tv/astrawave-free-tv.m3u'},
@@ -16,6 +19,7 @@ const core:Def[]=[
 ];
 
 const epgUrl=process.env.ASTRAWAVE_EPG_JSON_URL||'https://raw.githubusercontent.com/james-mull/astrawave-tv-build/feature/nuvio-core-rebuild/astrawave-epg/us-live-guide.json';
+const nexusUsHealthUrl='https://dearbulut.github.io/iptv/api/v1/by-country/us.json';
 
 function parseM3u(text:string,def:Def,sourceIndex:number){
   const out:Raw[]=[];const lines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);let pending='';
@@ -34,6 +38,28 @@ function norm(value:string){return value.toLowerCase().replace(/\b(uhd|fhd|hd|sd
 
 async function load(def:Def,sourceIndex:number){
   const response=await fetch(def.url,{next:{revalidate:300}});if(!response.ok)throw new Error(`${def.name} ${response.status}`);return parseM3u(await response.text(),def,sourceIndex);
+}
+
+async function nexusHealth():Promise<Map<string,HealthMeta>>{
+  const out=new Map<string,HealthMeta>();
+  try{
+    const response=await fetch(nexusUsHealthUrl,{next:{revalidate:300}});if(!response.ok)return out;
+    const body=await response.json() as NexusChannel[];
+    for(const channel of Array.isArray(body)?body:[]){
+      if(channel.online===false)continue;
+      for(const stream of channel.streams||[]){
+        if(!stream.url||stream.health?.status!=='online'||stream.referrer||stream.user_agent)continue;
+        out.set(stream.url,{
+          rank:stream.rank,
+          healthScore:stream.health?.score??channel.score,
+          uptimePercent:stream.health?.uptime,
+          latencyMs:stream.health?.latency_ms,
+          quality:stream.quality||undefined,
+        });
+      }
+    }
+  }catch{}
+  return out;
 }
 
 async function epg():Promise<GuideIndex|null>{
@@ -65,25 +91,49 @@ function providerOrder(rows:Raw[],guide:GuideIndex|null){
   });
 }
 
+function sourceComparator(a:Raw,b:Raw){
+  const ah=a.health;const bh=b.health;
+  return (bh?.rank||bh?.healthScore||0)-(ah?.rank||ah?.healthScore||0)
+    ||(bh?.uptimePercent||0)-(ah?.uptimePercent||0)
+    ||(ah?.latencyMs??999999)-(bh?.latencyMs??999999)
+    ||a.sourceIndex-b.sourceIndex
+    ||a.channelIndex-b.channelIndex;
+}
+
 function merge(rows:Raw[],guide:GuideIndex|null){
   const groups=new Map<string,Raw[]>();
   for(const channel of rows){const key=channel.tvgId?`id:${channel.tvgId.toLowerCase()}`:`name:${norm(channel.name)||channel.id}`;groups.set(key,[...(groups.get(key)||[]),channel])}
   const titleToId=guideMaps(guide);
   return Array.from(groups.values()).map((items,groupIndex)=>{
-    const preferred=items.find(x=>x.tvgId)||items[0];
-    const sources=items.map((x,index)=>({id:`${preferred.id}:${index}`,provider:x.sourceName,sourceId:x.sourceId,streamUrl:x.streamUrl,group:x.group}));
+    const ordered=[...items].sort(sourceComparator);
+    const preferred=ordered.find(x=>x.tvgId)||ordered[0];
+    const sources=ordered.map((x,index)=>({
+      id:`${preferred.id}:${index}`,
+      provider:x.sourceName,
+      sourceId:x.sourceId,
+      streamUrl:x.streamUrl,
+      group:x.group,
+      quality:x.health?.quality,
+      healthScore:x.health?.healthScore,
+      uptimePercent:x.health?.uptimePercent,
+      latencyMs:x.health?.latencyMs,
+    }));
     const schedule=decoratePrograms(programsFor(preferred,guide,titleToId));
-    return {id:preferred.tvgId||norm(preferred.name)||preferred.id,tvgId:preferred.tvgId,name:preferred.name,group:preferred.group||items.find(x=>x.group)?.group,logoUrl:preferred.logoUrl||items.find(x=>x.logoUrl)?.logoUrl,streamUrl:sources[0]?.streamUrl,sources,sourceCount:sources.length,provider:preferred.sourceName,providerOrder:groupIndex,...schedule};
-  }).sort((a,b)=>a.name.localeCompare(b.name));
+    return {id:preferred.tvgId||norm(preferred.name)||preferred.id,tvgId:preferred.tvgId,name:preferred.name,group:preferred.group||ordered.find(x=>x.group)?.group,logoUrl:preferred.logoUrl||ordered.find(x=>x.logoUrl)?.logoUrl,streamUrl:sources[0]?.streamUrl,sources,sourceCount:sources.length,provider:sources[0]?.provider||preferred.sourceName,providerOrder:groupIndex,healthScore:sources[0]?.healthScore,uptimePercent:sources[0]?.uptimePercent,latencyMs:sources[0]?.latencyMs,...schedule};
+  }).sort((a,b)=>(b.healthScore||0)-(a.healthScore||0)||a.name.localeCompare(b.name));
 }
 
 export async function GET(request:NextRequest){
   const requested=request.nextUrl.searchParams.get('source')||'all-free';
   const mode=request.nextUrl.searchParams.get('mode')==='provider'?'provider':'managed';
   const selected=requested==='all-free'?core:core.filter(x=>x.id===requested);
-  const settled=await Promise.allSettled(selected.map((def,index)=>load(def,index)));
-  const rows=settled.flatMap(r=>r.status==='fulfilled'?r.value:[]);
-  const guide=await epg();
+  const wantsNexusHealth=mode==='managed'&&selected.some(x=>x.id==='nexus-us');
+  const [settled,guide,healthMap]=await Promise.all([
+    Promise.allSettled(selected.map((def,index)=>load(def,index))),
+    epg(),
+    wantsNexusHealth?nexusHealth():Promise.resolve(new Map<string,HealthMeta>()),
+  ]);
+  const rows=settled.flatMap(r=>r.status==='fulfilled'?r.value:[]).map(row=>row.sourceId==='nexus-us'&&healthMap.has(row.streamUrl)?{...row,health:healthMap.get(row.streamUrl)}:row);
   const managedChannels=merge(rows,guide);
   const channels=mode==='provider'?providerOrder(rows,guide):managedChannels;
   return NextResponse.json({
@@ -91,8 +141,8 @@ export async function GET(request:NextRequest){
     mode,
     sourceOptions:[{id:'all-free',name:'All Free Sources'},...core.map(({id,name})=>({id,name}))],
     channels,
-    stats:{channels:channels.length,rawChannels:rows.length,mergedChannels:managedChannels.length,epgLinked:channels.filter(x=>x.programs.length).length,epgGeneratedAt:guide?.generatedAt||null,epgScheduledChannels:guide?.scheduledChannels||0},
+    stats:{channels:channels.length,rawChannels:rows.length,mergedChannels:managedChannels.length,epgLinked:channels.filter(x=>x.programs.length).length,healthRankedSources:rows.filter(x=>x.health?.healthScore!==undefined).length,epgGeneratedAt:guide?.generatedAt||null,epgScheduledChannels:guide?.scheduledChannels||0},
     failures:settled.flatMap((r,i)=>r.status==='rejected'?[{source:selected[i].name,error:String(r.reason)}]:[]),
-    policy:'Managed mode safely consolidates duplicates. Provider Order is a non-destructive fallback that preserves each upstream playlist order exactly; customer-authorized providers can use the same contract.',
+    policy:'Unified mode consolidates duplicate public channels and uses fresh IPTV Nexus health telemetry when available. Provider Order is a non-destructive fallback that preserves upstream playlist order exactly; customer-authorized providers can use the same contract.',
   });
 }
