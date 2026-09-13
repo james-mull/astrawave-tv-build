@@ -9,6 +9,7 @@ export default function ControlCenterLayout({ children }: { children: ReactNode 
         <ControlLink href="/app/control/setup">Easy Setup</ControlLink>
         <ControlLink href="/app/control">Sources</ControlLink>
         <ControlLink href="/app/control/debrid">Debrid</ControlLink>
+        <ControlLink href="/app/control/playback">Playback</ControlLink>
         <ControlLink href="/app/control/channels">Channels</ControlLink>
         <ControlLink href="/app/control/trakt">Trakt</ControlLink>
         <ControlLink href="/app/control/diagnostics">Diagnostics</ControlLink>
