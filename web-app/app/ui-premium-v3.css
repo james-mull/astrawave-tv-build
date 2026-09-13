@@ -94,6 +94,63 @@ body>.shell>.main{padding-bottom:88px}
 /* TV remote / keyboard focus */
 .title-shell button:focus-visible,.title-shell a:focus-visible,.easySetup button:focus-visible,.easySetup input:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(167,152,255,.38),0 0 0 7px rgba(139,124,255,.08)}
 
+/* Premium navigation clarity */
+.side nav{gap:7px}
+.side nav>button{min-height:46px;border-radius:14px;font-weight:720}
+.side nav>button span{letter-spacing:-.01em}
+.side nav>button.active:after{content:"";position:absolute;right:10px;width:5px;height:5px;border-radius:50%;background:#b8aeff;box-shadow:0 0 12px rgba(184,174,255,.8)}
+.top h1{font-size:29px;font-weight:830}
+.top>div:first-of-type small{font-size:9px;letter-spacing:.18em}
+.top .search{border-radius:15px;min-height:46px}
+
+/* Editorial rail rhythm and discovery density */
+.aw-row:nth-of-type(odd) .row-head h3{color:#f8f9fd}
+.aw-row:nth-of-type(even) .row-head h3{color:#e9e6ff}
+.card-strip{padding-top:6px;padding-bottom:17px}
+.card-strip:after{content:"";flex:0 0 20px}
+.aw-card>strong{font-weight:760;letter-spacing:-.015em}
+.aw-card>small{line-height:1.35}
+.searchResults{box-shadow:0 24px 68px rgba(0,0,0,.24)}
+
+/* Content section separation without boxes everywhere */
+.main>section:not(.appHero):not(.searchResults):not(.setupNotice){padding-top:2px}
+.main>section:not(.appHero):not(.searchResults):not(.setupNotice)+section:not(.appHero):before{content:"";position:absolute;left:0;right:0;top:-18px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.045),transparent);pointer-events:none}
+
+/* Phone/tablet polish */
+@media(max-width:980px){
+  .top h1{font-size:25px}
+  .aw-row+.aw-row{margin-top:36px}
+  .card-strip{gap:14px}
+}
+@media(max-width:680px){
+  body>.shell>.main{padding-left:12px;padding-right:12px}
+  .main>.top{margin-left:-12px;margin-right:-12px;padding-left:12px;padding-right:12px}
+  .appHero{margin-left:-2px;margin-right:-2px}
+  .heroShade h2{max-width:92%;letter-spacing:-.05em}
+  .row-head{align-items:flex-start;margin-bottom:11px}
+  .row-head h3{font-size:19px}
+  .row-head>span{display:none}
+  .card-strip{margin-left:-12px;margin-right:-12px;padding-left:12px;padding-right:12px}
+  .liveGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .liveTile{padding:13px;min-height:100px}
+  .sportsGrid>article{padding:16px}
+  .guideList>article{border-radius:14px}
+  .aw-row+.aw-row{margin-top:32px}
+  .sourceChips,.dateChips{padding-bottom:8px}
+  .sourceChips button,.dateChips button{min-height:38px;padding:0 12px}
+  .binge{padding:14px;border-radius:18px}
+  .source-list{grid-template-columns:1fr}
+  .source-list button{min-height:68px}
+  .easySetup .choices button:hover,.episode-list article:hover,.trailers a:hover,.related-card:hover,.source-list button:hover{transform:none}
+}
+@media(max-width:460px){
+  .appHero{min-height:300px}.heroShade{padding:22px 18px}.heroShade h2{font-size:32px}
+  .heroShade p{font-size:12px;line-height:1.5}
+  .liveGrid{grid-template-columns:1fr}
+  .aw-card{width:132px}.aw-poster{height:192px}.aw-card>strong,.aw-card>small{max-width:132px}
+  .sourceChips button,.dateChips button{font-size:10px}
+}
+
 @media(min-width:1450px){
   .aw-card{width:178px}.aw-poster{height:260px}.aw-card>strong,.aw-card>small{max-width:178px}
   .appHero{height:min(42vw,500px)}
@@ -105,9 +162,4 @@ body>.shell>.main{padding-bottom:88px}
 @media(max-width:680px){
   .aw-row+.aw-row{margin-top:34px}
   .row-head h3{font-size:19px}
-  .sourceChips button,.dateChips button{min-height:38px;padding:0 12px}
-  .binge{padding:14px;border-radius:18px}
-  .source-list{grid-template-columns:1fr}
-  .source-list button{min-height:68px}
-  .easySetup .choices button:hover,.episode-list article:hover,.trailers a:hover,.related-card:hover,.source-list button:hover{transform:none}
 }
