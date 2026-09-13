@@ -20,6 +20,7 @@ const tmdbImage=(p?:string|null,size='w500')=>p?`https://image.tmdb.org/t/p/${si
 
 async function getJson<T>(path:string):Promise<T>{const response=await fetch(`${base}${path}`,{cache:'no-store'});if(!response.ok)throw new Error(`AstraWave API ${response.status}`);return response.json() as Promise<T>}
 function browserTmdbToken(){try{return typeof window!=='undefined'?localStorage.getItem('astrawave:tmdb-token')?.trim()||'':''}catch{return''}}
+function sessionDebridToken(){try{return typeof window!=='undefined'?sessionStorage.getItem('astrawave:rd-access-token')?.trim()||'':''}catch{return''}}
 async function browserTmdb(path:string){
   const token=browserTmdbToken();if(!token)throw new Error('TMDB browser token is not configured');
   const bearer=token.startsWith('eyJ');
@@ -59,17 +60,27 @@ function localStremioManifests(){
     const seen=new Set<string>();return raw.flatMap(item=>{const url=String(item?.url||'').trim();if(!url||item.enabled===false||seen.has(url))return[];seen.add(url);return[{name:item.name,url}]}).slice(0,12);
   }catch{return[] as {name?:string;url:string}[]}
 }
+async function optimizeWithSessionDebrid(sources:SourceCandidate[]):Promise<SourceCandidate[]>{
+  const accessToken=sessionDebridToken();if(!accessToken||!sources.length)return sources;
+  try{
+    const response=await fetch(`${base}/debrid/real-debrid/optimize`,{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({accessToken,sources})});
+    if(!response.ok)return sources;
+    const payload=await response.json() as {sources?:SourceCandidate[]};return payload.sources?.length?payload.sources:sources;
+  }catch{return sources}
+}
 async function unifiedSources(kind:string,id:string):Promise<SourceCandidate[]>{
   const baseSources=await getJson<SourceCandidate[]>(`/v1/sources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`).catch(()=>[]);
-  if(kind!=='movie'&&kind!=='series')return baseSources;
-  const manifests=localStremioManifests();if(!manifests.length)return baseSources;
+  if(kind!=='movie'&&kind!=='series')return optimizeWithSessionDebrid(baseSources);
+  const manifests=localStremioManifests();
+  if(!manifests.length)return optimizeWithSessionDebrid(baseSources);
   try{
-    const details=(await titleDetails(kind,id)).details;if(!details?.imdbId)return baseSources;
+    const details=(await titleDetails(kind,id)).details;if(!details?.imdbId)return optimizeWithSessionDebrid(baseSources);
     const response=await fetch(`${base}/vod-resolve`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kind,tmdbId:id,imdbId:details.imdbId,manifests}),cache:'no-store'});
-    if(!response.ok)return baseSources;
+    if(!response.ok)return optimizeWithSessionDebrid(baseSources);
     const payload=await response.json() as {sources?:SourceCandidate[]};
-    const seen=new Set<string>();return[...baseSources,...(payload.sources||[])].filter(source=>{const key=source.url||source.id;if(!key||seen.has(key))return false;seen.add(key);return true});
-  }catch{return baseSources}
+    const seen=new Set<string>();const merged=[...baseSources,...(payload.sources||[])].filter(source=>{const key=source.url||source.id;if(!key||seen.has(key))return false;seen.add(key);return true});
+    return optimizeWithSessionDebrid(merged);
+  }catch{return optimizeWithSessionDebrid(baseSources)}
 }
 
 export const AstraWaveApi={
