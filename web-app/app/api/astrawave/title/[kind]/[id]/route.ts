@@ -23,7 +23,7 @@ export async function GET(_:Request,context:{params:Promise<{kind:string;id:stri
     const {kind,id}=await context.params;
     if(!/^\d+$/.test(id)||!['movie','series'].includes(kind))return NextResponse.json({error:'Invalid title'},{status:400});
     const isMovie=kind==='movie';
-    const path=isMovie?`/movie/${id}?language=en-US&append_to_response=credits,videos,recommendations,similar,release_dates`:`/tv/${id}?language=en-US&append_to_response=credits,videos,recommendations,similar,content_ratings`;
+    const path=isMovie?`/movie/${id}?language=en-US&append_to_response=credits,videos,recommendations,similar,release_dates`:`/tv/${id}?language=en-US&append_to_response=credits,videos,recommendations,similar,content_ratings,external_ids`;
     const data=await tmdb(path);
     if(!data)return NextResponse.json({configured:false});
     const trailers=(data.videos?.results||[]).filter((v:any)=>v.site==='YouTube'&&['Trailer','Teaser','Clip','Featurette'].includes(v.type)).sort((a:any,b:any)=>Number(b.official)-Number(a.official)).slice(0,8).map((v:any)=>({key:v.key,name:v.name,type:v.type,official:Boolean(v.official),url:`https://www.youtube.com/watch?v=${encodeURIComponent(v.key)}`}));
@@ -38,6 +38,7 @@ export async function GET(_:Request,context:{params:Promise<{kind:string;id:stri
     }
     const runtime=isMovie?Number(data.runtime||0)||null:Number(data.episode_run_time?.[0]||0)||null;
     const related=mapRelated([...(data.recommendations?.results||[]),...(data.similar?.results||[])],kind as 'movie'|'series',id);
-    return NextResponse.json({configured:true,details:{id,kind,title:data.title||data.name||'Untitled',overview:data.overview||'',tagline:data.tagline||'',posterUrl:img(data.poster_path),backdropUrl:img(data.backdrop_path,'original'),releaseDate:data.release_date||data.first_air_date||undefined,runtimeMinutes:runtime,rating,score:Number(data.vote_average||0),voteCount:Number(data.vote_count||0),genres:(data.genres||[]).map((g:any)=>g.name),status:data.status||undefined,seasons:Number(data.number_of_seasons||0)||undefined,episodes:Number(data.number_of_episodes||0)||undefined,homepage:data.homepage||undefined,cast,crew,trailers,related}});
+    const imdbId=String(isMovie?data.imdb_id||'':data.external_ids?.imdb_id||'').trim()||undefined;
+    return NextResponse.json({configured:true,details:{id,kind,title:data.title||data.name||'Untitled',overview:data.overview||'',tagline:data.tagline||'',posterUrl:img(data.poster_path),backdropUrl:img(data.backdrop_path,'original'),releaseDate:data.release_date||data.first_air_date||undefined,runtimeMinutes:runtime,rating,score:Number(data.vote_average||0),voteCount:Number(data.vote_count||0),genres:(data.genres||[]).map((g:any)=>g.name),status:data.status||undefined,seasons:Number(data.number_of_seasons||0)||undefined,episodes:Number(data.number_of_episodes||0)||undefined,homepage:data.homepage||undefined,imdbId,cast,crew,trailers,related}});
   }catch(error){console.error('AstraWave title details error',error);return NextResponse.json({error:'Title details unavailable'},{status:500})}
 }
