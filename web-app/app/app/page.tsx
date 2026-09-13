@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, CalendarDays, Clock3, Compass, Film, Gauge, Home, Menu, Music2, Play,
@@ -9,6 +10,8 @@ import {
 import {
   AstraWaveApi, CatalogItem, CatalogRail, LiveData, SourceRegistry, SportsEvent
 } from '../../lib/astrawave-api';
+import { firebaseAuth } from '../../lib/firebase';
+import { CloudProgress, CloudWatchlistItem, FirebaseData } from '../../lib/firebase-data';
 
 type View='home'|'movies'|'tv'|'live'|'guide'|'sports'|'audio'|'discover'|'sources'|'diagnostics';
 type LiveMode='managed'|'provider';
@@ -27,11 +30,12 @@ function Card({item,onPlay}:{item:CatalogItem;onPlay:(item:CatalogItem)=>void}){
     {!item.posterUrl&&<span>{item.title.slice(0,1)}</span>}
     {item.streamUrl&&<button className="poster-play" onClick={e=>{e.preventDefault();onPlay(item)}}><Play size={15}/></button>}
     {item.score&&item.score>0?<b className="score">{item.score.toFixed(1)}</b>:null}
+    {item.progressPercent!=null&&item.progressPercent>0&&item.progressPercent<100?<i className="progress-bar"><span style={{width:`${Math.min(100,Math.max(0,item.progressPercent))}%`}}/></i>:null}
   </div><strong>{item.title}</strong><small>{item.subtitle||'AstraWave'}</small></article>;
   return item.kind==='movie'||item.kind==='series'?<Link className="card-link" href={`/app/title/${item.kind}/${item.id}`}>{body}</Link>:<div className="card-link">{body}</div>
 }
 
-function Row({rail,onPlay}:{rail:CatalogRail;onPlay:(item:CatalogItem)=>void}){if(!rail.items?.length)return null;return <section className="aw-row"><div className="row-head"><div><h3>{rail.title}</h3>{rail.source&&<small>{rail.source}</small>}</div><span>{rail.items.length}</span></div><div className="card-strip">{rail.items.map(x=><Card key={`${x.kind}:${x.id}`} item={x} onPlay={onPlay}/>)}</div></section>}
+function Row({rail,onPlay}:{rail:CatalogRail;onPlay:(item:CatalogItem)=>void}){if(!rail.items?.length)return null;return <section className="aw-row"><div className="row-head"><div><h3>{rail.title}</h3>{rail.source&&<small>{rail.source}</small>}</div><span>{rail.items.length}</span></div><div className="card-strip">{rail.items.map((x,index)=><Card key={`${x.kind}:${x.id}:${index}`} item={x} onPlay={onPlay}/>)}</div></section>}
 
 function BrowserPlayerVideo({url,onFatal}:{url:string;onFatal:()=>void}){
   const videoRef=useRef<HTMLVideoElement|null>(null);
@@ -76,6 +80,9 @@ function BrowserPlayerVideo({url,onFatal}:{url:string;onFatal:()=>void}){
 
 export default function WebAppHome(){
   const [view,setView]=useState<View>('home');
+  const [uid,setUid]=useState<string|null>(null);
+  const [cloudProgress,setCloudProgress]=useState<CloudProgress[]>([]);
+  const [cloudWatchlist,setCloudWatchlist]=useState<CloudWatchlistItem[]>([]);
   const [movieRails,setMovieRails]=useState<CatalogRail[]>([]);
   const [tvRails,setTvRails]=useState<CatalogRail[]>([]);
   const [addonRails,setAddonRails]=useState<CatalogRail[]>([]);
@@ -112,6 +119,12 @@ export default function WebAppHome(){
     if(!response.ok)throw new Error(`Live TV ${response.status}`);
     return response.json() as Promise<LiveData>;
   }
+
+  useEffect(()=>firebaseAuth?onAuthStateChanged(firebaseAuth,user=>setUid(user?.uid||null)):undefined,[]);
+  useEffect(()=>{
+    if(!uid){setCloudProgress([]);setCloudWatchlist([]);return}
+    Promise.all([FirebaseData.listProgress(uid),FirebaseData.listWatchlist(uid)]).then(([progress,watchlist])=>{setCloudProgress(progress);setCloudWatchlist(watchlist)}).catch(()=>{});
+  },[uid]);
 
   useEffect(()=>{
     try{
@@ -174,8 +187,34 @@ export default function WebAppHome(){
     });
   }
 
+  const allCatalogItems=useMemo(()=>unique([...movieRails,...tvRails].flatMap(r=>r.items)),[movieRails,tvRails]);
+  const continueWatching=useMemo(()=>{
+    const rows:CatalogItem[]=[];
+    for(const progress of cloudProgress){
+      const duration=Math.max(0,Number(progress.durationMs||0));const position=Math.max(0,Number(progress.positionMs||0));
+      if(duration<=0||position<=5000)continue;
+      const percent=Math.min(100,(position/duration)*100);if(percent>=95)continue;
+      const episode=progress.mediaId.match(/^episode:([^:]+):s(\d+):e(\d+)$/i);
+      if(episode){
+        const base=allCatalogItems.find(item=>item.kind==='series'&&item.id===episode[1]);
+        if(base)rows.push({...base,subtitle:`Resume S${episode[2]} E${episode[3]} • ${Math.round(percent)}%`,progressPercent:percent});
+        continue;
+      }
+      const match=progress.mediaId.match(/^(movie|series):(.+)$/i);if(!match)continue;
+      const base=allCatalogItems.find(item=>item.kind===match[1]&&item.id===match[2]);
+      if(base)rows.push({...base,subtitle:`Continue • ${Math.round(percent)}% watched`,progressPercent:percent});
+    }
+    return unique(rows).slice(0,24);
+  },[cloudProgress,allCatalogItems]);
+  const myWatchlist=useMemo(()=>cloudWatchlist.flatMap(item=>{
+    const match=item.mediaId.match(/^(movie|series):(.+)$/i);if(!match)return[];
+    const base=allCatalogItems.find(candidate=>candidate.kind===match[1]&&candidate.id===match[2]);
+    if(base)return[base];
+    return[{id:match[2],kind:match[1] as 'movie'|'series',title:item.title||'Saved title',posterUrl:item.posterUrl||undefined,subtitle:'My Watchlist'}];
+  }).slice(0,24),[cloudWatchlist,allCatalogItems]);
+
   const aiRails=useMemo(()=>{
-    const all=unique([...movieRails,...tvRails].flatMap(r=>r.items));
+    const all=allCatalogItems;
     const best=[...all].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,24);
     const hidden=[...all].filter(x=>(x.score||0)>=7&&(x.popularity||0)<100).sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,24);
     const fresh=unique([...movieRails.slice(0,3).flatMap(r=>r.items.slice(0,8)),...tvRails.slice(0,3).flatMap(r=>r.items.slice(0,8))]).slice(0,28);
@@ -184,7 +223,7 @@ export default function WebAppHome(){
       {title:'AstraWave AI • Hidden Gems',source:'AI-assisted ranking',items:hidden},
       {title:'AstraWave AI • Fresh Mix',source:'AI-assisted ranking',items:fresh},
     ].filter(r=>r.items.length) as CatalogRail[];
-  },[movieRails,tvRails]);
+  },[allCatalogItems,movieRails,tvRails]);
 
   const liveGroups=useMemo(()=>Array.from(new Set(liveData.channels.map(c=>c.group).filter((x):x is string=>Boolean(x)))).sort().slice(0,36),[liveData]);
   const filteredLive=useMemo(()=>{
@@ -228,7 +267,7 @@ export default function WebAppHome(){
 
     {query.trim()&&<section className="searchResults"><div className="row-head"><div><h3>Search Everything</h3><small>{searchResults.length} result{searchResults.length===1?'':'s'}</small></div></div><div className="card-strip">{searchResults.map(item=><Card key={`${item.kind}:${item.id}`} item={item} onPlay={play}/>)}</div></section>}
 
-    {!query.trim()&&view==='home'&&<>{!tmdbConfigured&&<div className="setupNotice"><h3>Movie/TV metadata not configured</h3><p>Add TMDB in AstraWave settings to populate rich movie and TV discovery.</p></div>}{hero&&<section className="appHero" style={hero.backdropUrl?{backgroundImage:`linear-gradient(90deg,rgba(6,8,13,.98),rgba(6,8,13,.45)),url(${hero.backdropUrl})`,backgroundSize:'cover',backgroundPosition:'center'}:undefined}><div className="heroShade"><span className="pillTag">ASTRAWAVE • FEATURED</span><h2>{hero.title}</h2><p>{hero.overview||hero.subtitle||'Your entertainment, unified.'}</p><div><button className="primaryBtn" onClick={()=>play(hero)}><Play size={16}/>Play Best</button><Link className="ghostBtn" href={`/app/title/${hero.kind}/${hero.id}`}>Details</Link></div></div></section>}{recentLiveItems.length>0&&<Row rail={{title:'Jump Back In • Live TV',source:'Your recent channels',items:recentLiveItems}} onPlay={play}/>} {aiRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}{movieRails.slice(0,4).map(r=><Row key={`m-${r.title}`} rail={r} onPlay={play}/>)}{tvRails.slice(0,4).map(r=><Row key={`t-${r.title}`} rail={r} onPlay={play}/>)}</>}
+    {!query.trim()&&view==='home'&&<>{!tmdbConfigured&&<div className="setupNotice"><h3>Movie/TV metadata not configured</h3><p>Add TMDB in AstraWave settings to populate rich movie and TV discovery.</p></div>}{hero&&<section className="appHero" style={hero.backdropUrl?{backgroundImage:`linear-gradient(90deg,rgba(6,8,13,.98),rgba(6,8,13,.45)),url(${hero.backdropUrl})`,backgroundSize:'cover',backgroundPosition:'center'}:undefined}><div className="heroShade"><span className="pillTag">ASTRAWAVE • FEATURED</span><h2>{hero.title}</h2><p>{hero.overview||hero.subtitle||'Your entertainment, unified.'}</p><div><button className="primaryBtn" onClick={()=>play(hero)}><Play size={16}/>Play Best</button><Link className="ghostBtn" href={`/app/title/${hero.kind}/${hero.id}`}>Details</Link></div></div></section>}{continueWatching.length>0&&<Row rail={{title:'Continue Watching',source:'Synced across your AstraWave devices',items:continueWatching}} onPlay={play}/>} {myWatchlist.length>0&&<Row rail={{title:'My Watchlist',source:'Your saved movies & shows',items:myWatchlist}} onPlay={play}/>} {recentLiveItems.length>0&&<Row rail={{title:'Jump Back In • Live TV',source:'Your recent channels',items:recentLiveItems}} onPlay={play}/>} {aiRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}{movieRails.slice(0,4).map(r=><Row key={`m-${r.title}`} rail={r} onPlay={play}/>)}{tvRails.slice(0,4).map(r=><Row key={`t-${r.title}`} rail={r} onPlay={play}/>)}</>}
 
     {!query.trim()&&view==='movies'&&movieRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}
     {!query.trim()&&view==='tv'&&tvRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}
