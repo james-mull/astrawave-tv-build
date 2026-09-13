@@ -77,7 +77,9 @@ async function resolveManifest(input:ManifestInput,type:'movie'|'series',stremio
       return[{id:`stremio:${body.id||provider}:${index}`,provider,url:direct.toString(),...parsed,direct:true,licenseLabel:'User-enabled Stremio addon'}];
     });
     return{provider,sources,error:null};
-  }catch(error){return{provider:input.name||manifest.hostname,sources:[] as SourceCandidate[],error:error instanceof Error?error.message:'Addon request failed'}
+  }catch(error){
+    return{provider:input.name||manifest.hostname,sources:[] as SourceCandidate[],error:error instanceof Error?error.message:'Addon request failed'};
+  }
 }
 
 export async function POST(request:NextRequest){
