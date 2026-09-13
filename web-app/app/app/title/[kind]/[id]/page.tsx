@@ -61,8 +61,8 @@ function SmartVodPlayer({kind,id,title,cloudUid,sources,selectedIndex,onSelected
     };
     const ended=()=>{try{localStorage.removeItem(playbackKey(kind,id))}catch{};if(cloudUid&&Number.isFinite(video.duration)&&video.duration>0)void FirebaseData.saveProgress(cloudUid,{mediaId:mediaProgressId(kind,id),kind,title,positionMs:Math.round(video.duration*1000),durationMs:Math.round(video.duration*1000)}).catch(()=>{});onEnded?.()};
     const pause=()=>save(true);
-    video.addEventListener('timeupdate',()=>save(false));video.addEventListener('pause',pause);video.addEventListener('ended',ended);video.addEventListener('error',fail);
-    const tick=()=>save(false);video.addEventListener('timeupdate',tick);
+    const tick=()=>save(false);
+    video.addEventListener('timeupdate',tick);video.addEventListener('pause',pause);video.addEventListener('ended',ended);video.addEventListener('error',fail);
     return()=>{save(true);video.removeEventListener('timeupdate',tick);video.removeEventListener('pause',pause);video.removeEventListener('ended',ended);video.removeEventListener('error',fail)};
   },[kind,id,title,cloudUid,selected?.url,selectedIndex,sources.length,onSelectedIndex,onEnded]);
 
@@ -84,11 +84,18 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
   const [selectedIndex,setSelectedIndex]=useState(0);
   const [watchlisted,setWatchlisted]=useState(false);
   const [resumeSeconds,setResumeSeconds]=useState(0);
+  const [autoNext,setAutoNext]=useState(true);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
 
   useEffect(()=>firebaseAuth?onAuthStateChanged(firebaseAuth,user=>setUid(user?.uid||null)):undefined,[]);
   useEffect(()=>{params.then(value=>setRoute({kind:value.kind==='series'?'series':'movie',id:value.id}))},[params]);
+  useEffect(()=>{
+    try{
+      const localPrefs=JSON.parse(localStorage.getItem('astrawave:playback-preferences')||'{}') as {autoplayNextEpisode?:boolean};
+      if(typeof localPrefs.autoplayNextEpisode==='boolean')setAutoNext(localPrefs.autoplayNextEpisode);
+    }catch{}
+  },[]);
   useEffect(()=>{
     if(!route)return;
     try{
@@ -108,7 +115,7 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
 
   useEffect(()=>{
     if(!uid||!route)return;
-    Promise.all([FirebaseData.listWatchlist(uid),FirebaseData.listProgress(uid)]).then(([watchlist,progress])=>{
+    Promise.all([FirebaseData.listWatchlist(uid),FirebaseData.listProgress(uid),FirebaseData.getAppConfig(uid)]).then(([watchlist,progress,appConfig])=>{
       const titleMediaId=`${route.kind}:${route.id}`;
       if(watchlist.some(item=>item.mediaId===titleMediaId)){
         setWatchlisted(true);
@@ -119,6 +126,10 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
       setProgressByMediaId(map);
       const cloudSeconds=map[titleMediaId]||0;
       if(cloudSeconds>resumeSeconds){setResumeSeconds(cloudSeconds);try{localStorage.setItem(playbackKey(route.kind,route.id),String(cloudSeconds))}catch{}}
+      if(appConfig&&typeof appConfig.autoplayNextEpisode==='boolean'){
+        setAutoNext(appConfig.autoplayNextEpisode);
+        try{localStorage.setItem('astrawave:playback-preferences',JSON.stringify(appConfig))}catch{}
+      }
     }).catch(()=>{});
   },[uid,route]);
 
@@ -156,10 +167,11 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
     if(!manifests.length){setEpisodeLoading(false);setEpisodeMessage('Add an enabled Stremio addon in Easy Setup to resolve episode playback on web.');return}
     try{
       const response=await fetch('/api/astrawave/vod-resolve',{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({kind:'episode',tmdbId:route.id,imdbId:details.imdbId,season:ep.season,episode:ep.episode,manifests})});
-      const payload=await response.json() as {sources?:SourceCandidate[];error?:string};
+      const payload=await response.json() as {sources?:SourceCandidate[];error?:string;debridOptimized?:number};
       if(!response.ok)throw new Error(payload.error||`Resolver ${response.status}`);
       const ranked=rankSources(payload.sources||[]);setSources(ranked);setSelectedIndex(0);
-      setEpisodeMessage(ranked.length?`Ready • S${ep.season} E${ep.episode} • ${ranked.length} source${ranked.length===1?'':'s'} ranked`:'No direct authorized episode source was returned by your enabled addons.');
+      const debridNote=payload.debridOptimized?` • ${payload.debridOptimized} debrid optimized`:'';
+      setEpisodeMessage(ranked.length?`Ready • S${ep.season} E${ep.episode} • ${ranked.length} source${ranked.length===1?'':'s'} ranked${debridNote}`:'No direct authorized episode source was returned by your enabled addons.');
       requestAnimationFrame(()=>document.getElementById('player')?.scrollIntoView({behavior:'smooth',block:'start'}));
     }catch(err){setEpisodeMessage(err instanceof Error?err.message:'Episode source resolution failed')}finally{setEpisodeLoading(false)}
   }
@@ -179,12 +191,12 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
     {!loading&&details&&<>
       <section className="title-hero" style={details.backdropUrl?{backgroundImage:`linear-gradient(90deg,rgba(5,7,12,.98),rgba(5,7,12,.76) 46%,rgba(5,7,12,.2)),url(${details.backdropUrl})`}:undefined}>
         {details.posterUrl&&<img className="hero-poster" src={details.posterUrl} alt=""/>}
-        <div className="hero-copy"><span className="eyebrow">{details.kind==='movie'?<Film size={14}/>:<Tv2 size={14}/>} {details.kind==='movie'?'MOVIE':'SERIES'}</span><h1>{details.title}</h1>{details.tagline&&<p className="tagline">{details.tagline}</p>}<div className="meta">{meta.map(x=><span key={String(x)}>{x}</span>)}{sources.length>0&&<span>{sources.length} source{sources.length===1?'':'s'}</span>}{topQuality&&<span>Best {topQuality}</span>}{uid&&<span>Cloud Sync</span>}</div><p className="overview">{details.overview||'No synopsis available.'}</p><div className="genres">{details.genres.map(g=><span key={g}>{g}</span>)}</div><div className="hero-actions">{selected?.url&&<button className="primary" onClick={()=>document.getElementById('player')?.scrollIntoView({behavior:'smooth'})}><Play size={16}/> {resumeSeconds>5?'Resume':'Play Best'}</button>}<button className={watchlisted?'secondary active':'secondary'} onClick={toggleWatchlist}>{watchlisted?<Check size={16}/>:<Bookmark size={16}/>} {watchlisted?'In Watchlist':'Add to Watchlist'}</button>{details.trailers[0]&&<a className="secondary" href={details.trailers[0].url} target="_blank" rel="noreferrer"><ExternalLink size={16}/> Trailer</a>}</div></div>
+        <div className="hero-copy"><span className="eyebrow">{details.kind==='movie'?<Film size={14}/>:<Tv2 size={14}/>} {details.kind==='movie'?'MOVIE':'SERIES'}</span><h1>{details.title}</h1>{details.tagline&&<p className="tagline">{details.tagline}</p>}<div className="meta">{meta.map(x=><span key={String(x)}>{x}</span>)}{sources.length>0&&<span>{sources.length} source{sources.length===1?'':'s'}</span>}{topQuality&&<span>Best {topQuality}</span>}{uid&&<span>Cloud Sync</span>}{route?.kind==='series'&&<span>AutoNext {autoNext?'On':'Off'}</span>}</div><p className="overview">{details.overview||'No synopsis available.'}</p><div className="genres">{details.genres.map(g=><span key={g}>{g}</span>)}</div><div className="hero-actions">{selected?.url&&<button className="primary" onClick={()=>document.getElementById('player')?.scrollIntoView({behavior:'smooth'})}><Play size={16}/> {resumeSeconds>5?'Resume':'Play Best'}</button>}<button className={watchlisted?'secondary active':'secondary'} onClick={toggleWatchlist}>{watchlisted?<Check size={16}/>:<Bookmark size={16}/>} {watchlisted?'In Watchlist':'Add to Watchlist'}</button>{details.trailers[0]&&<a className="secondary" href={details.trailers[0].url} target="_blank" rel="noreferrer"><ExternalLink size={16}/> Trailer</a>}</div></div>
       </section>
 
       {route?.kind==='series'&&episodes.length>0&&<section className="section binge"><div className="section-head"><div><small>BINGE MODE</small><h2>Episodes</h2></div><span>{episodes.length} episodes across {seasons.length} season{seasons.length===1?'':'s'}</span></div><div className="season-tabs">{seasons.map(s=><button key={s} className={season===s?'active':''} onClick={()=>setSeason(s)}>Season {s}</button>)}</div><div className="episode-list">{visibleEpisodes.map(ep=>{const cloudSeconds=route?progressByMediaId[mediaProgressId('episode',episodePlaybackId(route.id,ep))]||0:0;return <article key={ep.id} role="button" tabIndex={0} className={selectedEpisode?.id===ep.id?'active':''} onClick={()=>void playEpisode(ep)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();void playEpisode(ep)}}}>{ep.thumbnail?<img src={ep.thumbnail} alt=""/>:<div className="episode-fallback">S{ep.season}E{ep.episode}</div>}<div><small>S{ep.season} E{ep.episode}{ep.runtimeMinutes?` • ${ep.runtimeMinutes} min`:''}{ep.released?` • ${ep.released}`:''}{cloudSeconds>5?` • Resume ${Math.floor(cloudSeconds/60)}m`:''}</small><h3>{ep.title}</h3><p>{ep.overview||'Episode details will appear when available.'}</p></div>{selectedEpisode?.id===ep.id&&episodeLoading?<Loader2 className="spin" size={18}/>:<ChevronRight size={18}/>}</article>})}</div>{episodeMessage&&<div className="episode-status">{episodeLoading&&<Loader2 className="spin" size={15}/>} {episodeMessage}</div>}</section>}
 
-      <section className="section" id="player"><div className="section-head"><div><small>SMART PLAYBACK</small><h2>{selectedEpisode?`Play Best • S${selectedEpisode.season} E${selectedEpisode.episode}`:'Play Best'}</h2></div><span>{sources.length} approved candidate{sources.length===1?'':'s'}</span></div>{sources.length===0?<div className="state"><ShieldCheck/> {selectedEpisode?episodeMessage||'No approved episode source is currently available.':'No approved playable source is currently available. Add permitted Stremio, debrid or provider sources in the Control Center.'}</div>:<><div className="smart-summary"><div><b>{selectedEpisode?selectedEpisode.title:selected?.provider}</b><span>{selectedEpisode?`S${selectedEpisode.season} E${selectedEpisode.episode} • ${selected?.provider||'Best source'}`:`${selected?.quality||'Quality not reported'}${selected?.direct?' • Direct':''}`}</span></div><p>AstraWave ranks eligible sources by resolution, direct-play capability, bitrate, uptime and latency when those signals are available, then automatically advances to backups on playback failure.{selectedEpisode?' AutoNext advances to the next available episode when playback ends.':''}{uid?' Progress is synced to your signed-in AstraWave account.':''}</p></div><div className="source-list">{sources.map((source,index)=><button key={source.id} className={selectedIndex===index?'active':''} onClick={()=>setSelectedIndex(index)}><div><b>{index+1}. {source.provider}</b><small>{[source.quality,source.codec,source.hdr,source.bitrateKbps?`${Math.round(source.bitrateKbps/1000)} Mbps`:null,source.uptimePercent!=null?`${source.uptimePercent.toFixed(1)}% uptime`:null,source.latencyMs!=null?`${Math.round(source.latencyMs)} ms`:null,source.direct?'Direct':null,source.licenseLabel].filter(Boolean).join(' • ')||'Eligible source'}</small></div><span>{selectedIndex===index?'Playing':`Score ${Math.round(sourceScore(source))}`}</span></button>)}</div>{route&&<SmartVodPlayer kind={playbackKind} id={playbackId} title={playbackTitle} cloudUid={uid} sources={sources} selectedIndex={selectedIndex} onSelectedIndex={setSelectedIndex} onEnded={selectedEpisode?playNextEpisode:undefined}/>}</>}</section>
+      <section className="section" id="player"><div className="section-head"><div><small>SMART PLAYBACK</small><h2>{selectedEpisode?`Play Best • S${selectedEpisode.season} E${selectedEpisode.episode}`:'Play Best'}</h2></div><span>{sources.length} approved candidate{sources.length===1?'':'s'}</span></div>{sources.length===0?<div className="state"><ShieldCheck/> {selectedEpisode?episodeMessage||'No approved episode source is currently available.':'No approved playable source is currently available. Add permitted Stremio, debrid or provider sources in the Control Center.'}</div>:<><div className="smart-summary"><div><b>{selectedEpisode?selectedEpisode.title:selected?.provider}</b><span>{selectedEpisode?`S${selectedEpisode.season} E${selectedEpisode.episode} • ${selected?.provider||'Best source'}`:`${selected?.quality||'Quality not reported'}${selected?.direct?' • Direct':''}`}</span></div><p>AstraWave ranks eligible sources by resolution, direct-play capability, bitrate, uptime and latency when those signals are available, then automatically advances to backups on playback failure.{selectedEpisode?` AutoNext is ${autoNext?'enabled':'disabled'} for this account.`:''}{uid?' Progress is synced to your signed-in AstraWave account.':''}</p></div><div className="source-list">{sources.map((source,index)=><button key={source.id} className={selectedIndex===index?'active':''} onClick={()=>setSelectedIndex(index)}><div><b>{index+1}. {source.provider}</b><small>{[source.quality,source.codec,source.hdr,source.bitrateKbps?`${Math.round(source.bitrateKbps/1000)} Mbps`:null,source.uptimePercent!=null?`${source.uptimePercent.toFixed(1)}% uptime`:null,source.latencyMs!=null?`${Math.round(source.latencyMs)} ms`:null,source.direct?'Direct':null,source.licenseLabel].filter(Boolean).join(' • ')||'Eligible source'}</small></div><span>{selectedIndex===index?'Playing':`Score ${Math.round(sourceScore(source))}`}</span></button>)}</div>{route&&<SmartVodPlayer kind={playbackKind} id={playbackId} title={playbackTitle} cloudUid={uid} sources={sources} selectedIndex={selectedIndex} onSelectedIndex={setSelectedIndex} onEnded={selectedEpisode&&autoNext?playNextEpisode:undefined}/>}</>}</section>
 
       <section className="detail-grid"><article><h2>Cast</h2><div className="people">{details.cast.map(person=><div key={person.id}>{person.profileUrl?<img src={person.profileUrl} alt=""/>:<div className="person-fallback">{person.name.charAt(0)}</div>}<b>{person.name}</b><small>{person.role}</small></div>)}</div></article><aside><h2>About</h2>{details.crew.map(person=><div className="credit" key={`${person.id}:${person.role}`}><span>{person.role}</span><b>{person.name}</b></div>)}{details.status&&<div className="credit"><span>Status</span><b>{details.status}</b></div>}{details.episodes&&<div className="credit"><span>Episodes</span><b>{details.episodes}</b></div>}<div className="credit"><span>Source mode</span><b>Authorized only</b></div><div className="credit"><span>Progress</span><b>{uid?'Cloud + local':'Local only'}</b></div></aside></section>
 
