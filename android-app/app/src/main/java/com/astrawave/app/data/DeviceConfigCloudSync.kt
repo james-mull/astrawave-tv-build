@@ -166,6 +166,13 @@ class DeviceConfigCloudSync(private val context: Context) {
         config.getBoolean("aiDiscovery")?.let { editor.putBoolean("$profileId:aiDiscovery", it) }
         config.getString("preferredLanguage")?.let { editor.putString("$profileId:preferredLanguage", it) }
         config.getString("preferredRegion")?.let { editor.putString("$profileId:preferredRegion", it) }
+        config.getString("preferredSubtitleLanguage")?.let { editor.putString("$profileId:preferredSubtitleLanguage", it) }
+        config.getString("preferredAudioLanguage")?.let { editor.putString("$profileId:preferredAudioLanguage", it) }
+        config.getBoolean("subtitlesEnabled")?.let { editor.putBoolean("$profileId:subtitlesEnabled", it) }
+        config.getBoolean("preferForcedSubtitles")?.let { editor.putBoolean("$profileId:preferForcedSubtitles", it) }
+        config.getBoolean("preferHearingImpairedSubtitles")?.let { editor.putBoolean("$profileId:preferHearingImpairedSubtitles", it) }
+        config.getBoolean("autoplayNextEpisode")?.let { editor.putBoolean("$profileId:autoplayNextEpisode", it) }
+        config.getBoolean("preferSurroundAudio")?.let { editor.putBoolean("$profileId:preferSurroundAudio", it) }
         config.getString("activeLiveSource")?.let { editor.putString("$profileId:activeLiveSource", it) }
         editor.apply()
 
