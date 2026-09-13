@@ -80,6 +80,10 @@ class PlayerActivity : ComponentActivity() {
     private var playbackSpeed = 1f
     private var introEndMs = 0L
     private var recapEndMs = 0L
+    private var preferredAudioLanguage: String? = null
+    private var preferredSubtitleLanguage: String? = null
+    private var subtitlesEnabled = true
+    private var autoNextEnabled = true
     private lateinit var remoteInbox: RemoteCommandInbox
 
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -132,6 +136,7 @@ class PlayerActivity : ComponentActivity() {
         remoteInbox = RemoteCommandInbox(this)
 
         profileId = intent.getStringExtra(EXTRA_PROFILE_ID).orEmpty().ifBlank { DEFAULT_PROFILE_ID }
+        loadPlaybackPreferences()
         val primary = intent.getStringExtra(EXTRA_URL)
         val alternates = intent.getStringArrayListExtra(EXTRA_URLS).orEmpty()
         val requestedUrls = (listOfNotNull(primary) + alternates).filter { it.isNotBlank() }.distinct()
@@ -190,6 +195,7 @@ class PlayerActivity : ComponentActivity() {
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .also { exo ->
+                applyPlaybackPreferences(exo)
                 playerView?.player = exo
                 exo.addListener(object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
@@ -233,7 +239,7 @@ class PlayerActivity : ComponentActivity() {
                             prepareNextEpisode()
                         } else if (playbackState == Player.STATE_ENDED) {
                             persistProgress(exo, allowCloud = true)
-                            if (!autoplayCancelled && nextPlan != null) playNextEpisode()
+                            if (autoNextEnabled && !autoplayCancelled && nextPlan != null) playNextEpisode()
                         }
                     }
 
@@ -244,6 +250,30 @@ class PlayerActivity : ComponentActivity() {
                 playCurrent(exo, resumePositionMs)
             }
         handler.postDelayed(progressTicker, UI_TICK_MS)
+    }
+
+    private fun loadPlaybackPreferences() {
+        val prefs = getSharedPreferences("astrawave_experience", Context.MODE_PRIVATE)
+        preferredAudioLanguage = prefs.getString("$profileId:preferredAudioLanguage", null)
+            ?.trim()?.takeIf(String::isNotBlank)
+            ?: prefs.getString("$profileId:preferredLanguage", null)?.trim()?.takeIf(String::isNotBlank)
+        preferredSubtitleLanguage = prefs.getString("$profileId:preferredSubtitleLanguage", null)
+            ?.trim()?.takeIf(String::isNotBlank)
+            ?: preferredAudioLanguage
+        subtitlesEnabled = prefs.getBoolean("$profileId:subtitlesEnabled", true)
+        autoNextEnabled = prefs.getBoolean("$profileId:autoplayNextEpisode", true)
+    }
+
+    private fun applyPlaybackPreferences(exo: ExoPlayer) {
+        val builder = exo.trackSelectionParameters.buildUpon()
+        preferredAudioLanguage?.let { builder.setPreferredAudioLanguage(it) }
+        if (subtitlesEnabled) {
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            preferredSubtitleLanguage?.let { builder.setPreferredTextLanguage(it) }
+        } else {
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        }
+        exo.trackSelectionParameters = builder.build()
     }
 
     private fun consumeRemotePlaybackCommand(exo: ExoPlayer?) {
@@ -363,7 +393,11 @@ class PlayerActivity : ComponentActivity() {
         if (remaining <= UP_NEXT_WINDOW_MS && !autoplayCancelled) {
             if (countdownStartedAtMs == 0L) countdownStartedAtMs = System.currentTimeMillis()
             val seconds = ((remaining + 999L) / 1000L).coerceIn(1L, UP_NEXT_WINDOW_MS / 1000L)
-            upNextText?.text = "Up Next • S${plan.episode.season}E${plan.episode.episode} ${plan.episode.title}\nPlaying automatically in ${seconds}s"
+            upNextText?.text = if (autoNextEnabled) {
+                "Up Next • S${plan.episode.season}E${plan.episode.episode} ${plan.episode.title}\nPlaying automatically in ${seconds}s"
+            } else {
+                "Up Next • S${plan.episode.season}E${plan.episode.episode} ${plan.episode.title}\nAutoNext is off • choose Play Next to continue"
+            }
             upNextOverlay?.visibility = View.VISIBLE
         } else upNextOverlay?.visibility = View.GONE
     }
@@ -472,6 +506,9 @@ class PlayerActivity : ComponentActivity() {
             appendLine("Buffered: ${bufferedMs / 1000}s")
             appendLine("Video: ${video?.let(::formatVideo) ?: "No video format reported"}")
             appendLine("Audio: ${audio?.let(::formatAudio) ?: "No audio format reported"}")
+            appendLine("Audio preference: ${preferredAudioLanguage?.uppercase() ?: "Auto"}")
+            appendLine("Subtitle preference: ${if (subtitlesEnabled) preferredSubtitleLanguage?.uppercase() ?: "Auto" else "Off"}")
+            appendLine("AutoNext: ${if (autoNextEnabled) "On" else "Off"}")
             appendLine("Up Next: $next")
             append("Retries on current source: $retryCountForCurrentStream")
         }
