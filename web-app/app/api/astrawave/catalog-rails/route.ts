@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 type RailDef = { title: string; kind: 'movie' | 'series'; path: string; source?: string };
+type CatalogItem = {
+  id: string;
+  kind: 'movie' | 'series';
+  title: string;
+  subtitle?: string;
+  posterUrl?: string;
+  backdropUrl?: string;
+  overview?: string;
+  score?: number;
+  popularity?: number;
+  genreIds?: number[];
+};
 
 const tmdbImage = (path?: string | null, size = 'w500') => path ? `https://image.tmdb.org/t/p/${size}${path}` : undefined;
 
@@ -31,7 +43,7 @@ async function trakt(path: string) {
   return response.json();
 }
 
-function mapItems(items: any[], kind: 'movie' | 'series') {
+function mapItems(items: any[], kind: 'movie' | 'series'): CatalogItem[] {
   return (items || []).slice(0, 30).map((item) => ({
     id: String(item.id),
     kind,
@@ -70,6 +82,46 @@ function mapTraktItems(rows: any[], kind: 'movie' | 'series') {
       },
     }];
   });
+}
+
+function uniqueItems(items: CatalogItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.kind}:${item.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function curatedRails(kind: 'movie' | 'series', rails: Array<{ items: CatalogItem[] }>) {
+  const all = uniqueItems(rails.flatMap((rail) => rail.items));
+  const ranked = (predicate: (item: CatalogItem) => boolean, limit = 24) => all
+    .filter(predicate)
+    .sort((a, b) => (b.score || 0) - (a.score || 0) || (b.popularity || 0) - (a.popularity || 0))
+    .slice(0, limit);
+  const has = (item: CatalogItem, ...genres: number[]) => genres.some((genre) => item.genreIds?.includes(genre));
+  const rail = (title: string, items: CatalogItem[]) => items.length >= 4 ? { title, source: 'AstraWave Curated • no extra API calls', items } : null;
+
+  const definitions = kind === 'movie'
+    ? [
+        rail('AstraWave • Critics’ Night', ranked((item) => (item.score || 0) >= 7.6)),
+        rail('AstraWave • Hidden Gems', ranked((item) => (item.score || 0) >= 7 && (item.popularity || 0) < 140)),
+        rail('Mind-Bending Sci-Fi & Mystery', ranked((item) => has(item, 878, 9648) && (item.score || 0) >= 6.5)),
+        rail('Dark, Twisty & Suspenseful', ranked((item) => has(item, 53, 27, 9648))),
+        rail('Big Adventure Night', ranked((item) => has(item, 12, 28))),
+        rail('Family & Animation Favorites', ranked((item) => has(item, 10751, 16))),
+      ]
+    : [
+        rail('AstraWave • Prestige TV', ranked((item) => (item.score || 0) >= 8)),
+        rail('AstraWave • Hidden Series Gems', ranked((item) => (item.score || 0) >= 7.5 && (item.popularity || 0) < 120)),
+        rail('Crime, Mystery & Investigation', ranked((item) => has(item, 80, 9648))),
+        rail('Sci-Fi & Fantasy Worlds', ranked((item) => has(item, 10765))),
+        rail('Action & Adventure Series', ranked((item) => has(item, 10759))),
+        rail('Family, Kids & Animation', ranked((item) => has(item, 10751, 10762, 16))),
+      ];
+
+  return definitions.filter((value): value is NonNullable<typeof value> => Boolean(value));
 }
 
 const movieRails: RailDef[] = [
@@ -131,6 +183,9 @@ export async function GET(request: NextRequest) {
       }))
     : [];
 
+  const tmdbBaseRails = tmdbSettled.flatMap((result) => result.status === 'fulfilled' && result.value.items.length ? [result.value] : []);
+  const derivedRails = curatedRails(requested, tmdbBaseRails);
+
   const traktDefs = requested === 'series' ? traktTvRails : traktMovieRails;
   const traktSettled = traktConfigured
     ? await Promise.allSettled(traktDefs.map(async ([title, path]) => {
@@ -144,7 +199,9 @@ export async function GET(request: NextRequest) {
     : [];
 
   const rails = [
-    ...tmdbSettled.flatMap((result) => result.status === 'fulfilled' && result.value.items.length ? [result.value] : []),
+    ...tmdbBaseRails.slice(0, 5),
+    ...derivedRails,
+    ...tmdbBaseRails.slice(5),
     ...traktSettled.flatMap((result) => result.status === 'fulfilled' && result.value.items.length ? [result.value] : []),
   ];
 
