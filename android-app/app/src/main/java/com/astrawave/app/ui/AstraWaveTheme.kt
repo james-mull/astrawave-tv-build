@@ -20,28 +20,31 @@ import androidx.compose.ui.unit.sp
 
 /** AstraWave premium visual foundation shared by phone, tablet and TV. */
 object AstraWaveColors {
-    val Background = Color(0xFF05060A)
-    val BackgroundRaised = Color(0xFF090B11)
-    val Surface = Color(0xFF10131B)
-    val SurfaceRaised = Color(0xFF171B25)
-    val SurfaceFocus = Color(0xFF222737)
-    val Glass = Color(0xD9080A10)
-    val GlassRaised = Color(0xED121722)
-    val PrimaryText = Color(0xFFF8FAFF)
-    val SecondaryText = Color(0xFFADB5C6)
-    val TertiaryText = Color(0xFF747D91)
-    val Accent = Color(0xFF8B7CFF)
-    val AccentStrong = Color(0xFFB9AEFF)
-    val AccentSoft = Color(0xFF5549B9)
-    val Success = Color(0xFF58D5A5)
-    val Warning = Color(0xFFF0B45D)
-    val Error = Color(0xFFFF7086)
-    val Live = Color(0xFFFF536F)
-    val Divider = Color(0xFF242A37)
-    val FocusRing = Color(0xFFF2EEFF)
+    val Background = Color(0xFF05070B)
+    val BackgroundRaised = Color(0xFF0A0D14)
+    val Surface = Color(0xFF0F141D)
+    val SurfaceRaised = Color(0xFF151B27)
+    val SurfaceFocus = Color(0xFF20283A)
+    val Glass = Color(0xE0070A10)
+    val GlassRaised = Color(0xF0111621)
+    val PrimaryText = Color(0xFFF9FAFF)
+    val SecondaryText = Color(0xFFB4BDCE)
+    val TertiaryText = Color(0xFF7E899E)
+    val Accent = Color(0xFF8D7CFF)
+    val AccentStrong = Color(0xFFC0B7FF)
+    val AccentSoft = Color(0xFF5E50C7)
+    val Success = Color(0xFF61D9A9)
+    val Warning = Color(0xFFF1B963)
+    val Error = Color(0xFFFF748A)
+    val Live = Color(0xFFFF526F)
+    val Divider = Color(0xFF263042)
+    val FocusRing = Color(0xFFF4F0FF)
     val PlayerBlack = Color(0xFF000000)
-    val HeroScrim = Color(0xE605070C)
-    val Chip = Color(0xFF1B2030)
+    val HeroScrim = Color(0xE804070C)
+    val Chip = Color(0xFF1A2130)
+    val GuideNow = Color(0xFF9C8DFF)
+    val GuideFuture = Color(0xFF18202D)
+    val GuidePast = Color(0xFF10151D)
 }
 
 @Immutable
@@ -55,7 +58,7 @@ data class AstraWaveSpacing(
     val xxl: Dp = 44.dp,
     val section: Dp = 54.dp,
     val screenHorizontal: Dp = 20.dp,
-    val tvScreenHorizontal: Dp = 56.dp,
+    val tvScreenHorizontal: Dp = 52.dp,
 )
 
 @Immutable
@@ -65,39 +68,39 @@ data class AstraWaveSizing(
     val landscapeCardWidth: Dp = 284.dp,
     val compactCardWidth: Dp = 190.dp,
     val heroPhoneHeight: Dp = 430.dp,
-    val heroTvHeight: Dp = 590.dp,
-    val focusScale: Float = 1.035f,
+    val heroTvHeight: Dp = 610.dp,
+    val focusScale: Float = 1.022f,
 )
 
 @Immutable
 data class AstraWaveElevation(
-    val resting: Dp = 0.dp,
-    val focused: Dp = 12.dp,
-    val overlay: Dp = 22.dp,
+    val resting: Dp = 1.dp,
+    val focused: Dp = 18.dp,
+    val overlay: Dp = 28.dp,
 )
 
 @Immutable
 data class AstraWaveOpacity(
     val disabled: Float = 0.38f,
-    val secondary: Float = 0.76f,
-    val scrim: Float = 0.78f,
-    val heroGradient: Float = 0.92f,
+    val secondary: Float = 0.78f,
+    val scrim: Float = 0.82f,
+    val heroGradient: Float = 0.94f,
 )
 
 @Immutable
 data class AstraWaveMotion(
-    val fastMs: Int = 90,
-    val focusMs: Int = 130,
-    val standardMs: Int = 200,
-    val slowMs: Int = 300,
+    val fastMs: Int = 85,
+    val focusMs: Int = 115,
+    val standardMs: Int = 190,
+    val slowMs: Int = 280,
 )
 
 @Immutable
 data class AstraWaveLayoutMetrics(
     val gridGutter: Dp = 12.dp,
-    val tvGridGutter: Dp = 18.dp,
-    val dialogMaxWidth: Dp = 660.dp,
-    val contentMaxWidth: Dp = 1680.dp,
+    val tvGridGutter: Dp = 16.dp,
+    val dialogMaxWidth: Dp = 680.dp,
+    val contentMaxWidth: Dp = 1760.dp,
     val posterAspectRatio: Float = 2f / 3f,
     val backdropAspectRatio: Float = 16f / 9f,
     val squareAspectRatio: Float = 1f,
@@ -137,8 +140,8 @@ private val AstraWavePhoneTypography = Typography(
     titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold),
     bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Normal),
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Normal),
-    labelLarge = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold),
-    labelMedium = TextStyle(fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.45.sp),
+    labelLarge = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold),
+    labelMedium = TextStyle(fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.42.sp),
 )
 
 private val AstraWaveTabletTypography = Typography(
@@ -149,28 +152,28 @@ private val AstraWaveTabletTypography = Typography(
     titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
     bodyLarge = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal),
     bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal),
-    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold),
-    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold),
+    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.48.sp),
 )
 
 private val AstraWaveTvTypography = Typography(
-    displayLarge = TextStyle(fontSize = 64.sp, lineHeight = 66.sp, fontWeight = FontWeight.Black, letterSpacing = (-1.4).sp),
-    headlineLarge = TextStyle(fontSize = 40.sp, lineHeight = 45.sp, fontWeight = FontWeight.Bold),
-    headlineMedium = TextStyle(fontSize = 31.sp, lineHeight = 37.sp, fontWeight = FontWeight.Bold),
-    titleLarge = TextStyle(fontSize = 25.sp, lineHeight = 31.sp, fontWeight = FontWeight.Bold),
-    titleMedium = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
-    bodyLarge = TextStyle(fontSize = 19.sp, lineHeight = 27.sp, fontWeight = FontWeight.Normal),
-    bodyMedium = TextStyle(fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Normal),
-    labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold),
-    labelMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.55.sp),
+    displayLarge = TextStyle(fontSize = 62.sp, lineHeight = 64.sp, fontWeight = FontWeight.Black, letterSpacing = (-1.5).sp),
+    headlineLarge = TextStyle(fontSize = 38.sp, lineHeight = 43.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
+    headlineMedium = TextStyle(fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold),
+    titleLarge = TextStyle(fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold),
+    titleMedium = TextStyle(fontSize = 19.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold),
+    bodyLarge = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal),
+    bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold),
+    labelMedium = TextStyle(fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
 )
 
 private val AstraWaveShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(11.dp),
-    medium = RoundedCornerShape(15.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(22.dp),
+    extraLarge = RoundedCornerShape(30.dp),
 )
 
 @Composable
@@ -195,12 +198,12 @@ fun AstraWaveTheme(
     val effectiveSpacing = when (deviceClass) {
         AstraWaveDeviceClass.PHONE -> spacing
         AstraWaveDeviceClass.TABLET -> spacing.copy(screenHorizontal = 30.dp, section = 58.dp)
-        AstraWaveDeviceClass.TV -> spacing.copy(screenHorizontal = spacing.tvScreenHorizontal, section = 64.dp)
+        AstraWaveDeviceClass.TV -> spacing.copy(screenHorizontal = spacing.tvScreenHorizontal, section = 62.dp)
     }
     val effectiveSizing = when (deviceClass) {
         AstraWaveDeviceClass.PHONE -> sizing
-        AstraWaveDeviceClass.TABLET -> sizing.copy(posterWidth = 174.dp, posterHeight = 261.dp, landscapeCardWidth = 308.dp, compactCardWidth = 200.dp)
-        AstraWaveDeviceClass.TV -> sizing.copy(posterWidth = 194.dp, posterHeight = 291.dp, landscapeCardWidth = 344.dp, compactCardWidth = 224.dp, focusScale = 1.045f)
+        AstraWaveDeviceClass.TABLET -> sizing.copy(posterWidth = 174.dp, posterHeight = 261.dp, landscapeCardWidth = 310.dp, compactCardWidth = 202.dp)
+        AstraWaveDeviceClass.TV -> sizing.copy(posterWidth = 196.dp, posterHeight = 294.dp, landscapeCardWidth = 352.dp, compactCardWidth = 226.dp, focusScale = 1.024f)
     }
     val effectiveLayout = when (deviceClass) {
         AstraWaveDeviceClass.PHONE -> layout
