@@ -2,7 +2,7 @@ export type MediaKind = 'movie' | 'series' | 'episode' | 'live' | 'sport' | 'son
 export type LiveStreamSource = { id:string; provider:string; sourceId?:string; streamUrl:string; group?:string; quality?:string; healthScore?:number; uptimePercent?:number; latencyMs?:number };
 export type CatalogItem = { id:string; kind:MediaKind; title:string; subtitle?:string; posterUrl?:string; backdropUrl?:string; overview?:string; score?:number; popularity?:number; genreIds?:number[]; streamUrl?:string; sources?:LiveStreamSource[]; progressPercent?:number };
 export type CatalogRail = { title:string; source?:string; addonId?:string; manifestUrl?:string; items:CatalogItem[] };
-export type SourceCandidate = { id:string; provider:string; url?:string; quality?:string; codec?:string; hdr?:string; bitrateKbps?:number; latencyMs?:number; uptimePercent?:number; direct?:boolean; licenseLabel?:string };
+export type SourceCandidate = { id:string; provider:string; url?:string; quality?:string; codec?:string; hdr?:string; bitrateKbps?:number; audioCodec?:string; fileSizeBytes?:number; language?:string; releaseType?:string; latencyMs?:number; uptimePercent?:number; direct?:boolean; licenseLabel?:string };
 export type GuideProgram = { title:string; start:number; stop:number; category?:string };
 export type LiveChannel = { id:string; tvgId?:string; name:string; group?:string; logoUrl?:string; streamUrl?:string; sources?:LiveStreamSource[]; now?:string; next?:string; programs?:GuideProgram[]; sourceCount:number };
 export type LiveData = { activeSource:string; sourceOptions:{id:string;name:string}[]; channels:LiveChannel[]; stats:{channels:number;epgLinked:number;epgGeneratedAt?:string|null;epgScheduledChannels?:number}; failures?:{source:string;error:string}[] };
@@ -20,7 +20,6 @@ const tmdbImage=(p?:string|null,size='w500')=>p?`https://image.tmdb.org/t/p/${si
 
 async function getJson<T>(path:string):Promise<T>{const response=await fetch(`${base}${path}`,{cache:'no-store'});if(!response.ok)throw new Error(`AstraWave API ${response.status}`);return response.json() as Promise<T>}
 function browserTmdbToken(){try{return typeof window!=='undefined'?localStorage.getItem('astrawave:tmdb-token')?.trim()||'':''}catch{return''}}
-function sessionDebridToken(){try{return typeof window!=='undefined'?sessionStorage.getItem('astrawave:rd-access-token')?.trim()||'':''}catch{return''}}
 async function browserTmdb(path:string){
   const token=browserTmdbToken();if(!token)throw new Error('TMDB browser token is not configured');
   const bearer=token.startsWith('eyJ');
@@ -61,9 +60,9 @@ function localStremioManifests(){
   }catch{return[] as {name?:string;url:string}[]}
 }
 async function optimizeWithSessionDebrid(sources:SourceCandidate[]):Promise<SourceCandidate[]>{
-  const accessToken=sessionDebridToken();if(!accessToken||!sources.length)return sources;
+  if(!sources.length)return sources;
   try{
-    const response=await fetch(`${base}/debrid/real-debrid/optimize`,{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({accessToken,sources})});
+    const response=await fetch(`${base}/debrid/real-debrid/optimize`,{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({sources})});
     if(!response.ok)return sources;
     const payload=await response.json() as {sources?:SourceCandidate[]};return payload.sources?.length?payload.sources:sources;
   }catch{return sources}
