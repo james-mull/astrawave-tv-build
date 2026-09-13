@@ -18,14 +18,9 @@ export default function PlaybackDiagnosticsPage(){
   const [busy,setBusy]=useState(false);
 
   useEffect(()=>{
-    try{
-      const token=sessionStorage.getItem('astrawave:debrid:real-debrid:access-token')||'';
-      if(token){
-        fetch('/api/astrawave/debrid/real-debrid/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({accessToken:token}),cache:'no-store'})
-          .then(async response=>{const body=await response.json();setDebrid(response.ok?{connected:true,username:body.username,type:body.type,expiration:body.expiration}:{connected:false,error:body.error||'Verification failed'})})
-          .catch(()=>setDebrid({connected:false,error:'Verification failed'}));
-      }
-    }catch{}
+    fetch('/api/astrawave/debrid/real-debrid/verify',{method:'POST',headers:{'content-type':'application/json'},body:'{}',cache:'no-store'})
+      .then(async response=>{const body=await response.json();setDebrid(response.ok?{connected:true,username:body.username,type:body.type,expiration:body.expiration}:{connected:false,error:body.error||'Not connected'})})
+      .catch(()=>setDebrid({connected:false,error:'Verification failed'}));
     if(!firebaseAuth){setStatus('Firebase is not configured for this deployment.');return;}
     return onAuthStateChanged(firebaseAuth,next=>{
       setUser(next);
