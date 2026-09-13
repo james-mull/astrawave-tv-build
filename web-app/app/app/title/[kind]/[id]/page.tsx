@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Bookmark, Check, ChevronRight, ExternalLink, Film, Loader2, Play, ShieldCheck, Tv2 } from 'lucide-react';
 import { AstraWaveApi, CatalogItem, SourceCandidate, TitleDetails } from '../../../../../lib/astrawave-api';
+import { firebaseAuth } from '../../../../../lib/firebase';
+import { FirebaseData } from '../../../../../lib/firebase-data';
 
 type EpisodeItem={id:string;season:number;episode:number;title:string;overview?:string;released?:string;thumbnail?:string;runtimeMinutes?:number};
 type EpisodePayload={seriesId:string;title?:string|null;episodes:EpisodeItem[]};
@@ -24,6 +27,7 @@ function rankSources(sources:SourceCandidate[]){return [...sources].sort((a,b)=>
 function playbackKey(kind:string,id:string){return `astrawave:vod-progress:${kind}:${id}`}
 function watchlistKey(){return 'astrawave:vod-watchlist'}
 function episodePlaybackId(seriesId:string,episode:EpisodeItem){return `${seriesId}:s${episode.season}:e${episode.episode}`}
+function mediaProgressId(kind:string,id:string){return `${kind}:${id}`}
 function enabledStremioManifests():ManifestInput[]{
   try{
     const raw=JSON.parse(localStorage.getItem('astrawave:vod-stremio-manifests')||'[]') as Array<{name?:string;url?:string;enabled?:boolean}>;
@@ -32,25 +36,35 @@ function enabledStremioManifests():ManifestInput[]{
   }catch{return[]}
 }
 
-function SmartVodPlayer({kind,id,sources,selectedIndex,onSelectedIndex,onEnded}:{kind:string;id:string;sources:SourceCandidate[];selectedIndex:number;onSelectedIndex:(index:number)=>void;onEnded?:()=>void}){
+function SmartVodPlayer({kind,id,title,cloudUid,sources,selectedIndex,onSelectedIndex,onEnded}:{kind:string;id:string;title:string;cloudUid:string|null;sources:SourceCandidate[];selectedIndex:number;onSelectedIndex:(index:number)=>void;onEnded?:()=>void}){
   const videoRef=useRef<HTMLVideoElement|null>(null);
+  const cloudBucket=useRef(-1);
   const [message,setMessage]=useState('');
   const selected=sources[selectedIndex];
 
   useEffect(()=>{
     const video=videoRef.current;if(!video||!selected?.url)return;
-    setMessage('');
+    setMessage('');cloudBucket.current=-1;
     try{const saved=Number(localStorage.getItem(playbackKey(kind,id))||0);if(saved>5)video.currentTime=saved}catch{}
-    const save=()=>{try{if(video.currentTime>1)localStorage.setItem(playbackKey(kind,id),String(video.currentTime))}catch{}};
+    const save=(forceCloud=false)=>{
+      try{if(video.currentTime>1)localStorage.setItem(playbackKey(kind,id),String(video.currentTime))}catch{}
+      if(!cloudUid||video.currentTime<=1||!Number.isFinite(video.duration)||video.duration<=0)return;
+      const bucket=Math.floor(video.currentTime/15);
+      if(!forceCloud&&bucket===cloudBucket.current)return;
+      cloudBucket.current=bucket;
+      void FirebaseData.saveProgress(cloudUid,{mediaId:mediaProgressId(kind,id),kind,title,positionMs:Math.round(video.currentTime*1000),durationMs:Math.round(video.duration*1000)}).catch(()=>{});
+    };
     const fail=()=>{
       const next=selectedIndex+1;
       if(next<sources.length){setMessage(`Source ${selectedIndex+1} failed. AstraWave is trying backup ${next+1} of ${sources.length}.`);onSelectedIndex(next)}
       else setMessage('All ranked browser-playable candidates failed. Try another authorized source or the Android/TV app.');
     };
-    const ended=()=>{try{localStorage.removeItem(playbackKey(kind,id))}catch{};onEnded?.()};
-    video.addEventListener('timeupdate',save);video.addEventListener('pause',save);video.addEventListener('ended',ended);video.addEventListener('error',fail);
-    return()=>{save();video.removeEventListener('timeupdate',save);video.removeEventListener('pause',save);video.removeEventListener('ended',ended);video.removeEventListener('error',fail)};
-  },[kind,id,selected?.url,selectedIndex,sources.length,onSelectedIndex,onEnded]);
+    const ended=()=>{try{localStorage.removeItem(playbackKey(kind,id))}catch{};if(cloudUid&&Number.isFinite(video.duration)&&video.duration>0)void FirebaseData.saveProgress(cloudUid,{mediaId:mediaProgressId(kind,id),kind,title,positionMs:Math.round(video.duration*1000),durationMs:Math.round(video.duration*1000)}).catch(()=>{});onEnded?.()};
+    const pause=()=>save(true);
+    video.addEventListener('timeupdate',()=>save(false));video.addEventListener('pause',pause);video.addEventListener('ended',ended);video.addEventListener('error',fail);
+    const tick=()=>save(false);video.addEventListener('timeupdate',tick);
+    return()=>{save(true);video.removeEventListener('timeupdate',tick);video.removeEventListener('pause',pause);video.removeEventListener('ended',ended);video.removeEventListener('error',fail)};
+  },[kind,id,title,cloudUid,selected?.url,selectedIndex,sources.length,onSelectedIndex,onEnded]);
 
   if(!selected?.url)return null;
   return <div className="player"><video ref={videoRef} key={selected.url} src={selected.url} controls playsInline autoPlay/><div className="player-meta"><ShieldCheck size={15}/><span><b>{selected.provider}</b>{selected.quality?` • ${selected.quality}`:''}{selected.codec?` • ${selected.codec}`:''}{selected.hdr?` • ${selected.hdr}`:''}{selected.licenseLabel?` • ${selected.licenseLabel}`:''}</span></div>{message&&<p className="player-message">{message}</p>}</div>
@@ -58,6 +72,7 @@ function SmartVodPlayer({kind,id,sources,selectedIndex,onSelectedIndex,onEnded}:
 
 export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: string; id: string }> }) {
   const [route,setRoute]=useState<{kind:'movie'|'series';id:string}|null>(null);
+  const [uid,setUid]=useState<string|null>(null);
   const [details,setDetails]=useState<TitleDetails|null>(null);
   const [sources,setSources]=useState<SourceCandidate[]>([]);
   const [episodes,setEpisodes]=useState<EpisodeItem[]>([]);
@@ -65,12 +80,14 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
   const [selectedEpisode,setSelectedEpisode]=useState<EpisodeItem|null>(null);
   const [episodeLoading,setEpisodeLoading]=useState(false);
   const [episodeMessage,setEpisodeMessage]=useState('');
+  const [progressByMediaId,setProgressByMediaId]=useState<Record<string,number>>({});
   const [selectedIndex,setSelectedIndex]=useState(0);
   const [watchlisted,setWatchlisted]=useState(false);
   const [resumeSeconds,setResumeSeconds]=useState(0);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
 
+  useEffect(()=>firebaseAuth?onAuthStateChanged(firebaseAuth,user=>setUid(user?.uid||null)):undefined,[]);
   useEffect(()=>{params.then(value=>setRoute({kind:value.kind==='series'?'series':'movie',id:value.id}))},[params]);
   useEffect(()=>{
     if(!route)return;
@@ -89,6 +106,22 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
     }).finally(()=>setLoading(false));
   },[route]);
 
+  useEffect(()=>{
+    if(!uid||!route)return;
+    Promise.all([FirebaseData.listWatchlist(uid),FirebaseData.listProgress(uid)]).then(([watchlist,progress])=>{
+      const titleMediaId=`${route.kind}:${route.id}`;
+      if(watchlist.some(item=>item.mediaId===titleMediaId)){
+        setWatchlisted(true);
+        try{const local=new Set<string>(JSON.parse(localStorage.getItem(watchlistKey())||'[]'));local.add(titleMediaId);localStorage.setItem(watchlistKey(),JSON.stringify([...local]))}catch{}
+      }
+      const map:Record<string,number>={};
+      for(const item of progress)map[item.mediaId]=Math.max(0,Number(item.positionMs||0)/1000);
+      setProgressByMediaId(map);
+      const cloudSeconds=map[titleMediaId]||0;
+      if(cloudSeconds>resumeSeconds){setResumeSeconds(cloudSeconds);try{localStorage.setItem(playbackKey(route.kind,route.id),String(cloudSeconds))}catch{}}
+    }).catch(()=>{});
+  },[uid,route]);
+
   const related=useMemo(()=>details?.related||[],[details]);
   const meta=details?[details.releaseDate?.slice(0,4),details.rating,details.runtimeMinutes?`${details.runtimeMinutes} min`:null,details.seasons?`${details.seasons} seasons`:null,details.score?`★ ${details.score.toFixed(1)}`:null].filter(Boolean):[];
   const seasons=useMemo(()=>Array.from(new Set(episodes.map(e=>e.season))).sort((a,b)=>a-b),[episodes]);
@@ -97,18 +130,27 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
   const topQuality=sources.map(s=>s.quality).filter(Boolean)[0];
   const playbackKind=selectedEpisode?'episode':route?.kind||'movie';
   const playbackId=selectedEpisode&&route?episodePlaybackId(route.id,selectedEpisode):route?.id||'';
+  const playbackTitle=selectedEpisode&&details?`${details.title} • S${selectedEpisode.season} E${selectedEpisode.episode} • ${selectedEpisode.title}`:details?.title||'AstraWave';
 
   function toggleWatchlist(){
     if(!route)return;
+    const key=`${route.kind}:${route.id}`;let next=false;
     try{
-      const key=`${route.kind}:${route.id}`;const list=new Set<string>(JSON.parse(localStorage.getItem(watchlistKey())||'[]'));
+      const list=new Set<string>(JSON.parse(localStorage.getItem(watchlistKey())||'[]'));
       if(list.has(key))list.delete(key);else list.add(key);
-      localStorage.setItem(watchlistKey(),JSON.stringify([...list]));setWatchlisted(list.has(key));
-    }catch{}
+      next=list.has(key);localStorage.setItem(watchlistKey(),JSON.stringify([...list]));setWatchlisted(next);
+    }catch{return}
+    if(uid){
+      if(next)void FirebaseData.addWatchlist(uid,key,{kind:route.kind,title:details?.title||'',posterUrl:details?.posterUrl||null}).catch(()=>{});
+      else void FirebaseData.removeWatchlist(uid,key).catch(()=>{});
+    }
   }
 
   async function playEpisode(ep:EpisodeItem){
     if(!route||route.kind!=='series'||!details?.imdbId)return;
+    const episodeId=episodePlaybackId(route.id,ep);
+    const cloudSeconds=progressByMediaId[mediaProgressId('episode',episodeId)]||0;
+    if(cloudSeconds>0){try{const local=Number(localStorage.getItem(playbackKey('episode',episodeId))||0);if(cloudSeconds>local)localStorage.setItem(playbackKey('episode',episodeId),String(cloudSeconds))}catch{}}
     setSelectedEpisode(ep);setSeason(ep.season);setEpisodeLoading(true);setEpisodeMessage('Finding the best authorized episode source…');setSources([]);setSelectedIndex(0);
     const manifests=enabledStremioManifests();
     if(!manifests.length){setEpisodeLoading(false);setEpisodeMessage('Add an enabled Stremio addon in Easy Setup to resolve episode playback on web.');return}
@@ -137,14 +179,14 @@ export default function TitlePlaybackPage({ params }: { params: Promise<{ kind: 
     {!loading&&details&&<>
       <section className="title-hero" style={details.backdropUrl?{backgroundImage:`linear-gradient(90deg,rgba(5,7,12,.98),rgba(5,7,12,.76) 46%,rgba(5,7,12,.2)),url(${details.backdropUrl})`}:undefined}>
         {details.posterUrl&&<img className="hero-poster" src={details.posterUrl} alt=""/>}
-        <div className="hero-copy"><span className="eyebrow">{details.kind==='movie'?<Film size={14}/>:<Tv2 size={14}/>} {details.kind==='movie'?'MOVIE':'SERIES'}</span><h1>{details.title}</h1>{details.tagline&&<p className="tagline">{details.tagline}</p>}<div className="meta">{meta.map(x=><span key={String(x)}>{x}</span>)}{sources.length>0&&<span>{sources.length} source{sources.length===1?'':'s'}</span>}{topQuality&&<span>Best {topQuality}</span>}</div><p className="overview">{details.overview||'No synopsis available.'}</p><div className="genres">{details.genres.map(g=><span key={g}>{g}</span>)}</div><div className="hero-actions">{selected?.url&&<button className="primary" onClick={()=>document.getElementById('player')?.scrollIntoView({behavior:'smooth'})}><Play size={16}/> {resumeSeconds>5?'Resume':'Play Best'}</button>}<button className={watchlisted?'secondary active':'secondary'} onClick={toggleWatchlist}>{watchlisted?<Check size={16}/>:<Bookmark size={16}/>} {watchlisted?'In Watchlist':'Add to Watchlist'}</button>{details.trailers[0]&&<a className="secondary" href={details.trailers[0].url} target="_blank" rel="noreferrer"><ExternalLink size={16}/> Trailer</a>}</div></div>
+        <div className="hero-copy"><span className="eyebrow">{details.kind==='movie'?<Film size={14}/>:<Tv2 size={14}/>} {details.kind==='movie'?'MOVIE':'SERIES'}</span><h1>{details.title}</h1>{details.tagline&&<p className="tagline">{details.tagline}</p>}<div className="meta">{meta.map(x=><span key={String(x)}>{x}</span>)}{sources.length>0&&<span>{sources.length} source{sources.length===1?'':'s'}</span>}{topQuality&&<span>Best {topQuality}</span>}{uid&&<span>Cloud Sync</span>}</div><p className="overview">{details.overview||'No synopsis available.'}</p><div className="genres">{details.genres.map(g=><span key={g}>{g}</span>)}</div><div className="hero-actions">{selected?.url&&<button className="primary" onClick={()=>document.getElementById('player')?.scrollIntoView({behavior:'smooth'})}><Play size={16}/> {resumeSeconds>5?'Resume':'Play Best'}</button>}<button className={watchlisted?'secondary active':'secondary'} onClick={toggleWatchlist}>{watchlisted?<Check size={16}/>:<Bookmark size={16}/>} {watchlisted?'In Watchlist':'Add to Watchlist'}</button>{details.trailers[0]&&<a className="secondary" href={details.trailers[0].url} target="_blank" rel="noreferrer"><ExternalLink size={16}/> Trailer</a>}</div></div>
       </section>
 
-      {route?.kind==='series'&&episodes.length>0&&<section className="section binge"><div className="section-head"><div><small>BINGE MODE</small><h2>Episodes</h2></div><span>{episodes.length} episodes across {seasons.length} season{seasons.length===1?'':'s'}</span></div><div className="season-tabs">{seasons.map(s=><button key={s} className={season===s?'active':''} onClick={()=>setSeason(s)}>Season {s}</button>)}</div><div className="episode-list">{visibleEpisodes.map(ep=><article key={ep.id} role="button" tabIndex={0} className={selectedEpisode?.id===ep.id?'active':''} onClick={()=>void playEpisode(ep)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();void playEpisode(ep)}}}>{ep.thumbnail?<img src={ep.thumbnail} alt=""/>:<div className="episode-fallback">S{ep.season}E{ep.episode}</div>}<div><small>S{ep.season} E{ep.episode}{ep.runtimeMinutes?` • ${ep.runtimeMinutes} min`:''}{ep.released?` • ${ep.released}`:''}</small><h3>{ep.title}</h3><p>{ep.overview||'Episode details will appear when available.'}</p></div>{selectedEpisode?.id===ep.id&&episodeLoading?<Loader2 className="spin" size={18}/>:<ChevronRight size={18}/>}</article>)}</div>{episodeMessage&&<div className="episode-status">{episodeLoading&&<Loader2 className="spin" size={15}/>} {episodeMessage}</div>}</section>}
+      {route?.kind==='series'&&episodes.length>0&&<section className="section binge"><div className="section-head"><div><small>BINGE MODE</small><h2>Episodes</h2></div><span>{episodes.length} episodes across {seasons.length} season{seasons.length===1?'':'s'}</span></div><div className="season-tabs">{seasons.map(s=><button key={s} className={season===s?'active':''} onClick={()=>setSeason(s)}>Season {s}</button>)}</div><div className="episode-list">{visibleEpisodes.map(ep=>{const cloudSeconds=route?progressByMediaId[mediaProgressId('episode',episodePlaybackId(route.id,ep))]||0:0;return <article key={ep.id} role="button" tabIndex={0} className={selectedEpisode?.id===ep.id?'active':''} onClick={()=>void playEpisode(ep)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();void playEpisode(ep)}}}>{ep.thumbnail?<img src={ep.thumbnail} alt=""/>:<div className="episode-fallback">S{ep.season}E{ep.episode}</div>}<div><small>S{ep.season} E{ep.episode}{ep.runtimeMinutes?` • ${ep.runtimeMinutes} min`:''}{ep.released?` • ${ep.released}`:''}{cloudSeconds>5?` • Resume ${Math.floor(cloudSeconds/60)}m`:''}</small><h3>{ep.title}</h3><p>{ep.overview||'Episode details will appear when available.'}</p></div>{selectedEpisode?.id===ep.id&&episodeLoading?<Loader2 className="spin" size={18}/>:<ChevronRight size={18}/>}</article>})}</div>{episodeMessage&&<div className="episode-status">{episodeLoading&&<Loader2 className="spin" size={15}/>} {episodeMessage}</div>}</section>}
 
-      <section className="section" id="player"><div className="section-head"><div><small>SMART PLAYBACK</small><h2>{selectedEpisode?`Play Best • S${selectedEpisode.season} E${selectedEpisode.episode}`:'Play Best'}</h2></div><span>{sources.length} approved candidate{sources.length===1?'':'s'}</span></div>{sources.length===0?<div className="state"><ShieldCheck/> {selectedEpisode?episodeMessage||'No approved episode source is currently available.':'No approved playable source is currently available. Add permitted Stremio, debrid or provider sources in the Control Center.'}</div>:<><div className="smart-summary"><div><b>{selectedEpisode?selectedEpisode.title:selected?.provider}</b><span>{selectedEpisode?`S${selectedEpisode.season} E${selectedEpisode.episode} • ${selected?.provider||'Best source'}`:`${selected?.quality||'Quality not reported'}${selected?.direct?' • Direct':''}`}</span></div><p>AstraWave ranks eligible sources by resolution, direct-play capability, bitrate, uptime and latency when those signals are available, then automatically advances to backups on playback failure.{selectedEpisode?' AutoNext advances to the next available episode when playback ends.':''}</p></div><div className="source-list">{sources.map((source,index)=><button key={source.id} className={selectedIndex===index?'active':''} onClick={()=>setSelectedIndex(index)}><div><b>{index+1}. {source.provider}</b><small>{[source.quality,source.codec,source.hdr,source.bitrateKbps?`${Math.round(source.bitrateKbps/1000)} Mbps`:null,source.uptimePercent!=null?`${source.uptimePercent.toFixed(1)}% uptime`:null,source.latencyMs!=null?`${Math.round(source.latencyMs)} ms`:null,source.direct?'Direct':null,source.licenseLabel].filter(Boolean).join(' • ')||'Eligible source'}</small></div><span>{selectedIndex===index?'Playing':`Score ${Math.round(sourceScore(source))}`}</span></button>)}</div>{route&&<SmartVodPlayer kind={playbackKind} id={playbackId} sources={sources} selectedIndex={selectedIndex} onSelectedIndex={setSelectedIndex} onEnded={selectedEpisode?playNextEpisode:undefined}/>}</>}</section>
+      <section className="section" id="player"><div className="section-head"><div><small>SMART PLAYBACK</small><h2>{selectedEpisode?`Play Best • S${selectedEpisode.season} E${selectedEpisode.episode}`:'Play Best'}</h2></div><span>{sources.length} approved candidate{sources.length===1?'':'s'}</span></div>{sources.length===0?<div className="state"><ShieldCheck/> {selectedEpisode?episodeMessage||'No approved episode source is currently available.':'No approved playable source is currently available. Add permitted Stremio, debrid or provider sources in the Control Center.'}</div>:<><div className="smart-summary"><div><b>{selectedEpisode?selectedEpisode.title:selected?.provider}</b><span>{selectedEpisode?`S${selectedEpisode.season} E${selectedEpisode.episode} • ${selected?.provider||'Best source'}`:`${selected?.quality||'Quality not reported'}${selected?.direct?' • Direct':''}`}</span></div><p>AstraWave ranks eligible sources by resolution, direct-play capability, bitrate, uptime and latency when those signals are available, then automatically advances to backups on playback failure.{selectedEpisode?' AutoNext advances to the next available episode when playback ends.':''}{uid?' Progress is synced to your signed-in AstraWave account.':''}</p></div><div className="source-list">{sources.map((source,index)=><button key={source.id} className={selectedIndex===index?'active':''} onClick={()=>setSelectedIndex(index)}><div><b>{index+1}. {source.provider}</b><small>{[source.quality,source.codec,source.hdr,source.bitrateKbps?`${Math.round(source.bitrateKbps/1000)} Mbps`:null,source.uptimePercent!=null?`${source.uptimePercent.toFixed(1)}% uptime`:null,source.latencyMs!=null?`${Math.round(source.latencyMs)} ms`:null,source.direct?'Direct':null,source.licenseLabel].filter(Boolean).join(' • ')||'Eligible source'}</small></div><span>{selectedIndex===index?'Playing':`Score ${Math.round(sourceScore(source))}`}</span></button>)}</div>{route&&<SmartVodPlayer kind={playbackKind} id={playbackId} title={playbackTitle} cloudUid={uid} sources={sources} selectedIndex={selectedIndex} onSelectedIndex={setSelectedIndex} onEnded={selectedEpisode?playNextEpisode:undefined}/>}</>}</section>
 
-      <section className="detail-grid"><article><h2>Cast</h2><div className="people">{details.cast.map(person=><div key={person.id}>{person.profileUrl?<img src={person.profileUrl} alt=""/>:<div className="person-fallback">{person.name.charAt(0)}</div>}<b>{person.name}</b><small>{person.role}</small></div>)}</div></article><aside><h2>About</h2>{details.crew.map(person=><div className="credit" key={`${person.id}:${person.role}`}><span>{person.role}</span><b>{person.name}</b></div>)}{details.status&&<div className="credit"><span>Status</span><b>{details.status}</b></div>}{details.episodes&&<div className="credit"><span>Episodes</span><b>{details.episodes}</b></div>}<div className="credit"><span>Source mode</span><b>Authorized only</b></div></aside></section>
+      <section className="detail-grid"><article><h2>Cast</h2><div className="people">{details.cast.map(person=><div key={person.id}>{person.profileUrl?<img src={person.profileUrl} alt=""/>:<div className="person-fallback">{person.name.charAt(0)}</div>}<b>{person.name}</b><small>{person.role}</small></div>)}</div></article><aside><h2>About</h2>{details.crew.map(person=><div className="credit" key={`${person.id}:${person.role}`}><span>{person.role}</span><b>{person.name}</b></div>)}{details.status&&<div className="credit"><span>Status</span><b>{details.status}</b></div>}{details.episodes&&<div className="credit"><span>Episodes</span><b>{details.episodes}</b></div>}<div className="credit"><span>Source mode</span><b>Authorized only</b></div><div className="credit"><span>Progress</span><b>{uid?'Cloud + local':'Local only'}</b></div></aside></section>
 
       {details.trailers.length>0&&<section className="section"><div className="section-head"><div><small>TITLE-SPECIFIC MEDIA</small><h2>Trailers & extras</h2></div><span>Only for {details.title}</span></div><div className="trailers">{details.trailers.map(video=><a href={video.url} target="_blank" rel="noreferrer" key={video.key}><div><Play/></div><b>{video.name}</b><small>{video.type}{video.official?' • Official':''}</small></a>)}</div></section>}
 
