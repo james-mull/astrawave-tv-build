@@ -1,0 +1,113 @@
+:root{--aw-surface:rgba(12,17,25,.84);--aw-surface-strong:rgba(18,24,36,.94);--aw-soft-line:rgba(255,255,255,.075);--aw-violet:#9788ff;--aw-violet-soft:rgba(151,136,255,.16)}
+
+/* Premium presentation pass 3 — hierarchy, density and discovery polish */
+body>.shell>.main{padding-bottom:88px}
+.main section{position:relative}
+
+/* Make home/discover feel more editorial */
+.aw-row{position:relative}
+.aw-row+.aw-row{margin-top:42px}
+.row-head{padding-right:4px}
+.row-head h3{font-size:22px;line-height:1.1;font-weight:820;letter-spacing:-.04em}
+.row-head small{margin-top:5px;color:#778397;text-transform:none}
+.row-head>span{background:rgba(255,255,255,.025);backdrop-filter:blur(8px)}
+.card-strip{scroll-padding-left:clamp(18px,3vw,42px);overscroll-behavior-inline:contain}
+.aw-card{scroll-snap-align:start}
+.aw-poster:after{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(3,5,9,.45));opacity:.72}
+.poster-play{z-index:2}
+.score{z-index:2;font-weight:800;letter-spacing:.02em}
+
+/* Distinct first content rail below hero */
+.appHero+.aw-row{margin-top:30px;padding-top:5px}
+.appHero+.aw-row:before{content:"";position:absolute;left:0;top:-8px;width:56px;height:2px;border-radius:999px;background:linear-gradient(90deg,var(--aw-violet),transparent)}
+
+/* Chips read more like premium filters */
+.sourceChips,.dateChips{gap:9px}
+.sourceChips button,.dateChips button{min-height:40px;border-radius:999px;padding:0 14px;font-weight:720;font-size:11px;box-shadow:inset 0 1px rgba(255,255,255,.02)}
+.sourceChips button.active,.dateChips button.active{background:linear-gradient(145deg,rgba(139,124,255,.24),rgba(103,87,214,.14));border-color:rgba(172,159,255,.48)}
+
+/* Live TV hierarchy */
+.liveGrid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.liveTile{padding:17px 16px 15px}
+.liveTile b{padding-right:34px;font-size:15px;letter-spacing:-.015em}
+.liveTile span{font-size:11.5px;max-width:92%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.liveTile small{font-weight:650;letter-spacing:.015em}
+
+/* Guide rows feel more like an actual grid */
+.guideList>article{padding:13px 15px;min-height:78px}
+.guideList>article>div:first-child{align-self:center}
+.guideList>article>div:last-child>span{min-height:54px;display:flex;flex-direction:column;justify-content:center}
+.guideList span b{font-size:11.5px;line-height:1.25}
+
+/* Sports emphasis */
+.sportsGrid>article{padding:19px}
+.sportsGrid h3{font-size:18.5px;letter-spacing:-.025em}
+.sportsGrid p{font-size:11.5px}
+.sportsGrid .primaryBtn{min-height:44px;border-radius:13px}
+
+/* Detail / binge polish */
+.title-shell{max-width:1760px;margin:0 auto}
+.title-hero{position:relative;isolation:isolate}
+.title-hero:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(0deg,rgba(5,7,12,.28),transparent 45%);z-index:0}
+.title-hero>.hero-poster,.title-hero>.hero-copy{position:relative;z-index:1}
+.hero-copy .meta span,.hero-copy .genres span{backdrop-filter:blur(12px)}
+.hero-actions .primary{box-shadow:0 12px 30px rgba(255,255,255,.08)}
+.hero-actions .secondary{backdrop-filter:blur(12px)}
+
+.binge{padding:20px;border:1px solid var(--aw-soft-line);border-radius:22px;background:linear-gradient(145deg,rgba(15,20,30,.88),rgba(9,13,20,.82));box-shadow:0 18px 54px rgba(0,0,0,.16)}
+.season-tabs{padding-bottom:3px}
+.season-tabs button{min-height:39px;border-radius:999px;padding:0 14px;font-weight:750}
+.episode-list{gap:10px}
+.episode-list article{transition:.16s ease;border-color:rgba(255,255,255,.075);box-shadow:0 8px 24px rgba(0,0,0,.09)}
+.episode-list article:hover{transform:translateY(-2px);border-color:rgba(176,162,255,.3);background:#111722}
+.episode-list h3{font-size:16px;letter-spacing:-.02em}
+
+/* Play Best becomes the visual anchor */
+.smart-summary{box-shadow:inset 0 1px rgba(255,255,255,.025),0 14px 38px rgba(0,0,0,.12)}
+.source-list{gap:10px}
+.source-list button{min-height:74px;border-radius:15px;padding:14px 15px;transition:.16s ease}
+.source-list button:hover{transform:translateY(-2px);border-color:rgba(170,156,255,.32);background:#141a24}
+.source-list button.active{background:linear-gradient(145deg,#292051,#18142e);box-shadow:0 14px 34px rgba(68,48,156,.18)}
+.source-list button.active>span{color:#fff}
+.player{border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.34)}
+.player video{max-height:72vh}
+
+/* Cast and extras */
+.detail-grid>article,.detail-grid>aside{box-shadow:0 12px 34px rgba(0,0,0,.1)}
+.people>div{padding:8px;border-radius:14px;transition:.15s ease}
+.people>div:hover{background:rgba(255,255,255,.025)}
+.trailers a{transition:.16s ease;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.trailers a:hover{transform:translateY(-3px);border-color:rgba(174,160,255,.3);background:#111720}
+.related-card{transition:.16s ease}
+.related-card:hover{transform:translateY(-4px)}
+.related-card img,.related-fallback{box-shadow:0 12px 30px rgba(0,0,0,.18)}
+
+/* Easy setup should feel onboarding-like */
+.easySetup header{max-width:850px}
+.easySetup .choices button{transition:.16s ease;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.easySetup .choices button:hover{transform:translateY(-3px);border-color:rgba(165,150,255,.32)}
+.easySetup .choices button.active{box-shadow:0 18px 46px rgba(64,47,148,.18)}
+.easySetup .wizard{box-shadow:0 24px 70px rgba(0,0,0,.24)}
+.easySetup .fields input{font-size:14px}
+.easySetup .actions .primary{background:linear-gradient(145deg,#fff,#e8e9ef)}
+
+/* TV remote / keyboard focus */
+.title-shell button:focus-visible,.title-shell a:focus-visible,.easySetup button:focus-visible,.easySetup input:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(167,152,255,.38),0 0 0 7px rgba(139,124,255,.08)}
+
+@media(min-width:1450px){
+  .aw-card{width:178px}.aw-poster{height:260px}.aw-card>strong,.aw-card>small{max-width:178px}
+  .appHero{height:min(42vw,500px)}
+}
+@media(max-width:900px){
+  .binge{padding:16px}
+  .liveGrid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+}
+@media(max-width:680px){
+  .aw-row+.aw-row{margin-top:34px}
+  .row-head h3{font-size:19px}
+  .sourceChips button,.dateChips button{min-height:38px;padding:0 12px}
+  .binge{padding:14px;border-radius:18px}
+  .source-list{grid-template-columns:1fr}
+  .source-list button{min-height:68px}
+  .easySetup .choices button:hover,.episode-list article:hover,.trailers a:hover,.related-card:hover,.source-list button:hover{transform:none}
+}
