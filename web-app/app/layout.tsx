@@ -4,6 +4,7 @@ import './premium-overrides.css';
 import './app-polish.css';
 import './ui-premium-v2.css';
 import './ui-premium-v3.css';
+import './ui-competitive-v4.css';
 import './control-polish.css';
 import './mobile-primary-nav.css';
 import MobilePrimaryNav from './MobilePrimaryNav';
@@ -29,7 +30,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#06080d',
+  themeColor: '#05070b',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
