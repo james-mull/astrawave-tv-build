@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, CalendarDays, Compass, Film, Gauge, Home, Menu, Music2, Play,
-  RadioTower, Search, SlidersHorizontal, Tv2, Trophy, UserCircle2, X
+  Activity, CalendarDays, Clock3, Compass, Film, Gauge, Home, Menu, Music2, Play,
+  RadioTower, Search, SlidersHorizontal, Star, Tv2, Trophy, UserCircle2, X
 } from 'lucide-react';
 import {
   AstraWaveApi, CatalogItem, CatalogRail, LiveData, SourceRegistry, SportsEvent
@@ -12,6 +12,7 @@ import {
 
 type View='home'|'movies'|'tv'|'live'|'guide'|'sports'|'audio'|'discover'|'sources'|'diagnostics';
 type LiveMode='managed'|'provider';
+type LiveQuickFilter='all'|'favorites'|'recent';
 const nav=[
   ['home','Home',Home],['movies','Movies',Film],['tv','TV Shows',Tv2],['live','Live TV',RadioTower],
   ['guide','Guide',CalendarDays],['sports','Sports',Trophy],['audio','Music & Podcasts',Music2],
@@ -83,8 +84,13 @@ export default function WebAppHome(){
   const [activeSource,setActiveSource]=useState('all-free');
   const [liveMode,setLiveMode]=useState<LiveMode>('managed');
   const [liveGroup,setLiveGroup]=useState('all');
+  const [liveQuickFilter,setLiveQuickFilter]=useState<LiveQuickFilter>('all');
+  const [favoriteLiveIds,setFavoriteLiveIds]=useState<Set<string>>(new Set());
+  const [recentLiveIds,setRecentLiveIds]=useState<string[]>([]);
   const [sports,setSports]=useState<SportsEvent[]>([]);
   const [sportsDate,setSportsDate]=useState('all');
+  const [sportsLeague,setSportsLeague]=useState('all');
+  const [sportsQuery,setSportsQuery]=useState('');
   const [audio,setAudio]=useState<CatalogItem[]>([]);
   const [registry,setRegistry]=useState<SourceRegistry|null>(null);
   const [playing,setPlaying]=useState<CatalogItem|null>(null);
@@ -108,7 +114,11 @@ export default function WebAppHome(){
   }
 
   useEffect(()=>{
-    try{const raw=localStorage.getItem('astrawave:registry-enabled');if(raw)setEnabled(JSON.parse(raw))}catch{}
+    try{
+      const raw=localStorage.getItem('astrawave:registry-enabled');if(raw)setEnabled(JSON.parse(raw));
+      const fav=localStorage.getItem('astrawave:live-favorites');if(fav)setFavoriteLiveIds(new Set(JSON.parse(fav)));
+      const recent=localStorage.getItem('astrawave:live-recents');if(recent)setRecentLiveIds(JSON.parse(recent));
+    }catch{}
     Promise.allSettled([
       AstraWaveApi.catalogRails('movie'),AstraWaveApi.catalogRails('series'),AstraWaveApi.addonRails(),
       AstraWaveApi.liveData('all-free'),AstraWaveApi.sportsChannelCloud(),AstraWaveApi.audioTrending(),AstraWaveApi.sourceRegistry()
@@ -124,16 +134,24 @@ export default function WebAppHome(){
   },[]);
 
   useEffect(()=>{const id=setTimeout(()=>{if(!query.trim()){setSearchResults([]);return}AstraWaveApi.search(query).then(setSearchResults).catch(()=>setSearchResults([]))},220);return()=>clearTimeout(id)},[query]);
-  useEffect(()=>setLiveLimit(160),[activeSource,liveQuery,liveMode,liveGroup]);
+  useEffect(()=>setLiveLimit(160),[activeSource,liveQuery,liveMode,liveGroup,liveQuickFilter]);
   useEffect(()=>setGuideLimit(120),[activeSource,liveMode]);
 
   async function refreshLive(source:string,mode:LiveMode){
-    setLiveLoading(true);setActiveSource(source);setLiveMode(mode);setLiveGroup('all');
+    setLiveLoading(true);setActiveSource(source);setLiveMode(mode);setLiveGroup('all');setLiveQuickFilter('all');
     try{setLiveData(await loadLive(source,mode))}catch{setLiveData(d=>({...d,channels:[]}))}finally{setLiveLoading(false)}
   }
   async function switchSource(id:string){await refreshLive(id,liveMode)}
   async function switchLiveMode(mode:LiveMode){if(mode===liveMode)return;await refreshLive(activeSource,mode)}
-  function play(item:CatalogItem){setSourceIndex(0);setPlayerError('');const url=item.sources?.[0]?.streamUrl||item.streamUrl;setPlaying({...item,streamUrl:url})}
+  function rememberRecent(item:CatalogItem){
+    if(item.kind!=='live'&&item.kind!=='sport')return;
+    setRecentLiveIds(current=>{
+      const next=[item.id,...current.filter(id=>id!==item.id)].slice(0,30);
+      try{localStorage.setItem('astrawave:live-recents',JSON.stringify(next))}catch{}
+      return next;
+    });
+  }
+  function play(item:CatalogItem){setSourceIndex(0);setPlayerError('');rememberRecent(item);const url=item.sources?.[0]?.streamUrl||item.streamUrl;setPlaying({...item,streamUrl:url})}
   function selectPlayerSource(index:number){if(!playing?.sources?.[index])return;setSourceIndex(index);setPlayerError('');setPlaying({...playing,streamUrl:playing.sources[index].streamUrl})}
   function handlePlayerError(){
     if(!playing)return;
@@ -148,6 +166,13 @@ export default function WebAppHome(){
     setPlayerError(sources.length>1?'All ranked browser sources failed. Choose a source manually or switch Live TV to Provider Order.':'This source could not be played in the browser. Try Provider Order or the Android/TV app.');
   }
   function toggleRegistry(id:string,defaultValue:boolean){const next={...enabled,[id]:!(enabled[id]??defaultValue)};setEnabled(next);localStorage.setItem('astrawave:registry-enabled',JSON.stringify(next))}
+  function toggleLiveFavorite(id:string){
+    setFavoriteLiveIds(current=>{
+      const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);
+      try{localStorage.setItem('astrawave:live-favorites',JSON.stringify([...next]))}catch{}
+      return next;
+    });
+  }
 
   const aiRails=useMemo(()=>{
     const all=unique([...movieRails,...tvRails].flatMap(r=>r.items));
@@ -164,11 +189,21 @@ export default function WebAppHome(){
   const liveGroups=useMemo(()=>Array.from(new Set(liveData.channels.map(c=>c.group).filter((x):x is string=>Boolean(x)))).sort().slice(0,36),[liveData]);
   const filteredLive=useMemo(()=>{
     const n=norm(liveQuery);
-    return liveData.channels.filter(c=>(liveGroup==='all'||c.group===liveGroup)&&(!n||norm(`${c.name} ${c.group||''} ${c.now||''}`).includes(n)));
-  },[liveData,liveQuery,liveGroup]);
+    const recentIndex=new Map(recentLiveIds.map((id,index)=>[id,index]));
+    return liveData.channels
+      .filter(c=>(liveGroup==='all'||c.group===liveGroup)&&(!n||norm(`${c.name} ${c.group||''} ${c.now||''}`).includes(n)))
+      .filter(c=>liveQuickFilter==='all'||(liveQuickFilter==='favorites'&&favoriteLiveIds.has(c.id))||(liveQuickFilter==='recent'&&recentIndex.has(c.id)))
+      .sort((a,b)=>liveQuickFilter==='recent'?(recentIndex.get(a.id)??999)-(recentIndex.get(b.id)??999):0);
+  },[liveData,liveQuery,liveGroup,liveQuickFilter,favoriteLiveIds,recentLiveIds]);
   const guideChannels=useMemo(()=>filteredLive.filter(c=>c.programs?.length),[filteredLive]);
+  const recentLiveItems=useMemo(()=>recentLiveIds.map(id=>liveData.channels.find(c=>c.id===id)).filter(Boolean).slice(0,20).map(c=>({id:c!.id,kind:'live' as const,title:c!.name,subtitle:c!.now||c!.group,posterUrl:c!.logoUrl,streamUrl:c!.streamUrl,sources:c!.sources})),[recentLiveIds,liveData]);
   const dates=useMemo(()=>Array.from(new Set(sports.map(e=>e.date||e.startTime.slice(0,10)))),[sports]);
-  const visibleSports=sportsDate==='all'?sports:sports.filter(e=>(e.date||e.startTime.slice(0,10))===sportsDate);
+  const sportLeagues=useMemo(()=>Array.from(new Set(sports.map(e=>e.league).filter(Boolean))).sort(),[sports]);
+  const visibleSports=useMemo(()=>{
+    const q=norm(sportsQuery);
+    return sports.filter(e=>(sportsDate==='all'||(e.date||e.startTime.slice(0,10))===sportsDate)&&(sportsLeague==='all'||e.league===sportsLeague)&&(!q||norm(`${e.title} ${e.league} ${e.homeTeam||''} ${e.awayTeam||''} ${(e.broadcasts||[]).join(' ')}`).includes(q)));
+  },[sports,sportsDate,sportsLeague,sportsQuery]);
+  const activePlayerSource=playing?.sources?.[sourceIndex];
 
   async function runDiagnostics(){
     const checks:[string,()=>Promise<any>][]=[
@@ -193,7 +228,7 @@ export default function WebAppHome(){
 
     {query.trim()&&<section className="searchResults"><div className="row-head"><div><h3>Search Everything</h3><small>{searchResults.length} result{searchResults.length===1?'':'s'}</small></div></div><div className="card-strip">{searchResults.map(item=><Card key={`${item.kind}:${item.id}`} item={item} onPlay={play}/>)}</div></section>}
 
-    {!query.trim()&&view==='home'&&<>{!tmdbConfigured&&<div className="setupNotice"><h3>Movie/TV metadata not configured</h3><p>Add TMDB in AstraWave settings to populate rich movie and TV discovery.</p></div>}{hero&&<section className="appHero" style={hero.backdropUrl?{backgroundImage:`linear-gradient(90deg,rgba(6,8,13,.98),rgba(6,8,13,.45)),url(${hero.backdropUrl})`,backgroundSize:'cover',backgroundPosition:'center'}:undefined}><div className="heroShade"><span className="pillTag">ASTRAWAVE • FEATURED</span><h2>{hero.title}</h2><p>{hero.overview||hero.subtitle||'Your entertainment, unified.'}</p><div><button className="primaryBtn" onClick={()=>play(hero)}><Play size={16}/>Play Best</button><Link className="ghostBtn" href={`/app/title/${hero.kind}/${hero.id}`}>Details</Link></div></div></section>}{aiRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}{movieRails.slice(0,4).map(r=><Row key={`m-${r.title}`} rail={r} onPlay={play}/>)}{tvRails.slice(0,4).map(r=><Row key={`t-${r.title}`} rail={r} onPlay={play}/>)}</>}
+    {!query.trim()&&view==='home'&&<>{!tmdbConfigured&&<div className="setupNotice"><h3>Movie/TV metadata not configured</h3><p>Add TMDB in AstraWave settings to populate rich movie and TV discovery.</p></div>}{hero&&<section className="appHero" style={hero.backdropUrl?{backgroundImage:`linear-gradient(90deg,rgba(6,8,13,.98),rgba(6,8,13,.45)),url(${hero.backdropUrl})`,backgroundSize:'cover',backgroundPosition:'center'}:undefined}><div className="heroShade"><span className="pillTag">ASTRAWAVE • FEATURED</span><h2>{hero.title}</h2><p>{hero.overview||hero.subtitle||'Your entertainment, unified.'}</p><div><button className="primaryBtn" onClick={()=>play(hero)}><Play size={16}/>Play Best</button><Link className="ghostBtn" href={`/app/title/${hero.kind}/${hero.id}`}>Details</Link></div></div></section>}{recentLiveItems.length>0&&<Row rail={{title:'Jump Back In • Live TV',source:'Your recent channels',items:recentLiveItems}} onPlay={play}/>} {aiRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}{movieRails.slice(0,4).map(r=><Row key={`m-${r.title}`} rail={r} onPlay={play}/>)}{tvRails.slice(0,4).map(r=><Row key={`t-${r.title}`} rail={r} onPlay={play}/>)}</>}
 
     {!query.trim()&&view==='movies'&&movieRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}
     {!query.trim()&&view==='tv'&&tvRails.map(r=><Row key={r.title} rail={r} onPlay={play}/>)}
@@ -202,19 +237,21 @@ export default function WebAppHome(){
     {!query.trim()&&view==='live'&&<section>
       <div className="row-head"><div><h3>Live TV</h3><small>{liveData.stats.channels} channels • {liveData.stats.epgLinked} EPG linked • {liveMode==='managed'?'Unified channels':'Original provider order'}</small></div></div>
       <div className="sourceChips"><button className={liveMode==='managed'?'active':''} onClick={()=>switchLiveMode('managed')}>Unified</button><button className={liveMode==='provider'?'active':''} onClick={()=>switchLiveMode('provider')}>Provider Order</button></div>
+      <div className="sourceChips"><button className={liveQuickFilter==='all'?'active':''} onClick={()=>setLiveQuickFilter('all')}>All</button><button className={liveQuickFilter==='favorites'?'active':''} onClick={()=>setLiveQuickFilter('favorites')}><Star size={14}/> Favorites {favoriteLiveIds.size||''}</button><button className={liveQuickFilter==='recent'?'active':''} onClick={()=>setLiveQuickFilter('recent')}><Clock3 size={14}/> Recent</button></div>
       <div className="sourceChips">{liveData.sourceOptions.map(s=><button key={s.id} className={activeSource===s.id?'active':''} onClick={()=>switchSource(s.id)}>{s.name}</button>)}</div>
       {liveGroups.length>0&&<div className="sourceChips"><button className={liveGroup==='all'?'active':''} onClick={()=>setLiveGroup('all')}>All categories</button>{liveGroups.map(group=><button key={group} className={liveGroup===group?'active':''} onClick={()=>setLiveGroup(group)}>{group}</button>)}</div>}
       <input className="liveSearch" value={liveQuery} onChange={e=>setLiveQuery(e.target.value)} placeholder="Filter channels, categories or now playing"/>
-      {liveLoading&&<div className="setupNotice"><p>Refreshing {liveMode==='provider'?'provider order':'unified channels'}…</p></div>}
-      <div className="liveGrid">{filteredLive.slice(0,liveLimit).map(c=><button className="liveTile" key={c.id} onClick={()=>play({id:c.id,kind:'live',title:c.name,subtitle:c.now||c.group,posterUrl:c.logoUrl,streamUrl:c.streamUrl,sources:c.sources})}><b>{c.name}</b><span>{c.now||c.group||'Live'}</span><small>{liveMode==='provider'?'Provider order':`${c.sourceCount} source${c.sourceCount===1?'':'s'}`}</small></button>)}</div>
+      {liveLoading&&<div className="setupNotice"><p>Refreshing {liveMode==='provider'?'provider order':'health-ranked unified channels'}…</p></div>}
+      {!liveLoading&&filteredLive.length===0&&<div className="setupNotice"><h3>No channels in this view</h3><p>Try All channels, another category, or Provider Order. Favorites and Recent are stored locally on this device.</p></div>}
+      <div className="liveGrid">{filteredLive.slice(0,liveLimit).map(c=><div className="liveTile" key={c.id}><button className="cardButton" onClick={()=>play({id:c.id,kind:'live',title:c.name,subtitle:c.now||c.group,posterUrl:c.logoUrl,streamUrl:c.streamUrl,sources:c.sources})}><b>{c.name}</b><span>{c.now||c.group||'Live'}</span><small>{liveMode==='provider'?'Provider order':`${c.sourceCount} source${c.sourceCount===1?'':'s'}${c.sources?.[0]?.healthScore?` • health ${Math.round(c.sources[0].healthScore)}`:''}`}</small></button><button className={favoriteLiveIds.has(c.id)?'active':''} aria-label={favoriteLiveIds.has(c.id)?'Remove favorite':'Add favorite'} onClick={()=>toggleLiveFavorite(c.id)}><Star size={15}/></button></div>)}</div>
       {filteredLive.length>liveLimit&&<button className="ghostBtn" onClick={()=>setLiveLimit(v=>v+160)}>Show more</button>}
     </section>}
     {!query.trim()&&view==='guide'&&<section><div className="row-head"><div><h3>Guide</h3><small>{guideChannels.length} channels with schedule data • {liveMode==='provider'?'Provider Order':'Unified'}</small></div></div><div className="sourceChips"><button className={liveMode==='managed'?'active':''} onClick={()=>switchLiveMode('managed')}>Unified</button><button className={liveMode==='provider'?'active':''} onClick={()=>switchLiveMode('provider')}>Provider Order</button></div><div className="guideList">{guideChannels.slice(0,guideLimit).map(c=><article key={c.id} onClick={()=>play({id:c.id,kind:'live',title:c.name,subtitle:c.now||c.group,posterUrl:c.logoUrl,streamUrl:c.streamUrl,sources:c.sources})}><div><b>{c.name}</b><small>{c.group||'Live TV'}</small></div><div>{(c.programs||[]).slice(0,4).map(p=><span key={`${c.id}-${p.start}-${p.title}`}><b>{p.title}</b><small>{new Date(p.start).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</small></span>)}</div></article>)}</div>{guideChannels.length>guideLimit&&<button className="ghostBtn" onClick={()=>setGuideLimit(v=>v+120)}>Show more</button>}</section>}
-    {!query.trim()&&view==='sports'&&<section><div className="dateChips"><button className={sportsDate==='all'?'active':''} onClick={()=>setSportsDate('all')}>All</button>{dates.slice(0,14).map(d=><button key={d} className={sportsDate===d?'active':''} onClick={()=>setSportsDate(d)}>{new Date(`${d}T12:00:00`).toLocaleDateString([],{month:'short',day:'numeric'})}</button>)}</div><div className="sportsGrid">{visibleSports.map(e=>{const match=e.channelMatches?.[0];const sources=match?.candidates||[];const best=sources[0];const broadcasts=(e.broadcasts||[]).join(' • ');return <article key={e.id}><span>{e.league}</span><h3>{e.title}</h3><p>{new Date(e.startTime).toLocaleString()} • {e.status}</p><small>{broadcasts||'Broadcaster TBD'}</small>{match&&best&&<button className="primaryBtn" onClick={()=>play({id:match.id,kind:'live',title:match.name,subtitle:e.title,posterUrl:match.logoUrl,streamUrl:best.streamUrl,sources})}>Watch best • {match.name}</button>}{match&&<small>{match.sourceCount} ranked source{match.sourceCount===1?'':'s'}{match.healthScore?` • channel health ${Math.round(match.healthScore)}`:''}{best?.provider?` • best ${best.provider}`:''}{best?.healthScore?` ${Math.round(best.healthScore)}`:''}</small>}</article>})}</div></section>}
+    {!query.trim()&&view==='sports'&&<section><div className="dateChips"><button className={sportsDate==='all'?'active':''} onClick={()=>setSportsDate('all')}>All dates</button>{dates.slice(0,14).map(d=><button key={d} className={sportsDate===d?'active':''} onClick={()=>setSportsDate(d)}>{new Date(`${d}T12:00:00`).toLocaleDateString([],{month:'short',day:'numeric'})}</button>)}</div><div className="sourceChips"><button className={sportsLeague==='all'?'active':''} onClick={()=>setSportsLeague('all')}>All leagues</button>{sportLeagues.slice(0,24).map(league=><button key={league} className={sportsLeague===league?'active':''} onClick={()=>setSportsLeague(league)}>{league}</button>)}</div><input className="liveSearch" value={sportsQuery} onChange={e=>setSportsQuery(e.target.value)} placeholder="Filter teams, leagues or broadcasters"/><div className="row-head"><div><h3>Sports</h3><small>{visibleSports.length} events • health-ranked channel matching</small></div></div><div className="sportsGrid">{visibleSports.map(e=>{const match=e.channelMatches?.[0];const sources=match?.candidates||[];const best=sources[0];const broadcasts=(e.broadcasts||[]).join(' • ');return <article key={e.id}><span>{e.league}</span><h3>{e.title}</h3><p>{new Date(e.startTime).toLocaleString()} • {e.status}</p><small>{broadcasts||'Broadcaster TBD'}</small>{match&&best&&<button className="primaryBtn" onClick={()=>play({id:`sport:${e.id}`,kind:'sport',title:e.title,subtitle:`${e.league} • ${match.name}`,posterUrl:e.badge||match.logoUrl,streamUrl:best.streamUrl,sources})}>Watch best • {match.name}</button>}{match&&<small>{match.sourceCount} ranked source{match.sourceCount===1?'':'s'}{match.healthScore?` • channel health ${Math.round(match.healthScore)}`:''}{best?.provider?` • best ${best.provider}`:''}{best?.healthScore?` ${Math.round(best.healthScore)}`:''}</small>}</article>})}</div></section>}
     {!query.trim()&&view==='sources'&&registry&&<section>{(['stremio','cloudstream','live','providerCatalogs'] as const).map(group=><div className="sourceGroup" key={group}><h3>{group==='providerCatalogs'?'Provider Catalogs':group[0].toUpperCase()+group.slice(1)}</h3>{registry[group].map(s=>{const on=enabled[s.id]??s.enabledByDefault;return <article key={s.id}><div><b>{s.name}</b><small>{s.note}</small></div><button className={on?'active':''} onClick={()=>toggleRegistry(s.id,s.enabledByDefault)}>{on?'Enabled':'Disabled'}</button></article>})}</div>)}</section>}
     {!query.trim()&&view==='diagnostics'&&<section><div className="setupNotice"><h3>Playback & source diagnostics</h3><p>Tests both AstraWave Unified Live TV and the non-destructive Provider Order fallback, plus catalogs, sports matching and source registry health.</p></div><button className="primaryBtn" onClick={runDiagnostics}><Activity size={16}/>Run diagnostics</button><div className="diagList">{Object.entries(diag).map(([k,v])=><article key={k}><b>{k}</b><span>{v}</span></article>)}</div></section>}
 
-    {playing&&<div className="playerPanel"><div className="row-head"><div><h3>{playing.title}</h3><small>{playing.subtitle}</small></div><button className="ghostBtn" onClick={()=>setPlaying(null)}>Close</button></div>{playing.streamUrl?<BrowserPlayerVideo key={playing.streamUrl} url={playing.streamUrl} onFatal={handlePlayerError}/>:<p>No browser-playable source available.</p>}{playerError&&<p>{playerError}</p>}{playing.sources&&playing.sources.length>1&&<div className="sourceChips">{playing.sources.map((s,i)=><button className={i===sourceIndex?'active':''} key={s.id} onClick={()=>selectPlayerSource(i)}>{s.provider}</button>)}</div>}</div>}
+    {playing&&<div className="playerPanel"><div className="row-head"><div><h3>{playing.title}</h3><small>{playing.subtitle}</small></div><button className="ghostBtn" onClick={()=>setPlaying(null)}>Close</button></div>{playing.streamUrl?<BrowserPlayerVideo key={playing.streamUrl} url={playing.streamUrl} onFatal={handlePlayerError}/>:<p>No browser-playable source available.</p>}{activePlayerSource&&<div className="setupNotice"><h3>Why AstraWave chose this source</h3><p><b>{activePlayerSource.provider}</b>{activePlayerSource.quality?` • ${activePlayerSource.quality}`:''}{activePlayerSource.healthScore!=null?` • health ${Math.round(activePlayerSource.healthScore)}`:' • health not reported'}{activePlayerSource.uptimePercent!=null?` • uptime ${activePlayerSource.uptimePercent.toFixed(1)}%`:''}{activePlayerSource.latencyMs!=null?` • ${Math.round(activePlayerSource.latencyMs)} ms`:''}. {sourceIndex===0?'This is the highest-ranked eligible candidate AstraWave received.':'A higher-ranked source failed, so AstraWave advanced to this backup.'}</p></div>}{playerError&&<p>{playerError}</p>}{playing.sources&&playing.sources.length>1&&<div className="sourceChips">{playing.sources.map((s,i)=><button className={i===sourceIndex?'active':''} key={s.id} onClick={()=>selectPlayerSource(i)}><b>{i+1}. {s.provider}</b><span>{[s.quality,s.healthScore!=null?`health ${Math.round(s.healthScore)}`:null,s.uptimePercent!=null?`${s.uptimePercent.toFixed(1)}% uptime`:null,s.latencyMs!=null?`${Math.round(s.latencyMs)} ms`:null].filter(Boolean).join(' • ')||'Eligible source'}</span></button>)}</div>}</div>}
     {loading&&<div className="setupNotice"><p>Loading AstraWave…</p></div>}
     </section>
   </main>
