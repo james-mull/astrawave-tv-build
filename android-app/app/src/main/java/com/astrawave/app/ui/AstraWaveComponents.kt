@@ -229,6 +229,12 @@ fun AstraWavePrimaryButton(
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
 
+/** Keeps concise Compose calls such as `AstraWavePrimaryButton("Watch") { ... }` valid. */
+@Composable
+fun AstraWavePrimaryButton(label: String, onClick: () -> Unit) {
+    AstraWavePrimaryButton(label = label, onClick = onClick, modifier = Modifier, enabled = true)
+}
+
 @Composable
 fun AstraWaveSecondaryButton(
     label: String,
@@ -263,6 +269,12 @@ fun AstraWaveSecondaryButton(
         shape = MaterialTheme.shapes.medium,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 19.dp, vertical = 12.dp),
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
+}
+
+/** Keeps concise Compose calls such as `AstraWaveSecondaryButton("Sources") { ... }` valid. */
+@Composable
+fun AstraWaveSecondaryButton(label: String, onClick: () -> Unit) {
+    AstraWaveSecondaryButton(label = label, onClick = onClick, modifier = Modifier, enabled = true)
 }
 
 @Composable
