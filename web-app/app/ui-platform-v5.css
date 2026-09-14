@@ -1,0 +1,149 @@
+:root{
+  --aw-mobile-nav-h:72px;
+  --aw-desktop-content:1680px;
+}
+
+/* AstraWave platform UI v5 — phone, desktop and TV-like web layouts diverge intentionally. */
+@media (min-width: 1200px){
+  .main{max-width:var(--aw-desktop-content);padding-left:clamp(28px,3vw,52px)!important;padding-right:clamp(28px,3vw,52px)!important}
+  .appHero{height:min(43vw,640px)!important;min-height:540px!important}
+  .heroShade{max-width:760px!important}
+  .card-strip{gap:18px!important}
+  .aw-card{width:176px!important}
+  .aw-poster{height:264px!important}
+  .aw-card>strong,.aw-card>small{max-width:176px!important}
+  .liveGrid{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))!important}
+  .guideList{max-height:72vh!important}
+}
+
+@media (max-width: 839px){
+  body{
+    padding-bottom:calc(var(--aw-mobile-nav-h) + env(safe-area-inset-bottom))!important;
+    background:var(--aw-bg)!important;
+  }
+  .side{display:none!important}
+  .main{width:100%!important;max-width:none!important;padding:0 14px!important}
+  .top{
+    position:sticky!important;
+    top:0!important;
+    margin:0 -14px 10px!important;
+    padding:10px 14px 12px!important;
+    min-height:58px!important;
+    background:linear-gradient(180deg,rgba(5,7,11,.98) 76%,rgba(5,7,11,.72))!important;
+  }
+  .top .menu{display:none!important}
+  .top>div:first-of-type small{display:none!important}
+  .top h1{font-size:22px!important;line-height:1!important;margin:0!important}
+  .top .search{
+    position:absolute!important;
+    left:14px!important;
+    right:58px!important;
+    top:8px!important;
+    max-width:none!important;
+    min-height:44px!important;
+    opacity:0!important;
+    pointer-events:none!important;
+    transform:translateY(-4px)!important;
+    transition:opacity .16s ease,transform .16s ease!important;
+  }
+  .top .search:focus-within{
+    opacity:1!important;
+    pointer-events:auto!important;
+    transform:none!important;
+    z-index:5!important;
+  }
+  .top .user{width:42px!important;height:42px!important}
+
+  .appHero{
+    margin:0 -14px!important;
+    width:calc(100% + 28px)!important;
+    height:64vh!important;
+    min-height:470px!important;
+    max-height:650px!important;
+    border-radius:0 0 24px 24px!important;
+    border-left:0!important;border-right:0!important;border-top:0!important;
+    background-position:center top!important;
+  }
+  .appHero:before{
+    background:linear-gradient(0deg,rgba(3,5,9,.99) 0%,rgba(3,5,9,.92) 18%,rgba(3,5,9,.42) 55%,rgba(3,5,9,.08) 82%)!important;
+  }
+  .heroShade{
+    justify-content:flex-end!important;
+    padding:28px 18px 30px!important;
+    max-width:none!important;
+  }
+  .heroShade h2{font-size:clamp(38px,12vw,58px)!important;line-height:.94!important;margin:10px 0 12px!important}
+  .heroShade p{font-size:14px!important;line-height:1.5!important;max-width:92%!important;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .heroShade>div:last-child{display:flex!important;gap:9px!important;flex-wrap:wrap}
+  .primaryBtn,.ghostBtn{min-height:44px!important;padding:0 16px!important}
+
+  .aw-row{margin-top:28px!important}
+  .row-head{align-items:end!important;margin-bottom:9px!important}
+  .row-head h3{font-size:20px!important;line-height:1.05!important}
+  .row-head small{font-size:10px!important}
+  .row-head>span{display:none!important}
+  .card-strip{gap:11px!important;margin-left:-2px!important;margin-right:-14px!important;padding:4px 14px 14px 2px!important;scroll-padding-left:2px!important;mask-image:none!important}
+  .aw-card{width:132px!important}
+  .aw-poster{height:198px!important;border-radius:13px!important}
+  .aw-card>strong{font-size:12px!important;max-width:132px!important;margin-top:7px!important}
+  .aw-card>small{font-size:9.5px!important;max-width:132px!important}
+  .card-link:hover .aw-poster,.card-link:focus-visible .aw-poster{transform:none!important}
+
+  .searchResults{margin:0 -4px!important;padding:14px!important;border-radius:18px!important}
+  .sourceChips,.dateChips{overflow-x:auto!important;flex-wrap:nowrap!important;scrollbar-width:none;padding-bottom:4px!important}
+  .sourceChips::-webkit-scrollbar,.dateChips::-webkit-scrollbar{display:none}
+  .sourceChips button,.dateChips button{white-space:nowrap!important;min-height:38px!important}
+  .liveSearch{width:100%!important;margin-top:4px!important}
+  .liveGrid{grid-template-columns:1fr!important;gap:7px!important}
+  .liveTile{min-height:94px!important;border-radius:15px!important;padding:14px!important}
+  .liveTile .cardButton{padding-top:14px!important}
+
+  .guideList{margin:0 -14px!important;border-radius:0!important;border-left:0!important;border-right:0!important;max-height:none!important}
+  .guideList:before{width:154px!important}
+  .guideList>article{min-width:850px!important;grid-template-columns:154px minmax(690px,1fr)!important;min-height:64px!important}
+  .guideList>article>div:first-child{padding:9px 10px!important}
+  .guideList>article>div:last-child{grid-template-columns:repeat(4,minmax(165px,1fr))!important}
+  .guideList>article>div:last-child>span{min-height:64px!important;padding:9px 10px!important}
+
+  .sportsGrid{grid-template-columns:1fr!important;gap:8px!important}
+  .sportsGrid>article{min-height:172px!important;border-radius:17px!important;padding:17px!important}
+  .sportsGrid h3{font-size:18px!important}
+
+  .playerPanel{
+    left:0!important;right:0!important;bottom:calc(var(--aw-mobile-nav-h) + env(safe-area-inset-bottom))!important;
+    width:auto!important;max-height:76vh!important;overflow:auto!important;
+    border-radius:24px 24px 0 0!important;
+    padding:14px 14px 18px!important;
+  }
+  .playerPanel video{max-height:42vh!important;background:#000!important}
+
+  .mobile-primary-nav{
+    min-height:var(--aw-mobile-nav-h)!important;
+    padding:7px max(8px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))!important;
+    background:linear-gradient(180deg,rgba(8,10,15,.95),rgba(5,7,11,.995))!important;
+    border-top:1px solid rgba(255,255,255,.075)!important;
+    box-shadow:0 -18px 48px rgba(0,0,0,.32)!important;
+    backdrop-filter:blur(24px)!important;
+  }
+  .mobile-primary-nav button,.mobile-primary-nav a{
+    min-height:54px!important;
+    border-radius:16px!important;
+    transition:background .14s ease,color .14s ease,transform .14s ease!important;
+  }
+  .mobile-primary-nav button:active,.mobile-primary-nav a:active{
+    transform:scale(.96)!important;
+    background:rgba(151,136,255,.16)!important;
+  }
+  .mobile-primary-nav span{font-size:10.5px!important;letter-spacing:-.01em!important}
+}
+
+@media (min-width:840px) and (max-width:1199px){
+  .main{padding-left:22px!important;padding-right:22px!important}
+  .appHero{height:min(52vw,560px)!important}
+  .aw-card{width:156px!important}
+  .aw-poster{height:234px!important}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .aw-poster,.card-link,.side nav>button,.mobile-primary-nav button,.mobile-primary-nav a{transition:none!important}
+}
