@@ -3,14 +3,13 @@ package com.astrawave.app.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import com.astrawave.app.data.BuiltInCatalogMediaType
 import com.astrawave.app.data.DynamicCollectionRepository
 import com.astrawave.app.data.HouseholdProfileStore
-import com.astrawave.app.data.UltraMaxCatalogRegistry
 
 /**
- * Movies entry point for AstraWave's profile-aware collection universe.
- * Kids profiles keep the restricted discovery surface; adults get the configurable
- * Ultra MAX-inspired native catalog hub backed by AstraWave metadata and watch-first details.
+ * Movies entry point. Kids profiles retain the restricted discovery surface; adult profiles
+ * use AstraWave's 75 built-in movie catalogs with per-profile ordering/visibility.
  */
 @Composable
 fun MovieListsScreen(profileId: String = "default") {
@@ -20,6 +19,6 @@ fun MovieListsScreen(profileId: String = "default") {
     if (isKids) {
         KidsDiscoveryScreen(profileId = profileId, media = DynamicCollectionRepository.Media.MOVIE)
     } else {
-        UltraMaxMediaHubScreen(profileId = profileId, media = UltraMaxCatalogRegistry.Media.MOVIE)
+        BuiltInCatalogHubScreen(profileId = profileId, mediaType = BuiltInCatalogMediaType.MOVIE)
     }
 }
