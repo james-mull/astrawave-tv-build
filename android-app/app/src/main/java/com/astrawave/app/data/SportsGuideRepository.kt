@@ -1,17 +1,17 @@
 package com.astrawave.app.data
 
 import com.astrawave.app.core.IptvSource
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 /**
  * Sports command-center projection. Schedule metadata is kept separate from
  * broadcaster metadata so AstraWave never invents a playable source.
- *
- * Initial Sports loading deliberately avoids EPG and stream-health probes. Events and
- * broadcaster matches render first; SourceFusion validates the small matched candidate set
- * only when the user presses Watch.
  */
 enum class SportsAvailabilityReason {
     READY,
@@ -54,9 +54,6 @@ internal fun cloudSportsResolution(cloud: BackendSportsChannelCloudRepository.Cl
         startTimeEpochMs = 0L,
         broadcasterNames = cloud.broadcasts,
     )
-    // Sports Channel Cloud already health-ranks channel matches and each match's source candidates.
-    // Flatten without a second local score sort so the first candidate remains the cloud's best
-    // authorized/reviewed stream and PlayerActivity receives backups in the same failover order.
     val candidates = cloud.channelMatches.flatMapIndexed { matchIndex, match ->
         match.candidates.mapIndexed { candidateIndex, candidate ->
             SportsWatchCandidate(
@@ -80,18 +77,21 @@ class SportsGuideRepository(
     private val sportsCloud: BackendSportsChannelCloudRepository = BackendSportsChannelCloudRepository(),
 ) {
     fun load(
-        date: LocalDate = LocalDate.now(ZoneOffset.UTC),
+        date: LocalDate = LocalDate.now(),
         sources: List<IptvSource> = emptyList(),
         sport: String? = null,
         addonSportsChannelNames: List<String> = emptyList(),
     ): SportsGuideSnapshot {
-        val dateText = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val cloudEvents = runCatching { sportsCloud.events(date, days = 1) }.getOrDefault(emptyList())
+        // Older UI builds used UTC for "today". During evening hours in North America that can
+        // already be tomorrow. Normalize that legacy value back to the device's actual local day.
+        val localToday = LocalDate.now()
+        val utcToday = LocalDate.now(ZoneOffset.UTC)
+        val effectiveDate = if (date == utcToday && utcToday != localToday) localToday else date
+        val dateText = effectiveDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+
+        val cloudEvents = runCatching { sportsCloud.events(effectiveDate, days = 1) }.getOrDefault(emptyList())
             .filter { cloud -> sport.isNullOrBlank() || cloud.sport.equals(sport, ignoreCase = true) }
 
-        // Always build the authorized local channel inventory. The cloud is excellent for schedules
-        // and pre-ranked matches, but a cloud event with no match must still get a second chance
-        // against the user's own M3U/Xtream/public Live TV sources before AstraWave calls it unavailable.
         val live = combinedLiveTv.load(
             userSourcesConfig = sources,
             includeEpg = false,
@@ -156,8 +156,13 @@ class SportsGuideRepository(
         live: CombinedLiveTvSnapshot,
     ): SportsGuideSnapshot {
         val items = cloudEvents.map { cloud ->
-            val startDate = cloud.startTime.take(10).takeIf { it.length == 10 } ?: dateText
-            val startTime = cloud.startTime.substringAfter('T', "").take(8).takeIf(String::isNotBlank)
+            val localStart = parseCloudTime(cloud.startTime)
+            val startDate = localStart?.toLocalDate()?.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                ?: cloud.startTime.take(10).takeIf { it.length == 10 }
+                ?: dateText
+            val startTime = localStart?.format(DateTimeFormatter.ofPattern("h:mm a"))
+                ?: cloud.startTime.substringAfter('T', "").take(5).takeIf(String::isNotBlank)
+
             val event = SportsEvent(
                 id = cloud.id,
                 name = cloud.title,
@@ -205,6 +210,12 @@ class SportsGuideRepository(
             combinedChannelGroups = maxOf(matchedChannelCount, live.totalChannelGroups),
             addonSportsChannelCount = addonSportsChannelNames.distinct().size,
         )
+    }
+
+    private fun parseCloudTime(raw: String): ZonedDateTime? {
+        if (raw.isBlank()) return null
+        return runCatching { OffsetDateTime.parse(raw).atZoneSameInstant(ZoneId.systemDefault()) }.getOrNull()
+            ?: runCatching { Instant.parse(raw).atZone(ZoneId.systemDefault()) }.getOrNull()
     }
 
     private fun sportsDisplayOrder(): Comparator<SportsGuideItem> =
