@@ -23,8 +23,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.MovieListDetailActivity
 import com.astrawave.app.TvListDetailActivity
@@ -44,8 +46,8 @@ fun BuiltInCatalogHubScreen(
     val context = LocalContext.current
     val prefs = remember { BuiltInCatalogPreferences(context) }
     var revision by remember { mutableIntStateOf(0) }
-    var selectedCategory by remember { mutableStateOf<BuiltInCatalogCategory?>(null) }
     var manageMode by remember { mutableStateOf(false) }
+    var manageCategory by remember { mutableStateOf<BuiltInCatalogCategory?>(null) }
 
     val allDefinitions = (if (mediaType == BuiltInCatalogMediaType.MOVIE) {
         AstraWaveBuiltInCatalogRegistry.movies
@@ -56,8 +58,6 @@ fun BuiltInCatalogHubScreen(
     val visible = remember(profileId, mediaType, revision) {
         prefs.visible(mediaType, profileId).map(CatalogServiceOverrides::apply)
     }
-    val rows = visible.filter { selectedCategory == null || it.category == selectedCategory }
-    val mappedCount = allDefinitions.count { it.id in VerifiedMdbListCatalogs }
 
     fun open(definition: BuiltInCatalogDefinition) {
         val intent = if (mediaType == BuiltInCatalogMediaType.MOVIE) {
@@ -78,56 +78,83 @@ fun BuiltInCatalogHubScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
-        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+        contentPadding = PaddingValues(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        item("header") {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                AstraWavePageHeader(
-                    title = if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movies" else "TV Shows",
-                    subtitle = if (mediaType == BuiltInCatalogMediaType.MOVIE)
-                        "Browse movies like a premium streaming app • $mappedCount source-backed catalogs"
-                    else "Browse series like a premium streaming app • $mappedCount source-backed catalogs",
+        item("cinematic-header") {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movies" else "TV Shows",
+                    color = AstraWaveColors.PrimaryText,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
                 )
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(selected = selectedCategory == null, onClick = { selectedCategory = null }, label = { Text("All") })
-                    BuiltInCatalogCategory.entries.forEach { category ->
-                        FilterChip(
-                            selected = selectedCategory == category,
-                            onClick = { selectedCategory = category },
-                            label = { Text(categoryLabel(category)) },
-                        )
-                    }
-                    FilterChip(
-                        selected = manageMode,
-                        onClick = { manageMode = !manageMode },
-                        label = { Text(if (manageMode) "Done" else "Manage") },
-                    )
-                }
+                Text(
+                    if (manageMode) "Done" else "Manage",
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.clickable { manageMode = !manageMode },
+                )
             }
         }
 
         if (!manageMode) {
-            catalogSections(rows, mediaType).forEach { (section, definitions) ->
+            catalogSections(visible, mediaType).forEach { (section, definitions) ->
                 item("section-$section") {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(section, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
-                        Text(sectionSubtitle(section, mediaType), color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
-                    }
+                    Text(
+                        section,
+                        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 4.dp),
+                        color = AstraWaveColors.SecondaryText,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
                 items(definitions, key = { "rail-${it.id}" }) { definition ->
-                    CatalogContentShelf(definition = definition, profileId = profileId)
+                    Column(Modifier.padding(start = 22.dp)) {
+                        CatalogContentShelf(definition = definition, profileId = profileId)
+                    }
                 }
             }
         } else {
-            item("manage-heading") {
-                Text("Manage catalog rows", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+            item("manage-tools") {
+                Column(
+                    Modifier.padding(horizontal = 22.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        "Manage rows",
+                        color = AstraWaveColors.PrimaryText,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Pin, order or hide catalog rows. These controls stay out of normal browsing.",
+                        color = AstraWaveColors.SecondaryText,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(selected = manageCategory == null, onClick = { manageCategory = null }, label = { Text("All") })
+                        BuiltInCatalogCategory.entries.forEach { category ->
+                            FilterChip(
+                                selected = manageCategory == category,
+                                onClick = { manageCategory = category },
+                                label = { Text(categoryLabel(category)) },
+                            )
+                        }
+                    }
+                }
             }
-            items(rows, key = { it.id }) { definition ->
-                AstraWaveFocusableCard(Modifier.fillMaxWidth()) {
+
+            val managedRows = visible.filter { manageCategory == null || it.category == manageCategory }
+            items(managedRows, key = { it.id }) { definition ->
+                AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(Modifier.weight(1f)) {
@@ -152,10 +179,18 @@ fun BuiltInCatalogHubScreen(
 
             val hidden = allDefinitions.filter { prefs.isHidden(profileId, it.id) }
             if (hidden.isNotEmpty()) {
-                item("hidden-title") { Text("Hidden catalogs", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge) }
+                item("hidden-title") {
+                    Text(
+                        "Hidden rows",
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                        color = AstraWaveColors.PrimaryText,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                }
                 items(hidden, key = { "hidden-${it.id}" }) { definition ->
                     Row(
-                        Modifier.fillMaxWidth().background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(12.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 22.dp)
+                            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium).padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(definition.title, color = AstraWaveColors.SecondaryText)
@@ -202,21 +237,6 @@ private fun sectionFor(definition: BuiltInCatalogDefinition, mediaType: BuiltInC
             BuiltInCatalogCategory.PREMIUM_INTERNATIONAL -> "Kids, Anime & International"
         }
     }
-}
-
-private fun sectionSubtitle(section: String, mediaType: BuiltInCatalogMediaType): String = when (section) {
-    "Streaming Services" -> "Netflix, Prime Video, Disney+, Max, Apple TV+, Hulu, Peacock and Paramount+."
-    "Trending & Box Office" -> "Popular, watched, anticipated and theatrical movie discovery."
-    "New Releases & Awards" -> "Fresh movies, critics' picks, festivals and award-winning cinema."
-    "Movie Genres" -> "Action, comedy, drama, horror, sci-fi, documentary and more."
-    "Seasonal & Occasion" -> "Holiday, theme, runtime and occasion-based discovery."
-    "Premium Cinema & World" -> "4K/HDR, Dolby, anime and international cinema."
-    "Trending & Popular" -> "The shows audiences are watching and rating now."
-    "New Episodes & Prestige" -> "New series, fresh episodes, limited series and prestige TV."
-    "TV Genres" -> "Crime, comedy, drama, mystery, sci-fi, fantasy, horror and more."
-    "Reality, Docs & Lifestyle" -> "Reality, true crime, sports, food, travel, nature and documentary TV."
-    "Kids, Anime & International" -> "Kids TV, anime, K-dramas, British TV and series from around the world."
-    else -> if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movie discovery" else "TV discovery"
 }
 
 private fun sourceSubtitle(definition: BuiltInCatalogDefinition): String = when {
