@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
@@ -54,9 +55,12 @@ fun BuiltInCatalogHubScreen(
     } else {
         AstraWaveBuiltInCatalogRegistry.shows
     }).map(CatalogServiceOverrides::apply)
-    val visible = remember(profileId, mediaType, revision) { prefs.visible(mediaType, profileId) }
+    val visible = remember(profileId, mediaType, revision) {
+        prefs.visible(mediaType, profileId).map(CatalogServiceOverrides::apply)
+    }
     val rows = visible.filter { selectedCategory == null || it.category == selectedCategory }
     val mappedCount = allDefinitions.count { it.id in VerifiedMdbListCatalogs }
+    val serviceCount = allDefinitions.count { it.id in CatalogServiceOverrides }
 
     fun open(definition: BuiltInCatalogDefinition) {
         val intent = if (mediaType == BuiltInCatalogMediaType.MOVIE) {
@@ -84,7 +88,7 @@ fun BuiltInCatalogHubScreen(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AstraWavePageHeader(
                     title = if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movies" else "TV Shows",
-                    subtitle = "${allDefinitions.size} built-in dynamic catalogs • $mappedCount verified MDBList mappings • metadata fallback everywhere",
+                    subtitle = "${allDefinitions.size} ${if (mediaType == BuiltInCatalogMediaType.MOVIE) "movie" else "TV"} catalogs • $serviceCount streaming services • $mappedCount MDBList-backed",
                 )
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -108,41 +112,34 @@ fun BuiltInCatalogHubScreen(
             }
         }
 
-        items(rows, key = { it.id }) { definition ->
-            AstraWaveFocusableCard(
-                Modifier.fillMaxWidth().clickable(enabled = !manageMode) { open(definition) },
-            ) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(definition.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (definition.id in VerifiedMdbListCatalogs) Text("MDBLIST", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
-                            if (definition.id in CatalogServiceOverrides) Text("SERVICE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelSmall)
-                            if (definition.featured) Text("FEATURED", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                    Text(sourceSubtitle(definition), color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
-                    if (manageMode) {
-                        Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            FilterChip(
-                                selected = prefs.isPinned(profileId, definition.id),
-                                onClick = {
-                                    prefs.setPinned(profileId, definition.id, !prefs.isPinned(profileId, definition.id)); revision++
-                                },
-                                label = { Text("Pin to Home") },
-                            )
-                            FilterChip(selected = false, onClick = { prefs.move(profileId, mediaType, definition.id, -1); revision++ }, label = { Text("↑") })
-                            FilterChip(selected = false, onClick = { prefs.move(profileId, mediaType, definition.id, 1); revision++ }, label = { Text("↓") })
-                            FilterChip(selected = false, onClick = { prefs.setHidden(profileId, definition.id, true); revision++ }, label = { Text("Hide") })
-                        }
-                    } else {
-                        Text("Browse collection →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+        if (selectedCategory == null) {
+            catalogSections(rows).forEach { (section, definitions) ->
+                item(key = "section-$section") {
+                    Column(Modifier.padding(top = 10.dp, bottom = 2.dp)) {
+                        Text(section, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                        Text(sectionSubtitle(section, mediaType), color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                 }
+                catalogRows(
+                    definitions = definitions,
+                    manageMode = manageMode,
+                    profileId = profileId,
+                    mediaType = mediaType,
+                    prefs = prefs,
+                    open = ::open,
+                    onChanged = { revision++ },
+                )
             }
+        } else {
+            catalogRows(
+                definitions = rows,
+                manageMode = manageMode,
+                profileId = profileId,
+                mediaType = mediaType,
+                prefs = prefs,
+                open = ::open,
+                onChanged = { revision++ },
+            )
         }
 
         if (manageMode) {
@@ -176,6 +173,81 @@ fun BuiltInCatalogHubScreen(
                 }
             }
         }
+    }
+}
+
+private fun LazyListScope.catalogRows(
+    definitions: List<BuiltInCatalogDefinition>,
+    manageMode: Boolean,
+    profileId: String,
+    mediaType: BuiltInCatalogMediaType,
+    prefs: BuiltInCatalogPreferences,
+    open: (BuiltInCatalogDefinition) -> Unit,
+    onChanged: () -> Unit,
+) {
+    items(definitions, key = { it.id }) { definition ->
+        AstraWaveFocusableCard(
+            Modifier.fillMaxWidth().clickable(enabled = !manageMode) { open(definition) },
+        ) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(definition.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (definition.id in VerifiedMdbListCatalogs) Text("MDBLIST", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
+                        if (definition.id in CatalogServiceOverrides) Text("SERVICE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelSmall)
+                        if (definition.featured) Text("FEATURED", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Text(sourceSubtitle(definition), color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
+                if (manageMode) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = prefs.isPinned(profileId, definition.id),
+                            onClick = {
+                                prefs.setPinned(profileId, definition.id, !prefs.isPinned(profileId, definition.id)); onChanged()
+                            },
+                            label = { Text("Pin to Home") },
+                        )
+                        FilterChip(selected = false, onClick = { prefs.move(profileId, mediaType, definition.id, -1); onChanged() }, label = { Text("↑") })
+                        FilterChip(selected = false, onClick = { prefs.move(profileId, mediaType, definition.id, 1); onChanged() }, label = { Text("↓") })
+                        FilterChip(selected = false, onClick = { prefs.setHidden(profileId, definition.id, true); onChanged() }, label = { Text("Hide") })
+                    }
+                } else {
+                    Text("Browse collection →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+}
+
+private fun catalogSections(rows: List<BuiltInCatalogDefinition>): List<Pair<String, List<BuiltInCatalogDefinition>>> {
+    val order = listOf("Streaming Services", "Trending & Popular", "New & Notable", "Genres", "Moods & Themes", "Premium & World")
+    return order.mapNotNull { section ->
+        rows.filter { sectionFor(it) == section }.takeIf { it.isNotEmpty() }?.let { section to it }
+    }
+}
+
+private fun sectionFor(definition: BuiltInCatalogDefinition): String = when {
+    definition.id in CatalogServiceOverrides -> "Streaming Services"
+    definition.category == BuiltInCatalogCategory.DISCOVERY -> "Trending & Popular"
+    definition.category == BuiltInCatalogCategory.EDITORIAL -> "New & Notable"
+    definition.category == BuiltInCatalogCategory.GENRE_THEME -> "Genres"
+    definition.category == BuiltInCatalogCategory.MOOD_SEASONAL -> "Moods & Themes"
+    else -> "Premium & World"
+}
+
+private fun sectionSubtitle(section: String, mediaType: BuiltInCatalogMediaType): String {
+    val noun = if (mediaType == BuiltInCatalogMediaType.MOVIE) "movies" else "shows"
+    return when (section) {
+        "Streaming Services" -> "Browse $noun by Netflix, Prime Video, Disney+, Max, Apple TV+, Hulu, Peacock and Paramount+."
+        "Trending & Popular" -> "What people are watching, rating and anticipating now."
+        "New & Notable" -> "Fresh releases, critics' picks, awards and standout collections."
+        "Genres" -> "Jump directly into the kind of $noun you want."
+        "Moods & Themes" -> "Occasion, tone and theme-based discovery."
+        else -> "International, premium-format and specialty discovery."
     }
 }
 
