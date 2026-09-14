@@ -28,9 +28,11 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:limited-series':{owner:'ndg3270',slug:'tv-mini-series'},
 
   // Awards and prestige collections.
+  'movie:best-of-2025':{owner:'siskourso',slug:'rotten-tomatoes-best-of-2025'},
   'movie:oscar-winners':{owner:'nobnobz',slug:'awards-oscar-winners'},
   'movie:golden-globe-winners':{owner:'nobnobz',slug:'awards-golden-globe-winners'},
   'movie:cannes-favorites':{owner:'nobnobz',slug:'awards-cannes-winners'},
+  'movie:sundance-favorites':{owner:'amything',slug:'sundance-grand-jury-prize-dramatic'},
   'show:emmy-winners':{owner:'nobnobz',slug:'awards-emmy-winner'},
 
   // High-traffic genre collections with verified dynamic MDBList pages.
@@ -84,6 +86,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:music-series':{owner:'MaxtronTV',slug:'music-tv-shows'},
   'show:talk-shows':{owner:'MaxtronTV',slug:'talk-shows'},
   'show:game-shows':{owner:'p1ratepaul',slug:'game-shows'},
+  'show:late-night':{owner:'mulanzo1',slug:'late-night-sketches-and-practical-jokes'},
   'show:food-cooking':{owner:'jefland',slug:'cooking'},
   'show:home-design':{owner:'bigred777',slug:'hgtv-magnolia-diy-shows'},
   'show:travel-series':{owner:'faler',slug:'travel-tv-shows'},
