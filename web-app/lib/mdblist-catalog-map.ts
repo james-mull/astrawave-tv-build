@@ -33,6 +33,14 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:horror-hits':{owner:'ndg3270',slug:'horror'},
   'movie:sci-fi-essentials':{owner:'ndg3270',slug:'science-fiction'},
   'movie:crime-movies':{owner:'ndg3270',slug:'crime-movies'},
+  'movie:sports-movies':{owner:'hdlists',slug:'150-best-sports-movies-of-all-time'},
+  'show:true-crime':{owner:'an-kah',slug:'best-true-crime-shows'},
+  'movie:anime-movies':{owner:'apg2886',slug:'top-anime-movies'},
+  'show:anime-series':{owner:'aaron713',slug:'anime-shows'},
+
+  // International discovery collections.
+  'show:k-dramas':{owner:'egmi1',slug:'all-kdramas'},
+  'show:indian-series':{owner:'apollocat',slug:'indian-tv-shows-hindi-english'},
 
   // Curated premium/editorial collections.
   'movie:psychological-thrillers':{owner:'ndg3270',slug:'psychological-thrillers'},
