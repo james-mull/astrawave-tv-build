@@ -2,8 +2,8 @@ export type MdbListCatalogMapping={owner:string;slug:string};
 
 /**
  * Verified public MDBList mappings for AstraWave built-in catalogs.
- * Keep this list conservative: only add owner/slug pairs confirmed from a live MDBList page.
- * Unmapped catalogs continue through TMDB/Cinemeta fallback instead of guessing a list URL.
+ * Keep this list conservative: only add owner/slug pairs confirmed from a live MDBList page and
+ * whose actual contents match the AstraWave catalog intent. Unmapped catalogs use metadata fallback.
  */
 export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   // Official MDBList collections.
@@ -41,7 +41,6 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:4k-hdr-showcase':{owner:'littlerooster',slug:'the-complete-dolby-vision-4k-remux-list'},
   'movie:audience-favorites':{owner:'billryan',slug:'letterboxds-top-500-films'},
   'show:prestige-drama':{owner:'billryan',slug:'metacritic-must-see-tv'},
-  'movie:oscar-winners':{owner:'irfanh',slug:'best-picture-oscar-winners'},
 };
 
 export function mdblistPathForCatalog(id:string):string|undefined{
