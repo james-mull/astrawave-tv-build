@@ -57,6 +57,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:true-stories':{owner:'moonprism',slug:'movies-based-on-true-story'},
   'movie:biopics':{owner:'bbrodka1963',slug:'top-100-biography-movies-english'},
   'show:action-series':{owner:'MaxtronTV',slug:'action-and-adventure'},
+  'show:adventure-series':{owner:'hboinay',slug:'adventure-series'},
   'show:animated-series':{owner:'MaxtronTV',slug:'animated-tv-shows'},
   'show:comedy-series':{owner:'MaxtronTV',slug:'comedy-tv-shows'},
   'show:crime-series':{owner:'MaxtronTV',slug:'crime-tv-shows'},
@@ -68,6 +69,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:mystery-series':{owner:'MaxtronTV',slug:'mystery-tv-shows'},
   'show:romance-series':{owner:'MaxtronTV',slug:'romance-tv-shows'},
   'show:sci-fi-series':{owner:'digvijay-sai',slug:'sci-fi-tv-shows'},
+  'show:science-series':{owner:'htpc_509',slug:'science-shows'},
   'show:superhero-series':{owner:'MaxtronTV',slug:'superhero-tv-shows'},
   'show:thriller-series':{owner:'MaxtronTV',slug:'thriller-tv-shows'},
   'show:war-series':{owner:'MaxtronTV',slug:'war-tv-shows'},
@@ -79,6 +81,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:talk-shows':{owner:'MaxtronTV',slug:'talk-shows'},
   'show:game-shows':{owner:'p1ratepaul',slug:'game-shows'},
   'show:food-cooking':{owner:'jefland',slug:'cooking'},
+  'show:home-design':{owner:'bigred777',slug:'hgtv-magnolia-diy-shows'},
   'show:travel-series':{owner:'faler',slug:'travel-tv-shows'},
   'show:nature-series':{owner:'manu-081',slug:'latest-tv-shows-nature-documentary'},
   'show:true-crime':{owner:'an-kah',slug:'best-true-crime-shows'},
@@ -119,11 +122,13 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:psychological-thrillers':{owner:'ndg3270',slug:'psychological-thrillers'},
   'movie:comfort-movies':{owner:'billryan',slug:'comfort-movies'},
   'movie:cult-classics':{owner:'rizreflects',slug:'cult-classics'},
+  'movie:hidden-gems':{owner:'stevezau',slug:'movies-hidden-gems'},
   'movie:dolby-vision-picks':{owner:'ndg3270',slug:'dolby-vision-releases'},
   'movie:atmos-showcase':{owner:'danaramapyjama',slug:'dolby-atmos-films'},
   'movie:4k-hdr-showcase':{owner:'littlerooster',slug:'the-complete-dolby-vision-4k-remux-list'},
   'movie:audience-favorites':{owner:'billryan',slug:'letterboxds-top-500-films'},
   'show:prestige-drama':{owner:'billryan',slug:'metacritic-must-see-tv'},
+  'show:hidden-gem-series':{owner:'stevezau',slug:'tv-hidden-gems'},
 };
 
 export function mdblistPathForCatalog(id:string):string|undefined{
