@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets
  * Primary path: AstraWave backend proxy (which holds provider credentials server-side).
  * Fallback path: Cinemeta metadata/catalog endpoints that do not require a user API key.
  *
- * This class intentionally never accepts or persists a TMDB credential from the user.
+ * This class intentionally never accepts or persists a TMDB or MDBList credential from the user.
  */
 class AstraWaveMetadataGateway(
     private val apiBaseUrl: String = BuildConfig.ASTRAWAVE_API_BASE_URL.trimEnd('/'),
@@ -25,6 +25,11 @@ class AstraWaveMetadataGateway(
         val posterUrl: String? = null,
         val backdropUrl: String? = null,
         val releaseInfo: String? = null,
+    )
+
+    data class RemoteCatalog(
+        val items: List<Item>,
+        val source: String,
     )
 
     enum class Catalog(val backendPath: String, val cinemetaPath: String) {
@@ -42,6 +47,32 @@ class AstraWaveMetadataGateway(
         return loadFromCinemeta(catalog)
     }
 
+    /**
+     * Loads one of AstraWave's built-in catalog IDs through the server proxy. The server can use
+     * MDBList, TMDB or other reviewed metadata providers without exposing provider credentials in
+     * the Android APK. Null means the backend is unavailable/not configured and callers should use
+     * their local metadata fallback.
+     */
+    fun loadBuiltInCatalog(catalogId: String): RemoteCatalog? {
+        if (apiBaseUrl.isBlank() || catalogId.isBlank()) return null
+        val encoded = URLEncoder.encode(catalogId, StandardCharsets.UTF_8.name())
+        return runCatching {
+            val root = JSONObject(SimpleHttp.getText("$apiBaseUrl/builtin-catalogs?id=$encoded"))
+            if (!root.optBoolean("configured", false)) return@runCatching null
+            val definition = root.optJSONObject("definition")
+            val fallbackType = when (definition?.optString("kind")) {
+                "series" -> "series"
+                else -> "movie"
+            }
+            val items = parseCatalogItems(root.optJSONArray("items"), fallbackType)
+            if (items.isEmpty()) return@runCatching null
+            RemoteCatalog(
+                items = items,
+                source = root.optString("source").ifBlank { "AstraWave catalog service" },
+            )
+        }.getOrNull()
+    }
+
     fun search(query: String): List<Item> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
@@ -56,9 +87,6 @@ class AstraWaveMetadataGateway(
         val exact = searchCinemeta(q)
         if (exact.isNotEmpty()) return exact
 
-        // Large editorial collections are built from human-friendly labels/titles. A literal search
-        // can legitimately miss because of punctuation or filler such as "Part", "Saga", or
-        // "Collection". Try only conservative simplifications before allowing the row to be empty.
         val simplified = q
             .replace(Regex("[^A-Za-z0-9 ]+"), " ")
             .replace(
@@ -98,6 +126,29 @@ class AstraWaveMetadataGateway(
 
     private fun loadFromCinemeta(catalog: Catalog): List<Item> =
         parseCinemeta(JSONObject(SimpleHttp.getText("https://v3-cinemeta.strem.io${catalog.cinemetaPath}")))
+
+    private fun parseCatalogItems(array: JSONArray?, fallbackType: String): List<Item> {
+        if (array == null) return emptyList()
+        return buildList {
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val id = item.optString("id")
+                val name = item.optString("title").ifBlank { item.optString("name") }
+                if (id.isBlank() || name.isBlank()) continue
+                add(
+                    Item(
+                        id = id,
+                        type = item.optString("kind").ifBlank { item.optString("type") }.ifBlank { fallbackType },
+                        name = name,
+                        description = item.optString("overview").ifBlank { item.optString("description") }.takeIf { it.isNotBlank() },
+                        posterUrl = item.optString("posterUrl").takeIf { it.isNotBlank() },
+                        backdropUrl = item.optString("backdropUrl").takeIf { it.isNotBlank() },
+                        releaseInfo = item.optString("subtitle").ifBlank { item.optString("releaseInfo") }.takeIf { it.isNotBlank() },
+                    )
+                )
+            }
+        }.distinctBy { "${it.type}:${it.id}" }
+    }
 
     private fun parseBackendArray(json: String): List<Item> {
         val array = JSONArray(json)
