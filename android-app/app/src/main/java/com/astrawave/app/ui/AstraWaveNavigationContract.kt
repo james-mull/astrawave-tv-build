@@ -1,6 +1,9 @@
 package com.astrawave.app.ui
 
-/** Canonical premium navigation contract for AstraWave phone, tablet and TV surfaces. */
+/**
+ * Canonical customer navigation contract for AstraWave phone, tablet and TV surfaces.
+ * Keep high-frequency entertainment destinations ahead of account, setup and utility screens.
+ */
 data class AstraWaveNavItem(
     val route: String,
     val label: String,
