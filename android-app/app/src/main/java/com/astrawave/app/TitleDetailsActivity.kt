@@ -299,7 +299,7 @@ private fun TitleDetailsScreen(
                         selectedSeason = episode.season
                         selectedEpisode = episode
                     }
-                    quickPlayError = "No automatic source was eligible. Opening Sources so you can review available options."
+                    quickPlayError = "A one-tap option was not ready. Opening Watch Options so you can choose another."
                     sourcesMode = true
                 }
             }.onFailure { throwable ->
@@ -307,7 +307,7 @@ private fun TitleDetailsScreen(
                     selectedSeason = episode.season
                     selectedEpisode = episode
                 }
-                quickPlayError = throwable.message ?: "Automatic playback resolution failed."
+                quickPlayError = throwable.message ?: "Playback could not start automatically."
                 sourcesMode = true
             }
         }
@@ -331,8 +331,8 @@ private fun TitleDetailsScreen(
                 Text(
                     when {
                         selectedEpisode != null -> "Season ${selectedEpisode!!.season} • Episode ${selectedEpisode!!.episode} • ${selectedEpisode!!.title}"
-                        sourcesMode && seriesMode -> "Episodes & Sources"
-                        sourcesMode -> "Sources"
+                        sourcesMode && seriesMode -> "Episodes & Watch Options"
+                        sourcesMode -> "Watch Options"
                         details?.releaseDate?.isNotBlank() == true -> details!!.releaseDate.orEmpty()
                         year != null -> year.toString()
                         else -> if (seriesMode) "Series details" else "Movie details"
@@ -343,7 +343,7 @@ private fun TitleDetailsScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (sourcesMode) IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh sources") }
+            if (sourcesMode) IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh watch options") }
         }
 
         if (!sourcesMode) {
@@ -391,7 +391,7 @@ private fun TitleDetailsScreen(
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    Text(if (quickPlayLoading) "Finding Best Source…" else "▶ Play Best", fontWeight = FontWeight.Bold)
+                    Text(if (quickPlayLoading) "Finding a Stream…" else "▶ Play", fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -405,7 +405,7 @@ private fun TitleDetailsScreen(
                     val saved = progressByEpisode[firstUnwatched.id]
                     val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
                     Text(
-                        if (quickPlayLoading) "Finding Best Episode Source…"
+                        if (quickPlayLoading) "Finding Episode…"
                         else "$prefix Series • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}",
                         fontWeight = FontWeight.Bold,
                     )
@@ -416,13 +416,13 @@ private fun TitleDetailsScreen(
                 onClick = { sourcesMode = true },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp),
-            ) { Text(if (hasEpisodeCatalog) "Browse All Episodes & Sources" else "Choose Sources", fontWeight = FontWeight.Bold) }
+            ) { Text(if (hasEpisodeCatalog) "Browse Episodes & Watch Options" else "Watch Options", fontWeight = FontWeight.Bold) }
             quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }
             Text(
                 if (hasEpisodeCatalog) {
-                    "AstraWave picks the first unfinished episode, searches owned media and authorized providers, selects the strongest source automatically, and keeps manual Sources available as an override."
+                    "AstraWave can continue with your first unfinished episode automatically. Open Watch Options whenever you want to choose another available stream."
                 } else {
-                    "Play Best searches owned media and eligible providers in parallel, ranks healthy sources by quality and latency, and keeps backups ready for automatic failover."
+                    "Press Play and AstraWave chooses an available playback option automatically, with backups ready when available."
                 },
                 color = DetailsMuted,
                 fontSize = 12.sp,
@@ -432,9 +432,9 @@ private fun TitleDetailsScreen(
 
         Text(
             if (hasEpisodeCatalog) {
-                "Choose an episode, then AstraWave resolves that episode and ranks healthy eligible sources. Completed episodes are skipped when a later unwatched episode is available."
+                "Choose an episode to play or resume. Watched episodes stay marked, and AstraWave continues from the first unfinished episode."
             } else {
-                "AstraWave checks reviewed public sources and explicitly authorized providers, removes duplicates, verifies stream health, and ranks the best playable source first."
+                "Choose from the available playback options below. AstraWave puts its recommended option first."
             },
             color = DetailsMuted,
             fontSize = 14.sp,
@@ -443,8 +443,8 @@ private fun TitleDetailsScreen(
 
         if (hasEpisodeCatalog && selectedEpisode == null) {
             when {
-                episodeLoading -> LoadingRow("Loading seasons and episodes…")
-                episodes.isEmpty() -> EmptyPanel("No episode metadata found", "This series did not return a compatible native or Cinemeta episode list yet.")
+                episodeLoading -> LoadingRow("Loading episodes…")
+                episodes.isEmpty() -> EmptyPanel("Episodes unavailable", "Episode information is not available for this series right now.")
                 else -> SeriesEpisodeBrowser(
                     episodes = episodes,
                     selectedSeason = selectedSeason,
@@ -456,17 +456,17 @@ private fun TitleDetailsScreen(
         } else {
             if (selectedEpisode != null) TextButton(onClick = { selectedEpisode = null; sources = emptyList(); error = null }) { Text("← Back to episodes") }
             when {
-                loading -> LoadingRow("Resolving playable sources…")
+                loading -> LoadingRow("Checking watch options…")
                 error != null -> Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
                 sources.isEmpty() -> EmptyPanel(
-                    "No verified source found",
-                    "AstraWave checked reviewed and customer-authorized sources but did not find a healthy eligible direct stream for this ${if (selectedEpisode != null) "episode" else "title"}.",
+                    "No watch option available",
+                    "No playable option is available from your connected sources for this ${if (selectedEpisode != null) "episode" else "title"} right now.",
                 )
                 else -> {
                     val allUrls = sources.map { it.link.url }.distinct()
-                    Text("Available Sources", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Watch Options", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "${allUrls.size} verified option${if (allUrls.size == 1) "" else "s"} • automatic backup failover enabled",
+                        "${allUrls.size} option${if (allUrls.size == 1) "" else "s"} available • backups used automatically",
                         color = DetailsSuccess,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -714,8 +714,8 @@ private fun InfoPanel(title: String, year: Int?, seriesMode: Boolean) {
         Text(title, color = DetailsPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         year?.let { Text(it.toString(), color = DetailsMuted, fontSize = 14.sp) }
         Text(
-            if (seriesMode) "Browse the title first, then let AstraWave pick the next episode and strongest eligible source, or open Sources for manual control."
-            else "Use Play Best for automatic source selection, or open Sources to choose a verified option manually.",
+            if (seriesMode) "Browse episodes, resume where you left off, or let AstraWave continue with the next unfinished episode."
+            else "Press Play for one-tap viewing, or open Watch Options when you want to choose manually.",
             color = DetailsMuted,
             fontSize = 14.sp,
             lineHeight = 20.sp,
@@ -740,6 +740,14 @@ private fun SeriesEpisodeBrowser(
     onEpisode: (StremioEpisode) -> Unit,
 ) {
     val seasons = episodes.map { it.season }.filter { it > 0 }.distinct().sorted()
+    val currentSeasonEpisodes = episodes.filter { it.season == selectedSeason }
+    val currentSeasonWatched = currentSeasonEpisodes.count { progress[it.id]?.completed == true }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Season $selectedSeason", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        if (currentSeasonEpisodes.isNotEmpty()) {
+            Text("$currentSeasonWatched of ${currentSeasonEpisodes.size} episodes watched", color = DetailsMuted, fontSize = 12.sp)
+        }
+    }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         seasons.forEach { season ->
             val seasonEpisodes = episodes.filter { it.season == season }
@@ -761,7 +769,7 @@ private fun SeriesEpisodeBrowser(
                 AsyncImage(model = episode.thumbnail, contentDescription = episode.title, contentScale = ContentScale.Crop, modifier = Modifier.width(150.dp).height(84.dp).background(Color(0xFF202736), RoundedCornerShape(10.dp)))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("S${episode.season} E${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
+                Text("Episode ${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
                 episode.released?.takeIf { it.isNotBlank() }?.let { Text(it.take(10), color = DetailsMuted, fontSize = 11.sp) }
                 episode.overview?.let { Text(it, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 Text(
@@ -774,6 +782,14 @@ private fun SeriesEpisodeBrowser(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
+                if (percent != null && percent in 1..99) {
+                    LinearProgressIndicator(
+                        progress = { percent / 100f },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = DetailsSuccess,
+                        trackColor = Color(0xFF2A3140),
+                    )
+                }
             }
         }
     }
@@ -800,11 +816,11 @@ private fun SourceCard(index: Int, source: ResolvedSource, onPlay: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(source.link.sourceName, color = DetailsPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (index == 0) Text("BEST", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(DetailsAccent, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
+                if (index == 0) Text("RECOMMENDED", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(DetailsAccent, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
             }
-            val details = listOfNotNull(source.link.quality, source.contentType, source.latencyMs?.let { "${it}ms" }, source.link.licenseLabel, "score ${source.score}").joinToString(" • ")
+            val details = listOfNotNull(source.link.quality, source.contentType, source.link.licenseLabel).joinToString(" • ")
             Text(details, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("Health verified • backups ready", color = DetailsSuccess, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text("Ready to watch • backups available", color = DetailsSuccess, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
