@@ -1,6 +1,7 @@
 package com.astrawave.app.ui
 
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -26,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.astrawave.app.MovieListDetailActivity
@@ -65,14 +68,12 @@ fun CatalogContentShelf(
     val device = LocalAstraWaveDeviceClass.current
     val repository = remember { BuiltInCatalogRepository(context) }
     var items by remember(definition.id, profileId) { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
-    var source by remember(definition.id, profileId) { mutableStateOf("") }
 
     LaunchedEffect(definition.id, profileId) {
         val result = withContext(Dispatchers.IO) {
             runCatching { repository.page(definition.id, profileId, offset = 0, pageSize = 18) }.getOrNull()
         }
         items = result?.items.orEmpty()
-        source = result?.sourceLabel.orEmpty()
     }
 
     if (items.isEmpty()) return
@@ -111,45 +112,58 @@ fun CatalogContentShelf(
         )
     }
 
-    val cardWidth = if (device == AstraWaveDeviceClass.TV) 164.dp else 142.dp
-    val posterHeight = if (device == AstraWaveDeviceClass.TV) 246.dp else 213.dp
+    val cardWidth = when (device) {
+        AstraWaveDeviceClass.TV -> 172.dp
+        AstraWaveDeviceClass.TABLET -> 154.dp
+        AstraWaveDeviceClass.PHONE -> 138.dp
+    }
+    val posterHeight = when (device) {
+        AstraWaveDeviceClass.TV -> 258.dp
+        AstraWaveDeviceClass.TABLET -> 231.dp
+        AstraWaveDeviceClass.PHONE -> 207.dp
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-            Column {
-                Text(
-                    definition.title,
-                    color = AstraWaveColors.PrimaryText,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (source.isNotBlank() && device != AstraWaveDeviceClass.PHONE) {
-                    Text(source, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
-                }
-            }
+        Row(
+            Modifier.fillMaxWidth().padding(end = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                "See all  ›",
+                definition.title,
+                color = AstraWaveColors.PrimaryText,
+                style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "View all  ›",
                 color = AstraWaveColors.AccentStrong,
                 style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.clickable { openCatalog() },
+                modifier = Modifier.clickable { openCatalog() }.padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
             )
         }
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.TV) 14.dp else 12.dp),
-            contentPadding = PaddingValues(end = 34.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.TV) 14.dp else 11.dp),
+            contentPadding = PaddingValues(end = 34.dp, bottom = 5.dp),
         ) {
             items(items, key = { item -> "${definition.id}:${item.id}:${item.name}" }) { item ->
+                val typeLabel = if (
+                    definition.mediaType == BuiltInCatalogMediaType.SHOW ||
+                    item.type.equals("series", true) || item.type.equals("tv", true)
+                ) "TV" else "MOVIE"
                 AstraWaveFocusableCard(
-                    Modifier
-                        .width(cardWidth)
-                        .clickable { openItem(item) },
+                    Modifier.width(cardWidth).clickable { openItem(item) },
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(posterHeight)
-                                .clip(MaterialTheme.shapes.medium),
+                                .clip(MaterialTheme.shapes.large)
+                                .background(AstraWaveColors.BackgroundRaised),
                             contentAlignment = Alignment.Center,
                         ) {
                             AsyncImage(
@@ -161,19 +175,32 @@ fun CatalogContentShelf(
                             if (item.posterUrl.isNullOrBlank() && item.backdropUrl.isNullOrBlank()) {
                                 Text(item.name.take(1), color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)
                             }
+                            Text(
+                                typeLabel,
+                                color = AstraWaveColors.PrimaryText,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(8.dp)
+                                    .background(AstraWaveColors.Background.copy(alpha = 0.78f), MaterialTheme.shapes.small)
+                                    .padding(horizontal = 7.dp, vertical = 4.dp),
+                            )
                         }
                         Text(
                             item.name,
                             color = AstraWaveColors.PrimaryText,
                             style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         item.releaseInfo?.takeIf(String::isNotBlank)?.let { release ->
                             Text(
-                                release.take(16),
+                                release.take(18),
                                 color = AstraWaveColors.TertiaryText,
                                 style = MaterialTheme.typography.labelSmall,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
