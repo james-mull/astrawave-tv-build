@@ -47,7 +47,7 @@ fun SubscriptionOverviewScreen(
     val repository = remember { EntitlementCloudRepository(context) }
     val billing = remember { PlayBillingRepository(context) }
     var entitlement by remember { mutableStateOf(AstraWaveEntitlementPolicy.snapshot(null, fallbackPlan, source = "account-fallback")) }
-    var statusMessage by remember { mutableStateOf(if (repository.signedIn) "Checking your account…" else "Sign in to sync verified plan status.") }
+    var statusMessage by remember { mutableStateOf(if (repository.signedIn) "Checking your account…" else "Sign in to sync your plan across devices.") }
     var billingMessage by remember { mutableStateOf("Connecting to Google Play…") }
     var premiumOffer by remember { mutableStateOf<PlayBillingRepository.PremiumOffer?>(null) }
     var showPowerCenter by remember { mutableStateOf(false) }
@@ -57,11 +57,11 @@ fun SubscriptionOverviewScreen(
             result.onSuccess { snapshot ->
                 entitlement = snapshot
                 statusMessage = when {
-                    snapshot.source == "firestore-entitlements" -> "Verified from your AstraWave account"
-                    repository.signedIn -> "No server entitlement is active yet; showing the current app plan"
-                    else -> "Local plan view — sign in to restore purchases and cloud entitlements"
+                    snapshot.source == "firestore-entitlements" -> "Verified with your AstraWave account"
+                    repository.signedIn -> "Showing your current AstraWave plan"
+                    else -> "Sign in to restore purchases and sync your plan"
                 }
-            }.onFailure { statusMessage = "Could not verify plan state right now; showing your last known plan" }
+            }.onFailure { statusMessage = "Could not refresh plan status right now; showing your last known plan" }
         }
     }
 
@@ -72,7 +72,7 @@ fun SubscriptionOverviewScreen(
                 is PlayBillingRepository.Event.Pending -> billingMessage = event.message
                 is PlayBillingRepository.Event.Error -> billingMessage = event.message
                 is PlayBillingRepository.Event.Verified -> {
-                    billingMessage = "Premium purchase verified. Refreshing your AstraWave entitlement…"
+                    billingMessage = "Premium is verified. Refreshing your account…"
                     refreshEntitlement()
                 }
             }
@@ -93,10 +93,10 @@ fun SubscriptionOverviewScreen(
         billing.loadPremiumOffer { result ->
             result.onSuccess { offer ->
                 premiumOffer = offer
-                billingMessage = "Google Play Premium available • ${offer.formattedPrice}/month"
+                billingMessage = "Premium available • ${offer.formattedPrice}/month"
             }.onFailure { error ->
                 premiumOffer = null
-                billingMessage = error.message ?: "Google Play Premium is unavailable right now."
+                billingMessage = error.message ?: "Premium is unavailable right now."
             }
         }
     }
@@ -108,12 +108,14 @@ fun SubscriptionOverviewScreen(
     ) {
         Text("ASTRAWAVE+", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
         AstraWavePageHeader(
-            title = "$19.99 should feel obvious.",
-            subtitle = "Premium is not access to content. It is the intelligence, reliability, household, sports, cloud and power-TV layer that turns your authorized entertainment sources into one polished system.",
+            title = "Choose the AstraWave experience that fits you.",
+            subtitle = "AstraWave organizes and improves the entertainment sources you are authorized to use. A subscription pays for software features, personalization and cloud services — not third-party content.",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AstraWaveSecondaryButton(label = "← Back", onClick = onBack)
-            AstraWavePrimaryButton(label = "Open Premium Power Center", onClick = { showPowerCenter = true })
+            if (entitlement.premiumActive()) {
+                AstraWavePrimaryButton(label = "Premium Features", onClick = { showPowerCenter = true })
+            }
         }
 
         CurrentPlanStatus(entitlement = entitlement, statusMessage = statusMessage)
@@ -124,27 +126,32 @@ fun SubscriptionOverviewScreen(
             message = billingMessage,
             onPurchase = {
                 when {
-                    !repository.signedIn -> billingMessage = "Sign in to AstraWave first so Premium can be verified to your account."
-                    activity == null -> billingMessage = "Google Play checkout must be opened from an AstraWave activity."
+                    !repository.signedIn -> billingMessage = "Sign in first so Premium can be linked to your AstraWave account."
+                    activity == null -> billingMessage = "Google Play checkout is unavailable on this screen."
                     premiumOffer == null -> billingMessage = "Premium is not available from Google Play on this device/account yet."
                     else -> {
                         val result = billing.launchPremium(activity, requireNotNull(premiumOffer))
                         if (result.responseCode != BillingClient.BillingResponseCode.OK) {
                             billingMessage = result.debugMessage.ifBlank { "Google Play could not start checkout." }
                         } else {
-                            billingMessage = "Google Play checkout opened. Premium activates only after verified payment."
+                            billingMessage = "Google Play checkout opened. Premium activates after the purchase is verified."
                         }
                     }
                 }
             },
             onRestore = {
                 if (!repository.signedIn) {
-                    billingMessage = "Sign in to AstraWave before restoring purchases."
+                    billingMessage = "Sign in before restoring purchases."
                 } else {
                     billingMessage = "Checking Google Play subscriptions…"
                     billing.restore { result ->
-                        result.onSuccess { count -> billingMessage = if (count > 0) "Found $count AstraWave subscription purchase${if (count == 1) "" else "s"}; verifying…" else "No active AstraWave Premium purchase was found on this Play account." }
-                            .onFailure { billingMessage = it.message ?: "Restore failed" }
+                        result.onSuccess { count ->
+                            billingMessage = if (count > 0) {
+                                "Found $count AstraWave subscription${if (count == 1) "" else "s"}. Verifying your account…"
+                            } else {
+                                "No active AstraWave Premium purchase was found on this Play account."
+                            }
+                        }.onFailure { billingMessage = it.message ?: "Restore failed" }
                     }
                 }
             },
@@ -153,57 +160,56 @@ fun SubscriptionOverviewScreen(
         PlanCard(
             plan = AstraWavePlan.FREE,
             active = activePlan == AstraWavePlan.FREE,
-            headline = "A great free entertainment client",
+            headline = "A strong everyday entertainment hub",
             features = listOf(
-                "Movies & TV metadata and core discovery",
-                "Basic Live TV + EPG from authorized/public sources",
-                "One personal source and basic Stremio catalogs",
-                "Search, watchlist, favorites, history and audio basics",
-                "Basic sports schedule",
+                "Movies & TV discovery",
+                "Live TV and guide support for eligible sources",
+                "Search, watchlist, favorites and history",
+                "Basic sports schedule and audio discovery",
             ),
         )
         PlanCard(
             plan = AstraWavePlan.PLUS,
             active = activePlan == AstraWavePlan.PLUS,
-            headline = "Cloud convenience and advanced viewing",
+            headline = "More convenience across your household",
             features = listOf(
-                "Web Control Center + cloud sync",
-                "Device handoff and 2/3/4-up Multiview",
-                "DVR capability on compatible authorized sources",
+                "Cloud sync and web controls where available",
+                "Device handoff and expanded Multiview",
                 "Advanced recommendations",
-                "Extra household profiles and premium themes",
+                "Additional household and personalization features",
             ),
         )
         PlanCard(
             plan = AstraWavePlan.PREMIUM,
             active = activePlan == AstraWavePlan.PREMIUM,
-            headline = "The complete AstraWave Entertainment OS",
+            headline = "The complete AstraWave experience",
             features = listOf(
-                "Astra AI concierge for movies, TV, sports and short-watch discovery",
-                "Predictive Smart Source Fusion with health history and priority failover",
-                "Advanced timeline EPG, channel editor, catch-up and timeshift",
-                "Record once + series recording on capable providers",
-                "Unlimited compatible providers and advanced source management",
-                "Sports Intelligence: My Teams, event-to-channel matching, reminders and Sports Mosaic",
-                "Up to six simultaneous sports/live panes where hardware permits",
-                "Downloads + Travel Mode for authorized offline media",
+                "Advanced movie, TV and sports personalization",
+                "Automatic best-option playback with backup recovery",
+                "Advanced Live TV guide and channel customization",
+                "Sports favorites, event matching, reminders and up to six Multiview panes where supported",
+                "Downloads and Travel Mode for eligible authorized media",
                 "Plex, Jellyfin, Emby, WebDAV/NAS personal-media aggregation",
-                "Household Watch Night voting and shared entertainment decisions",
-                "Live web → TV configuration sync and private remote commands",
-                "Premium audio/podcast tools and richer listening continuity",
-                "Best-source autoplay, player diagnostics, PiP, track controls and backup recovery",
+                "Household Watch Night and shared entertainment tools",
+                "Cross-device sync, web controls and private remote commands where configured",
+                "Premium audio and podcast continuity tools",
+                "Player controls including PiP, audio/subtitles, speed, next episode and playback recovery",
             ),
         )
 
         AstraWaveFocusableCard(Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("Why Premium exists", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-                Text("The subscription pays for software intelligence and cloud orchestration: source health, sync, household state, sports personalization, remote management, AI-assisted organization and ongoing compatibility work. AstraWave does not sell third-party channels or unauthorized media.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                Text("What you’re paying for", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Premium supports AstraWave’s software features, cloud services, personalization, playback reliability and ongoing compatibility work. AstraWave does not sell third-party channels or unauthorized media.",
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
 
         Text(
-            "Google Play checkout never grants Premium by itself. AstraWave submits the purchase to the verification service, and only the server-owned /entitlements/{userId} record unlocks paid capabilities.",
+            "Subscriptions are billed through Google Play. Purchases are verified to your signed-in AstraWave account before Premium features activate.",
             color = AstraWaveColors.TertiaryText,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -224,11 +230,11 @@ private fun PlayBillingCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("GOOGLE PLAY", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
-        Text(if (activePremium) "Premium is active" else "Start AstraWave Premium", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-        Text(offer?.let { "${it.formattedPrice}/month • billed by Google Play" } ?: "Loading current Google Play offer…", color = AstraWaveColors.SecondaryText)
+        Text(if (activePremium) "Premium is active" else "AstraWave Premium", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+        Text(offer?.let { "${it.formattedPrice}/month • billed by Google Play" } ?: "Checking the current Google Play offer…", color = AstraWaveColors.SecondaryText)
         Text(message, color = if (activePremium) AstraWaveColors.Success else AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
         if (!signedIn) {
-            AstraWaveStatePanel("Sign in required", "AstraWave ties a Play purchase to your private account only after backend verification.")
+            AstraWaveStatePanel("Sign in required", "Sign in so purchases can be restored and Premium can follow your AstraWave account.")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (!activePremium) AstraWavePrimaryButton("Start Premium", onPurchase, enabled = signedIn && offer != null)
@@ -247,12 +253,24 @@ private fun CurrentPlanStatus(entitlement: EntitlementSnapshot, statusMessage: S
         Text("YOUR PLAN", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
         Text(entitlement.plan.displayName, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
         Text(statusMessage, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-        entitlement.daysRemainingInTrial()?.let { days -> Text(if (days > 0) "$days day${if (days == 1) "" else "s"} left in trial" else "Trial expired", color = if (days > 0) AstraWaveColors.Success else AstraWaveColors.Warning, style = MaterialTheme.typography.labelLarge) }
-        entitlement.trialEndsAtEpochMs?.let { end -> Text("Trial ends ${formatter.format(Date(end))}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium) }
-        entitlement.renewsAtEpochMs?.let { renewal -> Text("Renews ${formatter.format(Date(renewal))}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium) }
+        entitlement.daysRemainingInTrial()?.let { days ->
+            Text(
+                if (days > 0) "$days day${if (days == 1) "" else "s"} left in trial" else "Trial expired",
+                color = if (days > 0) AstraWaveColors.Success else AstraWaveColors.Warning,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        entitlement.trialEndsAtEpochMs?.let { end ->
+            Text("Trial ends ${formatter.format(Date(end))}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+        }
+        entitlement.renewsAtEpochMs?.let { renewal ->
+            Text("Renews ${formatter.format(Date(renewal))}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+        }
         if (entitlement.premiumActive()) {
-            Text("${entitlement.effectiveEntitlements().size} premium capabilities active", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
-            if (entitlement.has(AstraWaveEntitlement.PRIORITY_SOURCE_FAILOVER)) Text("Predictive source failover enabled", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+            Text("Premium features active", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+            if (entitlement.has(AstraWaveEntitlement.PRIORITY_SOURCE_FAILOVER)) {
+                Text("Automatic playback recovery enabled", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }
@@ -268,10 +286,16 @@ private fun PlanCard(plan: AstraWavePlan, active: Boolean, headline: String, fea
                 Text(plan.displayName, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
                 Text(headline, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
             }
-            Text(plan.monthlyPriceUsd?.let { "$${"%.2f".format(it)}/mo" } ?: "Free", color = if (plan == AstraWavePlan.PREMIUM) AstraWaveColors.AccentStrong else AstraWaveColors.SecondaryText, style = MaterialTheme.typography.titleMedium)
+            Text(
+                plan.monthlyPriceUsd?.let { "$${"%.2f".format(it)}/mo" } ?: "Free",
+                color = if (plan == AstraWavePlan.PREMIUM) AstraWaveColors.AccentStrong else AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.titleMedium,
+            )
         }
         if (active) Text("CURRENT PLAN", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(2.dp))
-        features.forEach { feature -> Text("• $feature", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium) }
+        features.forEach { feature ->
+            Text("• $feature", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
