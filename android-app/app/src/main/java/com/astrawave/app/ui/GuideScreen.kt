@@ -392,7 +392,7 @@ private fun buildTimelineGeometry(
         val effectiveStart = maxOf(start, cursor)
         if (end <= effectiveStart) return@mapNotNull null
         val gap = timeWidth((effectiveStart - cursor).coerceAtLeast(0L))
-        val width = timeWidth(end - effectiveStart).coerceAtLeast(72.dp)
+        val width = timeWidth(end - effectiveStart)
         cursor = end
         GuideProgrammeGeometry(
             title = programme.title,
@@ -418,10 +418,10 @@ private fun formatGuideTime(epochMs: Long): String = SimpleDateFormat("h:mm a", 
 private fun GuideSummaryRail(snapshot: GuideSnapshot, customized: Int, epgOverrides: Int) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         GuideStatPill("CHANNELS", snapshot.rows.size.toString())
-        GuideStatPill("FREE", snapshot.freeChannelCount.toString())
-        GuideStatPill("MY IPTV", snapshot.userChannelCount.toString())
-        GuideStatPill("CUSTOM", customized.toString())
-        GuideStatPill("EPG MAPS", epgOverrides.toString())
+        GuideStatPill("FREE TV", snapshot.freeChannelCount.toString())
+        GuideStatPill("MY CHANNELS", snapshot.userChannelCount.toString())
+        if (customized > 0) GuideStatPill("CUSTOMIZED", customized.toString())
+        
     }
 }
 
