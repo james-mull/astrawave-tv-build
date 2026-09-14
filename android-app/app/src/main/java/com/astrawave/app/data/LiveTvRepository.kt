@@ -136,12 +136,13 @@ class LiveTvRepository {
         }
 
         /**
-         * Preserve provider XMLTV identity whenever it exists. Name-first grouping can collapse
-         * sibling channels with similar display names and attach the wrong EPG row.
+         * Group the same logical channel across providers by its cleaned display identity so those
+         * feeds remain alternates. XMLTV identity is resolved per candidate in scheduleForChannel,
+         * which keeps provider-specific EPG IDs authoritative without splitting duplicate channels.
          */
         fun channelIdentityKey(channel: LiveChannel): String =
-            channel.tvgId?.trim()?.takeIf { it.isNotBlank() }?.lowercase(Locale.US)?.let { "tvg:$it" }
-                ?: channel.normalizedName.takeIf { it.isNotBlank() }?.let { "name:$it" }
+            channel.normalizedName.takeIf { it.isNotBlank() }?.let { "name:$it" }
+                ?: channel.tvgId?.trim()?.takeIf { it.isNotBlank() }?.lowercase(Locale.US)?.let { "tvg:$it" }
                 ?: "url:${channel.url}"
 
         fun normalizeChannelName(raw: String): String = raw.lowercase(Locale.US)
