@@ -85,6 +85,10 @@ class PlayBillingRepository(context: Context) : PurchasesUpdatedListener {
     }
 
     fun loadPremiumOffer(onComplete: (Result<PremiumOffer>) -> Unit) {
+        if (productId.isBlank()) {
+            onComplete(Result.failure(IllegalStateException("AstraWave Premium is not configured in this build.")))
+            return
+        }
         connect { connection ->
             if (connection.isFailure) {
                 onComplete(Result.failure(connection.exceptionOrNull() ?: IllegalStateException("Billing unavailable")))
@@ -132,6 +136,12 @@ class PlayBillingRepository(context: Context) : PurchasesUpdatedListener {
             return BillingResult.newBuilder()
                 .setResponseCode(BillingClient.BillingResponseCode.ERROR)
                 .setDebugMessage("Sign in to AstraWave before purchasing Premium so the purchase can be verified to your account.")
+                .build()
+        }
+        if (BuildConfig.ASTRAWAVE_API_BASE_URL.isBlank()) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.BILLING_UNAVAILABLE)
+                .setDebugMessage("Premium checkout is not available in this build yet.")
                 .build()
         }
         val item = BillingFlowParams.ProductDetailsParams.newBuilder()
