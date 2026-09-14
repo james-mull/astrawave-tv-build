@@ -1,0 +1,54 @@
+name: Polish Safety Settings Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/polish-safety-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  polish-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+
+      - name: Simplify family and privacy wording
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/SafetySettingsScreen.kt')
+          text = p.read_text()
+          replacements = [
+              ('subtitle = "Profile-specific controls are stored locally. Kids ratings, approvals, search and bedtime rules apply immediately.",', 'subtitle = "Manage Kids Mode, Parent PIN, viewing limits and privacy choices for this profile.",'),
+              ('description = "Search uses built-in AstraWave metadata only; external addon results never appear in Kids Mode."', 'description = "Search stays limited to kid-safe results that meet this profile’s rules."'),
+              ('title = "Allow External Addons",', 'title = "Allow Connected Extensions",'),
+              ('description = "When off, addon catalogs are blocked centrally from Addons, Discover and Search."', 'description = "Leave this off to keep Kids Mode limited to AstraWave’s built-in kid-safe experience."'),
+              ('description = "When off, Live TV and the Guide stop before any channel data is loaded."', 'description = "Turn this off to hide Live TV and the Guide from this Kids profile."'),
+              ('description = "Controls access to the Sports/Game Day schedule and matched Watch actions."', 'description = "Turn this off to hide Sports and Game Day from this Kids profile."'),
+              ('description = "Prefer local state and avoid cloud sync behavior for this profile."', 'description = "Keep this profile’s activity on this device and turn off cloud syncing."'),
+              ('description = "Allow profile state to sync when Firebase/account configuration is available."', 'description = "Sync this profile’s library and watch progress across supported AstraWave devices when signed in."'),
+              ('description = "Opt in to analytics. This remains disabled by default."', 'description = "Share optional usage analytics to help improve AstraWave. Off by default."'),
+              ('description = "Allow watch/listening behavior to influence personalized recommendations."', 'description = "Use viewing and listening activity to improve recommendations for this profile."'),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'target not found: {old[:100]}')
+              text = text.replace(old, new, 1)
+          p.write_text(text)
+
+      - name: Commit safety wording
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/ui/SafetySettingsScreen.kt
+          git commit -m "Make family and privacy settings customer-facing"
+          git push origin HEAD:feature/nuvio-core-rebuild
