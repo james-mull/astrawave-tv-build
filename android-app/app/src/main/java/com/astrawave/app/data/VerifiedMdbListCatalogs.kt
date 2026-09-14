@@ -44,6 +44,9 @@ object VerifiedMdbListCatalogs {
         "show:true-crime",
         "movie:anime-movies",
         "show:anime-series",
+        "movie:international-cinema",
+        "movie:japanese-movies",
+        "movie:french-cinema",
         "show:k-dramas",
         "show:indian-series",
     )
