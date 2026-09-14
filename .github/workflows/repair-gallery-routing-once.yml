@@ -1,0 +1,56 @@
+name: Repair Gallery Routing Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/repair-gallery-routing-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+
+      - name: Restore green RebuildMainActivity and add route hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout 88f90fd27de798f0984af36baee60a1678bb8fdd -- android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = p.read_text()
+          old = '''        setContent {\n            AstraWaveTheme {\n                Surface(color = AstraWaveColors.Background) { RebuildRoot() }\n            }\n        }'''
+          new = '''        val qaStartRoute = intent.getStringExtra("qa_start_route")\n        setContent {\n            AstraWaveTheme {\n                Surface(color = AstraWaveColors.Background) { RebuildRoot(qaStartRoute) }\n            }\n        }'''
+          assert old in text
+          text = text.replace(old, new, 1)
+          assert '@Composable\nprivate fun RebuildRoot() {' in text
+          text = text.replace('@Composable\nprivate fun RebuildRoot() {', '@Composable\nprivate fun RebuildRoot(initialRoute: String? = null) {', 1)
+          old_current = '    var current by remember { mutableStateOf(RebuildDestination.Home) }'
+          new_current = '    var current by remember(initialRoute) { mutableStateOf(RebuildDestination.entries.firstOrNull { it.route == initialRoute } ?: RebuildDestination.Home) }'
+          assert old_current in text
+          text = text.replace(old_current, new_current, 1)
+          p.write_text(text)
+          PY
+
+      - name: Compile repaired debug app
+        working-directory: android-app
+        run: gradle --no-daemon :app:compileDebugKotlin
+
+      - name: Commit repair
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt
+          git commit -m "Repair screenshot gallery routing on green app shell"
+          git push origin HEAD:feature/nuvio-core-rebuild
