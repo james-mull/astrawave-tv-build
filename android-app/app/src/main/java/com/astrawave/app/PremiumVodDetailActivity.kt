@@ -38,6 +38,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.core.LibraryItemRef
+import com.astrawave.app.core.LibraryMediaType
+import com.astrawave.app.core.WatchlistEntry
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.LocalLibraryStore
 import com.astrawave.app.data.ResolvedSource
@@ -114,6 +117,17 @@ private fun PremiumVodDetailScreen(
     var sourcesLoading by remember { mutableStateOf(false) }
     var sources by remember { mutableStateOf<List<ResolvedSource>>(emptyList()) }
     var sourceError by remember { mutableStateOf<String?>(null) }
+    val libraryItem = remember(title, sourceId, seriesMode) {
+        LibraryItemRef(
+            id = sourceId ?: "${if (seriesMode) "series" else "movie"}:${title.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')}",
+            type = if (seriesMode) LibraryMediaType.SERIES else LibraryMediaType.MOVIE,
+            title = title,
+            sourceId = sourceId,
+        )
+    }
+    var inMyList by remember(profileId, libraryItem.id) {
+        mutableStateOf(library.watchlist(profileId).any { it.item.id == libraryItem.id })
+    }
 
     LaunchedEffect(tmdbId, tmdbToken) {
         if (tmdbId == null || !tmdbRepository.isConfigured()) {
@@ -266,6 +280,14 @@ private fun PremiumVodDetailScreen(
                         AstraWaveSecondaryButton("Trailer") {
                             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}"))) }
                         }
+                    }
+                    AstraWaveSecondaryButton(if (inMyList) "✓ My List" else "+ My List") {
+                        val enabled = !inMyList
+                        library.setWatchlist(
+                            WatchlistEntry(profileId = profileId, item = libraryItem),
+                            enabled = enabled,
+                        )
+                        inMyList = enabled
                     }
                     AstraWaveSecondaryButton(if (showSources) "Hide Options" else "Watch Options") {
                         if (showSources) showSources = false else loadSources()
