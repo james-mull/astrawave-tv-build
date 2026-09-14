@@ -18,7 +18,7 @@ concurrency:
 jobs:
   production-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: android-app
@@ -58,9 +58,35 @@ jobs:
           test -f docs/ASTRAWAVE_RELEASE_GATE.md
           test -f docs/ASTRAWAVE_RELEASE_READINESS.md
           test -f docs/THIRD_PARTY_NOTICES.md
+          test -f web-app/app/api/astrawave/billing/verify/route.ts
+          test -f web-app/app/privacy/page.tsx
+          test -f web-app/app/terms/page.tsx
+          test -f web-app/app/support/page.tsx
           test -s AstraWave-TV-source.zip
           grep -q '9b09045f7af32073c8073893f7e324f135c8060a' NUVIO_BASELINE.md
           grep -q 'GPL-3.0' NUVIO_BASELINE.md
+
+      - name: Require production customer configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            ASTRAWAVE_FIREBASE_API_KEY \
+            ASTRAWAVE_FIREBASE_APP_ID \
+            ASTRAWAVE_FIREBASE_PROJECT_ID \
+            ASTRAWAVE_FIREBASE_SENDER_ID \
+            ASTRAWAVE_API_BASE_URL \
+            ASTRAWAVE_PREMIUM_PRODUCT_ID; do
+            value="${!name:-}"
+            if [[ -z "$value" ]]; then
+              echo "Missing required production configuration: $name" >&2
+              exit 1
+            fi
+          done
+          case "$ASTRAWAVE_API_BASE_URL" in
+            https://*) ;;
+            *) echo "ASTRAWAVE_API_BASE_URL must use HTTPS" >&2; exit 1 ;;
+          esac
 
       - name: Require production signing secrets
         shell: bash
@@ -77,6 +103,53 @@ jobs:
           printf '%s' "$ASTRAWAVE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
           test -s "$KEYSTORE_PATH"
           echo "ASTRAWAVE_RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Build customer web app and billing backend
+        working-directory: web-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+
+      - name: Prove public production billing verifier and customer pages
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${ASTRAWAVE_API_BASE_URL%/}"
+          if [[ "$base" == */api/astrawave ]]; then
+            api="$base"
+            site="${base%/api/astrawave}"
+          elif [[ "$base" == */api/astrawave/* ]]; then
+            echo "ASTRAWAVE_API_BASE_URL must be the site root or end in /api/astrawave" >&2
+            exit 1
+          else
+            api="$base/api/astrawave"
+            site="$base"
+          fi
+          code=$(curl --fail-with-body --max-time 20 -sS -o /tmp/billing-probe.txt -w '%{http_code}' -X POST "$api/billing/verify" || true)
+          cat /tmp/billing-probe.txt || true
+          if [[ "$code" != "401" ]]; then
+            echo "Billing verifier is not publicly ready. Expected unauthenticated HTTP 401, got $code." >&2
+            exit 1
+          fi
+          for page in privacy terms support; do
+            code=$(curl --max-time 20 -sS -o /dev/null -w '%{http_code}' "$site/$page")
+            if [[ "$code" != "200" ]]; then
+              echo "Customer page /$page is not publicly reachable (HTTP $code)." >&2
+              exit 1
+            fi
+          done
+          echo "ASTRAWAVE_VERIFIER_PROBED=true" >> "$GITHUB_ENV"
+          echo "ASTRAWAVE_CUSTOMER_PAGES_PROBED=true" >> "$GITHUB_ENV"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -121,6 +194,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "${ASTRAWAVE_VERIFIER_PROBED:-false}" = "true"
+          test "${ASTRAWAVE_CUSTOMER_PAGES_PROBED:-false}" = "true"
           cd app/build/outputs
           find . -type f \( -name '*.apk' -o -name '*.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
           {
@@ -130,6 +205,10 @@ jobs:
             echo "git_ref=${GITHUB_REF}"
             echo "workflow_run_id=${GITHUB_RUN_ID}"
             echo "signed=true"
+            echo "production_configured=true"
+            echo "billing_backend_built=true"
+            echo "billing_verifier_public=true"
+            echo "customer_web_pages_public=true"
             echo "promotion_eligible=true"
             echo "notices=docs/THIRD_PARTY_NOTICES.md"
             echo "covered_source=AstraWave-TV-source.zip"
