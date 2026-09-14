@@ -34,20 +34,33 @@ data class PlaybackPreferences(
 
 class PlaybackPreferenceStore(context: Context) {
     private val prefs = context.getSharedPreferences("astrawave_playback_preferences", Context.MODE_PRIVATE)
+    private val legacyPlayerPrefs = context.getSharedPreferences("astrawave_experience", Context.MODE_PRIVATE)
 
     fun load(profileId: String = "default"): PlaybackPreferences {
-        val prefix = keyPrefix(profileId)
+        val id = profileId.ifBlank { "default" }
+        val prefix = keyPrefix(id)
         val preset = runCatching {
             PlaybackPreset.valueOf(prefs.getString("${prefix}preset", PlaybackPreset.AUTO.name) ?: PlaybackPreset.AUTO.name)
         }.getOrDefault(PlaybackPreset.AUTO)
+        val legacyAudio = legacyPlayerPrefs.getString("$id:preferredAudioLanguage", null)
+            ?: legacyPlayerPrefs.getString("$id:preferredLanguage", null)
+        val legacySubtitle = legacyPlayerPrefs.getString("$id:preferredSubtitleLanguage", null)
         return PlaybackPreferences(
             preset = preset,
-            preferredAudioLanguage = prefs.getString("${prefix}audio_language", "auto") ?: "auto",
-            preferredSubtitleLanguage = prefs.getString("${prefix}subtitle_language", "auto") ?: "auto",
+            preferredAudioLanguage = prefs.getString("${prefix}audio_language", null) ?: legacyAudio ?: "auto",
+            preferredSubtitleLanguage = prefs.getString("${prefix}subtitle_language", null) ?: legacySubtitle ?: legacyAudio ?: "auto",
             preferForcedSubtitles = prefs.getBoolean("${prefix}forced_subtitles", true),
             preferHearingImpairedSubtitles = prefs.getBoolean("${prefix}hearing_impaired_subtitles", false),
-            subtitlesEnabledByDefault = prefs.getBoolean("${prefix}subtitles_default", false),
-            autoNextEnabled = prefs.getBoolean("${prefix}auto_next", true),
+            subtitlesEnabledByDefault = if (prefs.contains("${prefix}subtitles_default")) {
+                prefs.getBoolean("${prefix}subtitles_default", false)
+            } else {
+                legacyPlayerPrefs.getBoolean("$id:subtitlesEnabled", false)
+            },
+            autoNextEnabled = if (prefs.contains("${prefix}auto_next")) {
+                prefs.getBoolean("${prefix}auto_next", true)
+            } else {
+                legacyPlayerPrefs.getBoolean("$id:autoplayNextEpisode", true)
+            },
             skipIntroEnabled = prefs.getBoolean("${prefix}skip_intro", true),
             skipRecapEnabled = prefs.getBoolean("${prefix}skip_recap", true),
             skipCreditsEnabled = prefs.getBoolean("${prefix}skip_credits", true),
@@ -60,7 +73,8 @@ class PlaybackPreferenceStore(context: Context) {
     }
 
     fun save(profileId: String = "default", value: PlaybackPreferences) {
-        val prefix = keyPrefix(profileId)
+        val id = profileId.ifBlank { "default" }
+        val prefix = keyPrefix(id)
         prefs.edit()
             .putString("${prefix}preset", value.preset.name)
             .putString("${prefix}audio_language", value.preferredAudioLanguage)
@@ -77,6 +91,18 @@ class PlaybackPreferenceStore(context: Context) {
             .putBoolean("${prefix}prefer_debrid", value.preferDebrid)
             .putInt("${prefix}guide_density", value.guideDensity.coerceIn(1, 3))
             .putInt("${prefix}ui_scale", value.uiScalePercent.coerceIn(85, 125))
+            .apply()
+
+        // PlayerActivity already consumes this namespace. Mirror the modern policy here until all
+        // player surfaces read PlaybackPreferenceStore directly.
+        val audio = value.preferredAudioLanguage.takeUnless { it == "auto" || it == "off" }
+        val subtitle = value.preferredSubtitleLanguage.takeUnless { it == "auto" || it == "off" }
+        legacyPlayerPrefs.edit()
+            .putString("$id:preferredAudioLanguage", audio)
+            .putString("$id:preferredLanguage", audio)
+            .putString("$id:preferredSubtitleLanguage", subtitle)
+            .putBoolean("$id:subtitlesEnabled", value.subtitlesEnabledByDefault && value.preferredSubtitleLanguage != "off")
+            .putBoolean("$id:autoplayNextEpisode", value.autoNextEnabled)
             .apply()
     }
 
