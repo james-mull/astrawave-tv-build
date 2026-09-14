@@ -8,28 +8,31 @@ import org.junit.Test
 class AstraWaveNavigationContractTest {
 
     @Test
-    fun phonePrimaryNavigationIsWatchFirstAndExactlyFiveItems() {
+    fun phonePrimaryNavigationIsTouchFirstAndExactlyFiveItems() {
         val routes = AstraWaveNavigationContract.mobilePrimary.map { it.route }
-        assertEquals(listOf("home", "live", "sports", "movies", "my"), routes)
+        assertEquals(listOf("home", "search", "live", "movies", "my"), routes)
         assertEquals(5, routes.size)
         assertEquals(routes.size, routes.distinct().size)
         assertEquals("VOD", AstraWaveNavigationContract.mobilePrimary.first { it.route == "movies" }.label)
+        assertEquals("Search", AstraWaveNavigationContract.mobilePrimary.first { it.route == "search" }.label)
     }
 
     @Test
     fun advancedDestinationsStayOutOfPhonePrimaryNavigation() {
         val primary = AstraWaveNavigationContract.mobilePrimary.map { it.route }.toSet()
-        listOf("guide", "tv", "discover", "multiview", "audio", "personal-media", "addons", "search").forEach { route ->
+        listOf("guide", "tv", "discover", "multiview", "audio", "personal-media", "addons", "sports").forEach { route ->
             assertFalse(route in primary)
         }
+        assertTrue("search" in primary)
     }
 
     @Test
     fun phoneMoreKeepsEveryCriticalSecondaryDestinationReachable() {
         val more = AstraWaveNavigationContract.mobileMore.map { it.route }.toSet()
-        listOf("search", "guide", "tv", "discover", "multiview", "audio", "personal-media", "addons", "settings").forEach { route ->
+        listOf("sports", "guide", "tv", "discover", "multiview", "audio", "personal-media", "addons", "settings").forEach { route ->
             assertTrue(route in more)
         }
+        assertFalse("search" in more)
     }
 
     @Test
