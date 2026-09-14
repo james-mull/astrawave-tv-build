@@ -58,6 +58,30 @@ jobs:
           test -f docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md
           echo "Validated branch=${GITHUB_REF_NAME} sha=${GITHUB_SHA}"
 
+      - name: Evaluate production customer configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in \
+            ASTRAWAVE_FIREBASE_API_KEY \
+            ASTRAWAVE_FIREBASE_APP_ID \
+            ASTRAWAVE_FIREBASE_PROJECT_ID \
+            ASTRAWAVE_FIREBASE_SENDER_ID \
+            ASTRAWAVE_API_BASE_URL \
+            ASTRAWAVE_PREMIUM_PRODUCT_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} == 0 )); then
+            echo "ASTRAWAVE_PRODUCTION_CONFIGURED=true" >> "$GITHUB_ENV"
+            echo "Production account, sync, and billing verification configuration detected."
+          else
+            echo "ASTRAWAVE_PRODUCTION_CONFIGURED=false" >> "$GITHUB_ENV"
+            echo "::warning::Not customer-promotion eligible. Missing production configuration: ${missing[*]}"
+          fi
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -147,12 +171,17 @@ jobs:
           set -euo pipefail
           cd app/build/outputs
           find . -type f \( -name '*.apk' -o -name '*.aab' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          promotion_eligible=false
+          if [[ "${ASTRAWAVE_RELEASE_SIGNED:-false}" == "true" && "${ASTRAWAVE_PRODUCTION_CONFIGURED:-false}" == "true" ]]; then
+            promotion_eligible=true
+          fi
           {
             echo "git_sha=${GITHUB_SHA}"
             echo "git_ref=${GITHUB_REF}"
             echo "workflow_run_id=${GITHUB_RUN_ID}"
             echo "signed=${ASTRAWAVE_RELEASE_SIGNED:-false}"
-            echo "promotion_eligible=${ASTRAWAVE_RELEASE_SIGNED:-false}"
+            echo "production_configured=${ASTRAWAVE_PRODUCTION_CONFIGURED:-false}"
+            echo "promotion_eligible=${promotion_eligible}"
             echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } > RELEASE_METADATA.txt
           cat SHA256SUMS.txt
