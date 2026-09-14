@@ -58,14 +58,12 @@ class LiveTvRepository {
         val nowMs = System.currentTimeMillis()
         return channelLists.flatten()
             .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
-            .distinctBy { "${it.source}:${it.normalizedName}:${it.url}" }
+            .distinctBy { "${it.source}:${it.tvgId.orEmpty()}:${it.normalizedName}:${it.url}" }
             .groupBy(::channelIdentityKey)
             .map { (identityKey, candidates) ->
                 val ordered = candidates.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.source })
                 val schedule = ordered.asSequence()
-                    .flatMap { channel ->
-                        scheduleForChannel(channel, byTvg, byNormalizedEpgId).asSequence()
-                    }
+                    .flatMap { channel -> scheduleForChannel(channel, byTvg, byNormalizedEpgId).asSequence() }
                     .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
                     .sortedBy { parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
                     .toList()
@@ -101,14 +99,12 @@ class LiveTvRepository {
         ).distinct()
         exactIds.firstNotNullOfOrNull { id -> byTvg[id]?.takeIf { it.isNotEmpty() } }?.let { return it }
 
-        // Built-in public playlists sometimes omit tvg-id or use a decorated XMLTV id such as
-        // "CNN.us" while the M3U channel is simply "CNN". Fall back only to strong normalized
-        // equality. We deliberately do not use contains/fuzzy matching because that can put the
-        // wrong schedule on sibling networks such as ESPN/ESPN2 or CNN/CNN International.
+        // Fall back only to strong normalized equality. Never use contains/fuzzy matching here:
+        // sibling networks such as ESPN/ESPN2 or CNN/CNN International must not share schedules.
         val channelKeys = buildList {
-            add(channel.normalizedName)
             channel.tvgId?.let { add(normalizeEpgChannelId(it)) }
             add(normalizeEpgChannelId(channel.name))
+            add(channel.normalizedName)
         }.filter { it.length >= 3 }.distinct()
 
         channelKeys.forEach { key ->
@@ -125,19 +121,28 @@ class LiveTvRepository {
 
     companion object {
         private val xmlTvFormats = listOf("yyyyMMddHHmmss Z", "yyyyMMddHHmm Z", "yyyyMMddHHmmss", "yyyyMMddHHmm")
+
         fun parseXmlTvEpochMs(raw: String): Long? {
-            val value = raw.trim(); if (value.isBlank()) return null
-            xmlTvFormats.forEach { pattern -> runCatching {
-                val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
-                val date: Date = parser.parse(value) ?: return@runCatching null
-                return date.time
-            } }
+            val value = raw.trim()
+            if (value.isBlank()) return null
+            xmlTvFormats.forEach { pattern ->
+                runCatching {
+                    val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
+                    val date: Date = parser.parse(value) ?: return@runCatching null
+                    return date.time
+                }
+            }
             return null
         }
 
-        fun channelIdentityKey(channel: LiveChannel): String = channel.normalizedName.takeIf { it.isNotBlank() }?.let { "name:$it" }
-            ?: channel.tvgId?.trim()?.takeIf { it.isNotBlank() }?.lowercase(Locale.US)?.let { "tvg:$it" }
-            ?: "url:${channel.url}"
+        /**
+         * Preserve provider XMLTV identity whenever it exists. Name-first grouping can collapse
+         * sibling channels with similar display names and attach the wrong EPG row.
+         */
+        fun channelIdentityKey(channel: LiveChannel): String =
+            channel.tvgId?.trim()?.takeIf { it.isNotBlank() }?.lowercase(Locale.US)?.let { "tvg:$it" }
+                ?: channel.normalizedName.takeIf { it.isNotBlank() }?.let { "name:$it" }
+                ?: "url:${channel.url}"
 
         fun normalizeChannelName(raw: String): String = raw.lowercase(Locale.US)
             .replace("+", " plus ").replace("&", " and ")
@@ -155,6 +160,8 @@ class LiveTvRepository {
             .trim()
             .replace(Regex("\\s+"), " ")
 
-        private fun preferredDisplayName(channels: List<LiveChannel>): String = channels.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.name.length }).firstOrNull()?.name ?: channels.first().name
+        private fun preferredDisplayName(channels: List<LiveChannel>): String =
+            channels.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.name.length }).firstOrNull()?.name
+                ?: channels.first().name
     }
 }
