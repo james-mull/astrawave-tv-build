@@ -244,8 +244,19 @@ class PlayBillingRepository(context: Context) : PurchasesUpdatedListener {
         }
     }
 
+    private fun billingVerificationUrl(base: String): URL {
+        val normalized = base.trimEnd('/')
+        val endpoint = when {
+            normalized.endsWith("/api/astrawave", ignoreCase = true) -> "$normalized/billing/verify"
+            normalized.endsWith("/api/astrawave/billing", ignoreCase = true) -> "$normalized/verify"
+            normalized.endsWith("/api/astrawave/billing/verify", ignoreCase = true) -> normalized
+            else -> "$normalized/api/astrawave/billing/verify"
+        }
+        return URL(endpoint)
+    }
+
     private fun postForVerification(base: String, firebaseIdToken: String, purchaseToken: String): Boolean {
-        val endpoint = URL("$base/billing/verify")
+        val endpoint = billingVerificationUrl(base)
         val connection = endpoint.openConnection() as HttpURLConnection
         return try {
             connection.connectTimeout = 15_000
