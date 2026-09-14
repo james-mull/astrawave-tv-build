@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { allBuiltInCatalogs, movieCatalogs, tvCatalogs } from '../../../../lib/builtin-catalogs';
+import { applyServiceCatalogOverride } from '../../../../lib/catalog-service-overrides';
 import { mdblistPathForCatalog } from '../../../../lib/mdblist-catalog-map';
 
 const image=(path?:string|null,size='w500')=>path?`https://image.tmdb.org/t/p/${size}${path}`:undefined;
@@ -49,11 +50,13 @@ export async function GET(request:NextRequest){
   const id=request.nextUrl.searchParams.get('id')?.trim();
   const kind=request.nextUrl.searchParams.get('kind')==='series'?'series':'movie';
   if(!id){
-    const definitions=kind==='series'?tvCatalogs:movieCatalogs;
+    const rawDefinitions=kind==='series'?tvCatalogs:movieCatalogs;
+    const definitions=rawDefinitions.map(applyServiceCatalogOverride);
     const mdblistMappedIds=definitions.filter(def=>Boolean(mdblistPathForCatalog(def.id))).map(def=>def.id);
     return NextResponse.json({kind,count:definitions.length,definitions,mdblistConfigured:Boolean(process.env.MDBLIST_API_KEY),mdblistMappedIds},{headers:{'Cache-Control':'public, s-maxage=14400, stale-while-revalidate=86400'}});
   }
-  const definition=allBuiltInCatalogs.find(x=>x.id===id);if(!definition)return NextResponse.json({error:'Unknown catalog'}, {status:404});
+  const rawDefinition=allBuiltInCatalogs.find(x=>x.id===id);if(!rawDefinition)return NextResponse.json({error:'Unknown catalog'}, {status:404});
+  const definition=applyServiceCatalogOverride(rawDefinition);
   const cacheHeaders={'Cache-Control':'public, s-maxage=14400, stale-while-revalidate=86400'};
   const listPath=mdblistPathForCatalog(id);
   if(listPath&&process.env.MDBLIST_API_KEY){
