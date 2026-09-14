@@ -6,9 +6,9 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Resolves AstraWave's 150 built-in catalog definitions into live metadata.
  *
- * Catalog identity is hardcoded, but item contents are not. Verified MDBList-backed definitions
- * can be fulfilled by the AstraWave backend when configured; otherwise this repository falls back
- * to live Cinemeta/metadata discovery so every catalog remains useful without shipping stale titles.
+ * Catalog identity is hardcoded, but item contents are not. Definitions with a verified MDBList
+ * mapping are eligible for server-side MDBList resolution; this Android repository never embeds an
+ * MDBList credential and safely falls back to live Cinemeta/metadata discovery.
  */
 class BuiltInCatalogRepository(
     context: Context,
@@ -39,7 +39,7 @@ class BuiltInCatalogRepository(
 
         val items = loadFallback(definition, limit.coerceIn(1, 100))
         val label = when {
-            definition.documentedUrl != null -> "MDBList-backed • live metadata fallback"
+            definition.documentedUrl != null -> "MDBList mapping available • live metadata fallback"
             else -> "AstraWave live metadata"
         }
         cache[cacheKey] = CacheEntry(now, items, label)
