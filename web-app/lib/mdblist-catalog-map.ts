@@ -95,8 +95,10 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:japanese-movies':{owner:'coreyh047',slug:'popular-japanese-movies'},
   'movie:indian-cinema':{owner:'tools-agent',slug:'latest-indian-movies'},
   'movie:french-cinema':{owner:'coreyh047',slug:'popular-french-movies'},
+  'movie:spanish-language-movies':{owner:'mxtrakttv',slug:'peliculas-en-espanol-m5xld0krku'},
   'show:british-tv':{owner:'amything',slug:'latest-uk-shows'},
   'show:k-dramas':{owner:'egmi1',slug:'all-kdramas'},
+  'show:spanish-language-tv':{owner:'mxtrakttv',slug:'series-en-espanol'},
   'show:indian-series':{owner:'apollocat',slug:'indian-tv-shows-hindi-english'},
   'show:international-tv':{owner:'fuzi0n',slug:'international-tv-top-rated'},
 
