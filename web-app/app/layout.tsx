@@ -8,7 +8,9 @@ import './ui-competitive-v4.css';
 import './ui-platform-v5.css';
 import './control-polish.css';
 import './mobile-primary-nav.css';
+import './command-palette.css';
 import MobilePrimaryNav from './MobilePrimaryNav';
+import AstraWaveCommandPalette from './AstraWaveCommandPalette';
 
 export const metadata: Metadata = {
   title: 'AstraWave — All Your Entertainment. One Place.',
@@ -40,6 +42,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <MobilePrimaryNav />
+        <AstraWaveCommandPalette />
       </body>
     </html>
   );
