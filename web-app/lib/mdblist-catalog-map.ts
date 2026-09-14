@@ -52,6 +52,24 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:k-dramas':{owner:'egmi1',slug:'all-kdramas'},
   'show:indian-series':{owner:'apollocat',slug:'indian-tv-shows-hindi-english'},
 
+  // Streaming-service substitutions. Stable legacy IDs preserve saved user layout/preferences.
+  'movie:girls-night':{owner:'snoak',slug:'latest-netflix-movies'},
+  'movie:guys-night':{owner:'snoak',slug:'latest-amazon-prime-movies'},
+  'movie:date-night':{owner:'snoak',slug:'latest-disney-plus-movies'},
+  'movie:feel-good-movies':{owner:'snoak',slug:'latest-max-movies'},
+  'movie:summer-blockbusters':{owner:'snoak',slug:'latest-apple-tv-plus-movies'},
+  'movie:music-movies':{owner:'snoak',slug:'latest-hulu-movies'},
+  'movie:disaster-movies':{owner:'petera209',slug:'peacock-movies'},
+  'movie:survival-stories':{owner:'snoak',slug:'latest-paramount-plus-movies'},
+  'show:martial-arts-series':{owner:'snoak',slug:'latest-netflix-tv-shows'},
+  'show:heist-series':{owner:'snoak',slug:'latest-amazon-prime-tv-shows'},
+  'show:spy-series':{owner:'snoak',slug:'latest-disney-plus-tv-shows'},
+  'show:survival-series':{owner:'snoak',slug:'latest-max-tv-shows'},
+  'show:post-apocalyptic-series':{owner:'snoak',slug:'latest-apple-tv-plus-tv-shows'},
+  'show:time-travel-series':{owner:'snoak',slug:'latest-hulu-series'},
+  'show:psychological-series':{owner:'brovik',slug:'peacock-shows'},
+  'show:biographical-series':{owner:'snoak',slug:'latest-paramount-plus-tv-shows'},
+
   // Curated premium/editorial collections.
   'movie:psychological-thrillers':{owner:'ndg3270',slug:'psychological-thrillers'},
   'movie:comfort-movies':{owner:'billryan',slug:'comfort-movies'},
