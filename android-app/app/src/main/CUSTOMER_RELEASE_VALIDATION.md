@@ -2,4 +2,4 @@
 
 This marker exists to trigger the Android build, release-candidate, and phone/tablet/TV smoke workflows on the exact customer-facing source state after release polish changes.
 
-Current validation scope includes Home, Movies/TV, Search, Live TV, Guide, Sports, My AstraWave, onboarding, subscription/billing, player UI, VOD Watch Options, direct My List save/remove, and phone-safe VOD hero actions.
+Current validation scope includes Home, Movies/TV, Search, Live TV, Guide, Sports, My AstraWave, onboarding, subscription/billing, player UI, VOD Watch Options, direct My List save/remove, phone-safe VOD hero actions, and the customer-facing season/episode browser with progress and Watch Options terminology.
