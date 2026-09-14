@@ -1,0 +1,154 @@
+name: Add Help Legal Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/add-help-legal-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  add-help-legal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+
+      - name: Add in-app Help and Legal destination
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > android-app/app/src/main/java/com/astrawave/app/ui/HelpLegalScreen.kt <<'EOF'
+          package com.astrawave.app.ui
+
+          import android.content.Intent
+          import android.net.Uri
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.Row
+          import androidx.compose.foundation.layout.Spacer
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.foundation.layout.height
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.remember
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.unit.dp
+          import com.astrawave.app.BuildConfig
+
+          @Composable
+          fun HelpLegalScreen(onBack: () -> Unit) {
+              val context = LocalContext.current
+              val customerBase = remember {
+                  BuildConfig.ASTRAWAVE_API_BASE_URL.trim().trimEnd('/')
+                      .removeSuffix("/api/astrawave")
+                      .trimEnd('/')
+              }
+              val linksReady = customerBase.startsWith("https://") || customerBase.startsWith("http://")
+
+              fun open(path: String) {
+                  if (!linksReady) return
+                  runCatching {
+                      context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$customerBase/$path")))
+                  }
+              }
+
+              Column(
+                  Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                      .padding(horizontal = 22.dp, vertical = 20.dp),
+                  verticalArrangement = Arrangement.spacedBy(12.dp),
+              ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                      Column(Modifier.weight(1f)) {
+                          AstraWavePageHeader(
+                              title = "Help & Legal",
+                              subtitle = "Get help, review AstraWave policies, and check this app version.",
+                          )
+                      }
+                      Text("Back", color = AstraWaveColors.Accent, modifier = Modifier.clickable(onClick = onBack).padding(10.dp))
+                  }
+
+                  if (!linksReady) {
+                      AstraWaveStatePanel(
+                          "Customer links unavailable in this build",
+                          "Support and policy links appear automatically when the production AstraWave service is configured.",
+                      )
+                  }
+
+                  HelpLegalRow("Support", "Help with your account, playback, connected services, or subscription.", linksReady) { open("support") }
+                  HelpLegalRow("Privacy Policy", "How AstraWave handles account, profile, playback, and device data.", linksReady) { open("privacy") }
+                  HelpLegalRow("Terms of Service", "Rules and terms for using AstraWave and Premium.", linksReady) { open("terms") }
+
+                  Spacer(Modifier.height(8.dp))
+                  AstraWaveStatePanel(
+                      "App version",
+                      "AstraWave ${BuildConfig.VERSION_NAME} • build ${BuildConfig.VERSION_CODE}",
+                  )
+              }
+          }
+
+          @Composable
+          private fun HelpLegalRow(title: String, subtitle: String, enabled: Boolean, onClick: () -> Unit) {
+              AstraWaveFocusableCard(
+                  Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
+              ) {
+                  Column {
+                      Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                      Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                      Text(
+                          if (enabled) "Open ›" else "Available in production",
+                          color = if (enabled) AstraWaveColors.Accent else AstraWaveColors.TertiaryText,
+                          style = MaterialTheme.typography.labelLarge,
+                          modifier = Modifier.padding(top = 8.dp),
+                      )
+                  }
+              }
+          }
+          EOF
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/MyAstraWaveHub.kt')
+          text = p.read_text()
+          old_state = '    var showExperienceSettings by remember { mutableStateOf(false) }\n'
+          new_state = old_state + '    var showHelpLegal by remember { mutableStateOf(false) }\n'
+          if old_state not in text:
+              raise SystemExit('state anchor not found')
+          text = text.replace(old_state, new_state, 1)
+
+          old_branch = '''    if (showExperienceSettings) {\n        AstraWaveExperienceSettingsScreen(profileId = profileId, onBack = { showExperienceSettings = false })\n        return\n    }\n'''
+          new_branch = old_branch + '''\n    if (showHelpLegal) {\n        HelpLegalScreen(onBack = { showHelpLegal = false })\n        return\n    }\n'''
+          if old_branch not in text:
+              raise SystemExit('branch anchor not found')
+          text = text.replace(old_branch, new_branch, 1)
+
+          old_rows = '''        SetupRow { showSetup = true }\n        ExperienceSettingsRow { showExperienceSettings = true }\n'''
+          new_rows = old_rows + '''        AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 5.dp).clickable { showHelpLegal = true }) {\n            Row(verticalAlignment = Alignment.CenterVertically) {\n                Icon(Icons.Default.Settings, null, tint = AstraWaveColors.Accent)\n                Spacer(Modifier.width(12.dp))\n                Column(Modifier.weight(1f)) {\n                    Text("Help & Legal", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)\n                    Text("Support, Privacy Policy, Terms & app version", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)\n                }\n                Icon(Icons.Default.ChevronRight, null, tint = AstraWaveColors.TertiaryText)\n            }\n        }\n'''
+          if old_rows not in text:
+              raise SystemExit('rows anchor not found')
+          text = text.replace(old_rows, new_rows, 1)
+          p.write_text(text)
+          PY
+
+      - name: Commit Help and Legal UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/ui/HelpLegalScreen.kt android-app/app/src/main/java/com/astrawave/app/ui/MyAstraWaveHub.kt
+          git commit -m "Add in-app Help and Legal destination"
+          git push origin HEAD:feature/nuvio-core-rebuild
