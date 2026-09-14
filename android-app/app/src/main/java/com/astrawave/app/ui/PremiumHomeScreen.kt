@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
@@ -97,7 +98,7 @@ fun PremiumHomeScreen(profileId: String = "default") {
             result.onSuccess { report ->
                 val restored = report.watchlistImported + report.favoritesImported + report.listsImported + report.progressImported
                 if (restored > 0) {
-                    cloudRestoreMessage = "Cloud synced"
+                    cloudRestoreMessage = "Synced"
                     intelligence.invalidate(profileId)
                     libraryRefresh += 1
                 }
@@ -111,9 +112,7 @@ fun PremiumHomeScreen(profileId: String = "default") {
                 metadata.load(AstraWaveMetadataGateway.Catalog.TRENDING_MOVIES).take(24) to
                     metadata.load(AstraWaveMetadataGateway.Catalog.TRENDING_SERIES).take(24)
             }
-            (pair.first + pair.second).forEach { item ->
-                ArtworkRegistry.register(item.name, item.posterUrl ?: item.backdropUrl)
-            }
+            (pair.first + pair.second).forEach { item -> ArtworkRegistry.register(item.name, item.posterUrl ?: item.backdropUrl) }
             HomeDiscoveryState.Ready(pair.first, pair.second)
         } catch (error: Exception) {
             HomeDiscoveryState.Error(error.message ?: "Discovery is temporarily unavailable")
@@ -122,12 +121,8 @@ fun PremiumHomeScreen(profileId: String = "default") {
 
     LaunchedEffect(profileId, libraryRefresh) {
         intelligenceLoading = true
-        intelligentRows = withContext(Dispatchers.IO) {
-            runCatching { intelligence.rows(profileId) }.getOrDefault(emptyList())
-        }
-        intelligentRows.flatMap { it.items }.forEach { item ->
-            ArtworkRegistry.register(item.name, item.posterUrl ?: item.backdropUrl)
-        }
+        intelligentRows = withContext(Dispatchers.IO) { runCatching { intelligence.rows(profileId) }.getOrDefault(emptyList()) }
+        intelligentRows.flatMap { it.items }.forEach { item -> ArtworkRegistry.register(item.name, item.posterUrl ?: item.backdropUrl) }
         intelligenceLoading = false
     }
 
@@ -135,17 +130,13 @@ fun PremiumHomeScreen(profileId: String = "default") {
         sports = withContext(Dispatchers.IO) {
             val sources = IptvSourceStore(context).load(profileId)
             runCatching {
-                val snapshot = sportsRepository.load(
-                    date = LocalDate.now(ZoneOffset.UTC),
-                    sources = sources,
-                )
+                val snapshot = sportsRepository.load(LocalDate.now(ZoneOffset.UTC), sources)
                 val favorites = sportsPreferences.teams(profileId).map { it.name.lowercase() }.toSet()
                 val ranked = snapshot.events.sortedWith(
-                    compareByDescending<SportsGuideItem> { item -> item.event.isLive }
-                        .thenByDescending { item ->
-                            listOfNotNull(item.event.homeTeam, item.event.awayTeam).any { it.lowercase() in favorites }
-                        }
-                        .thenByDescending { item -> item.watchCandidate != null },
+                    compareByDescending<SportsGuideItem> { it.event.isLive && it.watchCandidate != null }
+                        .thenByDescending { item -> listOfNotNull(item.event.homeTeam, item.event.awayTeam).any { it.lowercase() in favorites } }
+                        .thenByDescending { it.watchCandidate != null }
+                        .thenByDescending { it.event.isLive },
                 ).take(12)
                 if (ranked.isEmpty()) HomeSportsState.Empty else HomeSportsState.Ready(ranked)
             }.getOrDefault(HomeSportsState.Empty)
@@ -207,60 +198,44 @@ fun PremiumHomeScreen(profileId: String = "default") {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
-        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(26.dp),
+        contentPadding = PaddingValues(horizontal = 34.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        item(key = "home-topline") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
-                    Text("Your entertainment, already organized.", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-                }
+        item(key = "home-brand") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("ASTRAWAVE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
                 cloudRestoreMessage?.let { Text(it, color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium) }
             }
         }
 
         when {
-            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") {
-                HomeSportsHero(liveFeatured, ::playSports)
-            }
-            heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") {
-                HomeHero(heroProgress, ::openItem)
-            }
+            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }
+            heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }
             discovery is HomeDiscoveryState.Ready -> {
                 val first = (discovery as HomeDiscoveryState.Ready).movies.firstOrNull()
                     ?: (discovery as HomeDiscoveryState.Ready).series.firstOrNull()
-                if (first != null) item(key = "discovery-hero-${first.id}") {
-                    HomeDiscoveryHero(first, ::openMetadata)
-                }
-            }
-        }
-
-        val sportsReady = sports as? HomeSportsState.Ready
-        if (sportsReady != null) {
-            item(key = "sports-pulse") {
-                HomeSection(
-                    title = "Game Day",
-                    subtitle = "Live and upcoming events, with your teams and watch-ready matches first",
-                ) {
-                    HomeSportsRow(sportsReady.events, ::playSports)
-                }
+                if (first != null) item(key = "discovery-hero-${first.id}") { HomeDiscoveryHero(first, ::openMetadata) }
             }
         }
 
         if (continueSeries.isNotEmpty()) {
             item(key = "continue-series") {
-                HomeSection("Continue Series", "Resume the exact episode") {
-                    ProgressHomeRow(continueSeries, "CONTINUE SERIES", ::openItem)
+                HomeSection("Continue Watching", "Resume the exact episode") {
+                    ProgressHomeRow(continueSeries, "CONTINUE", ::openItem)
+                }
+            }
+        } else if (continueWatching.isNotEmpty()) {
+            item(key = "continue-watching") {
+                HomeSection("Continue Watching", "Pick up where you left off") {
+                    ProgressHomeRow(continueWatching, "CONTINUE", ::openItem)
                 }
             }
         }
 
-        if (continueWatching.isNotEmpty()) {
-            item(key = "continue-watching") {
-                HomeSection("Continue Watching", "Pick up instantly across your library") {
-                    ProgressHomeRow(continueWatching, "CONTINUE", ::openItem)
-                }
+        val sportsReady = sports as? HomeSportsState.Ready
+        if (sportsReady != null && sportsReady.events.isNotEmpty()) {
+            item(key = "sports-pulse") {
+                HomeSection("Game Day", "Watch-ready games first") { HomeSportsRow(sportsReady.events, ::playSports) }
             }
         }
 
@@ -269,21 +244,14 @@ fun PremiumHomeScreen(profileId: String = "default") {
                 HomeSection("For You", "Personalizing from your history") { HomeSkeletonRow() }
             }
         } else {
-            items(
-                items = intelligentRows,
-                key = { row -> "intel:${row.title}:${row.badge.orEmpty()}" },
-            ) { row ->
-                HomeSection(row.title, row.subtitle) {
-                    MetadataHomeRow(row.items, row.badge, ::openMetadata)
-                }
+            items(items = intelligentRows.filter { it.items.isNotEmpty() }, key = { row -> "intel:${row.title}:${row.badge.orEmpty()}" }) { row ->
+                HomeSection(row.title, row.subtitle) { MetadataHomeRow(row.items, row.badge, ::openMetadata) }
             }
         }
 
         if (watchlist.isNotEmpty()) {
             item(key = "watchlist") {
-                HomeSection("My Watchlist", "Saved for later") {
-                    LibraryHomeRow(watchlist.map { it.item }, "WATCHLIST", ::openItem)
-                }
+                HomeSection("My Watchlist", "Saved for later") { LibraryHomeRow(watchlist.map { it.item }, null, ::openItem) }
             }
         }
 
@@ -295,40 +263,32 @@ fun PremiumHomeScreen(profileId: String = "default") {
                 AstraWavePartialDataState(message = current.message, actionLabel = null)
             }
             is HomeDiscoveryState.Ready -> {
-                item(key = "trending-movies") {
-                    HomeSection("Trending Movies", "What people are watching now") {
-                        MetadataHomeRow(current.movies, "TRENDING", ::openMetadata)
-                    }
+                if (current.movies.isNotEmpty()) item(key = "trending-movies") {
+                    HomeSection("Trending Movies", "Popular right now") { MetadataHomeRow(current.movies, null, ::openMetadata) }
                 }
-                item(key = "trending-series") {
-                    HomeSection("Trending TV", "Series moving right now") {
-                        MetadataHomeRow(current.series, "TRENDING", ::openMetadata)
-                    }
+                if (current.series.isNotEmpty()) item(key = "trending-series") {
+                    HomeSection("Trending TV", "Series moving right now") { MetadataHomeRow(current.series, null, ::openMetadata) }
                 }
                 val fresh = (current.movies + current.series)
                     .sortedByDescending { it.releaseInfo?.take(10).orEmpty() }
                     .distinctBy { "${it.type}:${it.id}" }
                     .take(20)
                 if (fresh.isNotEmpty()) item(key = "fresh") {
-                    HomeSection("Fresh This Week", "Newer releases across movies and television") {
-                        MetadataHomeRow(fresh, "NEW", ::openMetadata)
-                    }
+                    HomeSection("Fresh This Week", "Newer movies and television") { MetadataHomeRow(fresh, "NEW", ::openMetadata) }
                 }
             }
         }
 
         if (recent.isNotEmpty()) {
             item(key = "recent") {
-                HomeSection("Recently Watched", "Jump back into something familiar") {
-                    LibraryHomeRow(recent.take(24).map { it.item }, "RECENT", ::openItem)
-                }
+                HomeSection("Recently Watched", "Your viewing history") { LibraryHomeRow(recent.take(24).map { it.item }, null, ::openItem) }
             }
         }
 
         item(key = "refresh") {
             Text(
-                "Refresh personalized Home",
-                color = AstraWaveColors.Accent,
+                "Refresh Home",
+                color = AstraWaveColors.AccentStrong,
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.clickable {
                     intelligence.invalidate(profileId)
@@ -342,15 +302,14 @@ fun PremiumHomeScreen(profileId: String = "default") {
 @Composable
 private fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> Unit) {
     AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onWatch(item) }) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(24.dp))
-                .padding(horizontal = 28.dp, vertical = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            Modifier.fillMaxWidth().height(390.dp)
+                .background(
+                    Brush.verticalGradient(listOf(AstraWaveColors.SurfaceFocus, AstraWaveColors.BackgroundRaised, AstraWaveColors.Background)),
+                    RoundedCornerShape(26.dp),
+                ),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Column(Modifier.align(Alignment.BottomStart).padding(30.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("● LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
                 Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
                 Text(
@@ -358,27 +317,7 @@ private fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> 
                     color = AstraWaveColors.SecondaryText,
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                item.event.homeScore?.let { home ->
-                    item.event.awayScore?.let { away ->
-                        Text(
-                            "${item.event.awayTeam ?: "Away"} $away  •  ${item.event.homeTeam ?: "Home"} $home",
-                            color = AstraWaveColors.PrimaryText,
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                    }
-                }
-                Text("Watch now →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
-            }
-            Column(Modifier.width(250.dp)) {
-                Text("GAME DAY", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(8.dp))
-                Text("Best matched source selected automatically", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "${(item.resolution?.candidates?.size ?: 1).coerceAtLeast(1)} source option${if ((item.resolution?.candidates?.size ?: 1) == 1) "" else "s"}",
-                    color = AstraWaveColors.Success,
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                Text("▶ Watch Best Source", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
@@ -387,19 +326,18 @@ private fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> 
 @Composable
 private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (AstraWaveMetadataGateway.Item) -> Unit) {
     AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(item) }) {
-        Row(
-            Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(24.dp)).padding(24.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.fillMaxWidth().height(430.dp)) {
+            AstraWaveArtwork(item.name, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.08f), AstraWaveColors.Background.copy(alpha = 0.52f), AstraWaveColors.Background)),
+                ),
+            )
+            Column(Modifier.align(Alignment.BottomStart).padding(30.dp).width(720.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 HomeBadge("FEATURED")
                 Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
-                Text(item.description ?: "Open details, ratings, trailers and watch options.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge, maxLines = 3)
-                Text("Explore →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
-            }
-            Box(Modifier.width(360.dp)) {
-                AstraWaveArtwork(item.name, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
+                Text(item.description ?: "Open details, trailers and watch options.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge, maxLines = 3)
+                Text("View details  →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
@@ -409,32 +347,29 @@ private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (Astr
 private fun HomeSection(title: String, subtitle: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().animateContentSize()) {
         Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(3.dp))
-        Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(11.dp))
+        Spacer(Modifier.height(2.dp))
+        Text(subtitle, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(10.dp))
         content()
     }
 }
 
 @Composable
 private fun HomeHero(progress: LocalLibraryStore.PlaybackProgress, onOpen: (LibraryItemRef) -> Unit) {
-    val ratio = if (progress.durationMs > 0L) {
-        (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
-    } else 0f
+    val ratio = if (progress.durationMs > 0L) (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
     AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(progress.item) }) {
-        Row(
-            Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(24.dp)).padding(24.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Box(Modifier.fillMaxWidth().height(420.dp)) {
+            AstraWaveArtwork(progress.item.title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.10f), AstraWaveColors.Background.copy(alpha = 0.58f), AstraWaveColors.Background)),
+                ),
+            )
+            Column(Modifier.align(Alignment.BottomStart).padding(30.dp).width(700.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 HomeBadge(if (progress.item.type == LibraryMediaType.EPISODE) "CONTINUE SERIES" else "CONTINUE")
                 Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
                 LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
-                Text("${(ratio * 100).toInt()}% watched • Resume →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
-            }
-            Box(Modifier.width(360.dp)) {
-                AstraWaveArtwork(progress.item.title, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
+                Text("${(ratio * 100).toInt()}% watched  •  Resume →", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
@@ -442,27 +377,19 @@ private fun HomeHero(progress: LocalLibraryStore.PlaybackProgress, onOpen: (Libr
 
 @Composable
 private fun HomeSportsRow(events: List<SportsGuideItem>, onWatch: (SportsGuideItem) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(events, key = { it.event.id }) { item ->
-            AstraWaveFocusableCard(
-                Modifier
-                    .width(310.dp)
-                    .clickable(enabled = item.watchCandidate != null) { onWatch(item) },
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            AstraWaveFocusableCard(Modifier.width(300.dp).clickable(enabled = item.watchCandidate != null) { onWatch(item) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        if (item.event.isLive) "● LIVE" else if (item.watchCandidate != null) "WATCH READY" else "UPCOMING",
-                        color = if (item.event.isLive) AstraWaveColors.Live else if (item.watchCandidate != null) AstraWaveColors.Success else AstraWaveColors.Accent,
+                        if (item.event.isLive) "● LIVE" else if (item.watchCandidate != null) "WATCH READY" else "SCHEDULED",
+                        color = if (item.event.isLive) AstraWaveColors.Live else if (item.watchCandidate != null) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
                         style = MaterialTheme.typography.labelLarge,
                     )
                     Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                    Text(listOfNotNull(item.event.league, item.event.time).joinToString(" • "), color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        listOfNotNull(item.event.league, item.event.time).joinToString(" • "),
-                        color = AstraWaveColors.SecondaryText,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        item.watchCandidate?.let { "${it.channelName} • ${it.source}" } ?: "Broadcast match pending",
+                        item.watchCandidate?.let { "${it.channelName} • ${it.source}" } ?: "Source pending",
                         color = if (item.watchCandidate != null) AstraWaveColors.Success else AstraWaveColors.TertiaryText,
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
@@ -474,25 +401,19 @@ private fun HomeSportsRow(events: List<SportsGuideItem>, onWatch: (SportsGuideIt
 }
 
 @Composable
-private fun ProgressHomeRow(
-    progressItems: List<LocalLibraryStore.PlaybackProgress>,
-    badge: String,
-    onOpen: (LibraryItemRef) -> Unit,
-) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
+private fun ProgressHomeRow(progressItems: List<LocalLibraryStore.PlaybackProgress>, badge: String, onOpen: (LibraryItemRef) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(progressItems, key = { it.item.id }) { progress ->
-            val ratio = if (progress.durationMs > 0L) {
-                (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
-            } else 0f
-            AstraWaveFocusableCard(Modifier.width(286.dp).clickable { onOpen(progress.item) }) {
+            val ratio = if (progress.durationMs > 0L) (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+            AstraWaveFocusableCard(Modifier.width(310.dp).clickable { onOpen(progress.item) }) {
                 Column {
-                    HomeBadge(badge)
-                    Spacer(Modifier.height(7.dp))
                     AstraWaveArtwork(progress.item.title, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
-                    Spacer(Modifier.height(9.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                    Spacer(Modifier.height(7.dp))
+                    Spacer(Modifier.height(6.dp))
                     LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(5.dp))
+                    Text(badge, color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -505,18 +426,18 @@ private fun HomeBadge(label: String) {
         label,
         color = AstraWaveColors.PrimaryText,
         style = MaterialTheme.typography.labelSmall,
-        modifier = Modifier.background(AstraWaveColors.Accent, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = Modifier.background(AstraWaveColors.AccentSoft.copy(alpha = 0.88f), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }
 
 @Composable
 private fun HomeSkeletonRow() {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
-        items(5) { index ->
-            Column(Modifier.width(280.dp)) {
-                Box(Modifier.fillMaxWidth().height(158.dp).background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)))
-                Spacer(Modifier.height(10.dp))
-                Box(Modifier.width((150 + index * 8).dp).height(18.dp).background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(6.dp)))
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
+        items(6) { index ->
+            Column(Modifier.width(196.dp)) {
+                Box(Modifier.fillMaxWidth().height(294.dp).background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)))
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.width((130 + index * 7).dp).height(16.dp).background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(6.dp)))
             }
         }
     }
@@ -525,13 +446,13 @@ private fun HomeSkeletonRow() {
 @Composable
 private fun LibraryHomeRow(items: List<LibraryItemRef>, badge: String? = null, onOpen: (LibraryItemRef) -> Unit) {
     val unique = items.distinctBy { it.id }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(unique, key = { it.id }) { item ->
             AstraWaveFocusableCard(Modifier.width(196.dp).clickable { onOpen(item) }) {
                 Column {
-                    badge?.let { HomeBadge(it); Spacer(Modifier.height(7.dp)) }
+                    badge?.let { HomeBadge(it); Spacer(Modifier.height(6.dp)) }
                     AstraWaveArtwork(item.title, Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(9.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                 }
             }
@@ -546,17 +467,17 @@ private fun MetadataHomeRow(
     onOpen: (AstraWaveMetadataGateway.Item) -> Unit,
 ) {
     val unique = metadataItems.distinctBy { "${it.type}:${it.id}" }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 20.dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(unique, key = { "${it.type}:${it.id}" }) { item ->
-            AstraWaveFocusableCard(Modifier.width(286.dp).clickable { onOpen(item) }) {
+            AstraWaveFocusableCard(Modifier.width(196.dp).clickable { onOpen(item) }) {
                 Column(Modifier.animateContentSize()) {
-                    badge?.let { HomeBadge(it); Spacer(Modifier.height(7.dp)) }
-                    AstraWaveArtwork(item.name, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
-                    Spacer(Modifier.height(9.dp))
+                    badge?.let { HomeBadge(it); Spacer(Modifier.height(6.dp)) }
+                    AstraWaveArtwork(item.name, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Poster)
+                    Spacer(Modifier.height(8.dp))
                     Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     item.releaseInfo?.let {
-                        Spacer(Modifier.height(4.dp))
-                        Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                        Spacer(Modifier.height(3.dp))
+                        Text(it, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                     }
                 }
             }
