@@ -7,18 +7,18 @@ data class AstraWaveNavItem(
 )
 
 object AstraWaveNavigationContract {
-    /** Phone bottom navigation stays intentionally simple and watch-first. */
+    /** Phone bottom navigation stays intentionally simple, search-first and touch-friendly. */
     val mobilePrimary = listOf(
         AstraWaveNavItem("home", "Home"),
+        AstraWaveNavItem("search", "Search"),
         AstraWaveNavItem("live", "Live"),
-        AstraWaveNavItem("sports", "Sports"),
         AstraWaveNavItem("movies", "VOD"),
         AstraWaveNavItem("my", "My"),
     )
 
     /** Secondary destinations live behind My / Content Manager instead of competing with playback. */
     val mobileMore = listOf(
-        AstraWaveNavItem("search", "Search Everything"),
+        AstraWaveNavItem("sports", "Sports"),
         AstraWaveNavItem("guide", "Live Guide"),
         AstraWaveNavItem("tv", "TV Series"),
         AstraWaveNavItem("discover", "Discover"),
@@ -45,7 +45,7 @@ object AstraWaveNavigationContract {
     )
 
     /**
-     * 10-foot TV rail follows the MYTVOnline-style mental model:
+     * 10-foot TV rail follows a dedicated IPTV mental model:
      * Live/Guide/VOD/Series are first-class; source management and power tools stay under My.
      */
     val tv = listOf(
@@ -64,8 +64,8 @@ object AstraWaveNavigationContract {
         check(mobileMore.map { it.route }.distinct().size == mobileMore.size)
         check(mobileTablet.map { it.route }.distinct().size == mobileTablet.size)
         check(tv.map { it.route }.distinct().size == tv.size)
-        check(mobilePrimary.map { it.route } == listOf("home", "live", "sports", "movies", "my"))
-        check(mobileMore.first().route == "search")
+        check(mobilePrimary.map { it.route } == listOf("home", "search", "live", "movies", "my"))
+        check(mobileMore.first().route == "sports")
         check(mobileMore.any { it.route == "guide" })
         check(mobileMore.any { it.route == "multiview" })
         check(mobileMore.any { it.route == "addons" })
