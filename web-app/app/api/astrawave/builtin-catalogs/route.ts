@@ -50,7 +50,8 @@ export async function GET(request:NextRequest){
   const kind=request.nextUrl.searchParams.get('kind')==='series'?'series':'movie';
   if(!id){
     const definitions=kind==='series'?tvCatalogs:movieCatalogs;
-    return NextResponse.json({kind,count:definitions.length,definitions,mdblistConfigured:Boolean(process.env.MDBLIST_API_KEY)},{headers:{'Cache-Control':'public, s-maxage=14400, stale-while-revalidate=86400'}});
+    const mdblistMappedIds=definitions.filter(def=>Boolean(mdblistPathForCatalog(def.id))).map(def=>def.id);
+    return NextResponse.json({kind,count:definitions.length,definitions,mdblistConfigured:Boolean(process.env.MDBLIST_API_KEY),mdblistMappedIds},{headers:{'Cache-Control':'public, s-maxage=14400, stale-while-revalidate=86400'}});
   }
   const definition=allBuiltInCatalogs.find(x=>x.id===id);if(!definition)return NextResponse.json({error:'Unknown catalog'}, {status:404});
   const cacheHeaders={'Cache-Control':'public, s-maxage=14400, stale-while-revalidate=86400'};
