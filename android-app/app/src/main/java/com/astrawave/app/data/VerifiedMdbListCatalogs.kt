@@ -50,6 +50,24 @@ object VerifiedMdbListCatalogs {
         "show:british-tv",
         "show:k-dramas",
         "show:indian-series",
+
+        // Stable legacy IDs now represent the eight major streaming-service catalogs.
+        "movie:girls-night",
+        "movie:guys-night",
+        "movie:date-night",
+        "movie:feel-good-movies",
+        "movie:summer-blockbusters",
+        "movie:music-movies",
+        "movie:disaster-movies",
+        "movie:survival-stories",
+        "show:martial-arts-series",
+        "show:heist-series",
+        "show:spy-series",
+        "show:survival-series",
+        "show:post-apocalyptic-series",
+        "show:time-travel-series",
+        "show:psychological-series",
+        "show:biographical-series",
     )
 
     operator fun contains(catalogId: String): Boolean = catalogId in ids
