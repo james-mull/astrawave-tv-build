@@ -3,6 +3,7 @@ package com.astrawave.app.ui
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -41,17 +43,22 @@ import com.astrawave.app.data.GuideChannelRow
 import com.astrawave.app.data.GuideRepository
 import com.astrawave.app.data.GuideSnapshot
 import com.astrawave.app.data.LiveChannelGroup
+import com.astrawave.app.data.LiveTvRepository
 import com.astrawave.app.data.SportsGuideItem
 import com.astrawave.app.data.SportsGuideRepository
 import com.astrawave.app.data.SportsGuideSnapshot
 import com.astrawave.app.data.SourceFusionPlaybackPlanner
 import com.astrawave.app.data.StremioLiveCatalogDiscovery
+import com.astrawave.app.data.XmlTvProgramme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Date
+import java.util.Locale
 
 private sealed interface TvFirstLoad<out T> {
     data object Loading : TvFirstLoad<Nothing>
@@ -240,6 +247,7 @@ fun PremiumGuideScreen(
     var state by remember(sources, profileId) { mutableStateOf<TvFirstLoad<GuideSnapshot>>(TvFirstLoad.Loading) }
     var selectedGroup by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
+    val timelineScroll = rememberScrollState()
 
     LaunchedEffect(sources, profileId) {
         state = try {
@@ -271,10 +279,10 @@ fun PremiumGuideScreen(
     }
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
-        TvFirstTopBar(title = "Guide", subtitle = "A fast, channel-first Now & Next guide")
+        TvFirstTopBar(title = "Guide", subtitle = "Real EPG • 3-hour timeline • provider schedules first")
         when (val current = state) {
             TvFirstLoad.Loading -> Box(Modifier.fillMaxSize().padding(24.dp)) {
-                AstraWaveLoadingState("Loading guide", "Matching channels with current programming.")
+                AstraWaveLoadingState("Loading guide", "Matching channels with real XMLTV programming.")
             }
             is TvFirstLoad.Error -> Box(Modifier.fillMaxSize().padding(24.dp)) {
                 AstraWaveErrorState("Guide unavailable", current.message)
@@ -284,11 +292,16 @@ fun PremiumGuideScreen(
                 val groups = snapshot.rows.map { it.group ?: "Other" }.distinct().sorted()
                 val normalized = query.trim().lowercase()
                 val rows = snapshot.rows.filter { row ->
+                    val programmeMatch = normalized.isNotBlank() && row.programmes.any { programme ->
+                        programme.title.lowercase().contains(normalized)
+                    }
                     (selectedGroup == null || (row.group ?: "Other") == selectedGroup) &&
-                        (normalized.isBlank() || row.name.lowercase().contains(normalized) ||
-                            row.now?.title.orEmpty().lowercase().contains(normalized) ||
-                            row.next?.title.orEmpty().lowercase().contains(normalized))
+                        (normalized.isBlank() || row.name.lowercase().contains(normalized) || programmeMatch)
                 }
+                val nowMs = System.currentTimeMillis()
+                val halfHourMs = 30L * 60L * 1000L
+                val windowStart = nowMs - (nowMs % halfHourMs)
+                val windowEnd = windowStart + 3L * 60L * 60L * 1000L
 
                 Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 10.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -297,25 +310,38 @@ fun PremiumGuideScreen(
                             onValueChange = { query = it },
                             modifier = Modifier.width(280.dp),
                             singleLine = true,
-                            placeholder = { Text("Search guide") },
+                            placeholder = { Text("Search channels or programs") },
                         )
                         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             GuidePill("All", selectedGroup == null) { selectedGroup = null }
                             groups.forEach { group -> GuidePill(group, selectedGroup == group) { selectedGroup = group } }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised).padding(vertical = 9.dp),
-                    ) {
-                        GuideHeaderCell("CHANNEL", 210)
-                        GuideHeaderCell("NOW", 410)
-                        GuideHeaderCell("NEXT", 410)
-                        Text("", modifier = Modifier.weight(1f))
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            "${snapshot.epgChannelCount}/${snapshot.rows.count { !it.id.startsWith("handoff:") }} channels with real EPG",
+                            color = AstraWaveColors.Success,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Text(
+                            "${snapshot.epgProgramCount} schedule entries",
+                            color = AstraWaveColors.TertiaryText,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
                     }
+                    Spacer(Modifier.height(10.dp))
+                    GuideTimelineHeader(windowStart = windowStart, scrollState = timelineScroll)
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(rows, key = { it.id }) { row ->
-                            GuideGridRow(row = row, onWatch = { play(row) })
+                            GuideTimelineRow(
+                                row = row,
+                                windowStart = windowStart,
+                                windowEnd = windowEnd,
+                                nowMs = nowMs,
+                                scrollState = timelineScroll,
+                                onWatch = { play(row) },
+                            )
                         }
                     }
                 }
@@ -564,31 +590,76 @@ private fun DatePill(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun GuideHeaderCell(label: String, width: Int) {
-    Text(
-        label,
-        color = AstraWaveColors.TertiaryText,
-        style = MaterialTheme.typography.labelSmall,
-        modifier = Modifier.width(width.dp).padding(horizontal = 12.dp),
-    )
+private fun GuideTimelineHeader(windowStart: Long, scrollState: ScrollState) {
+    Row(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised).padding(vertical = 8.dp)) {
+        Text(
+            "CHANNEL",
+            color = AstraWaveColors.TertiaryText,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.width(210.dp).padding(horizontal = 12.dp),
+        )
+        Row(Modifier.weight(1f).horizontalScroll(scrollState)) {
+            repeat(6) { index ->
+                val time = windowStart + index * 30L * 60L * 1000L
+                Text(
+                    formatGuideTime(time),
+                    color = if (index == 0) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.width(120.dp).padding(horizontal = 10.dp),
+                )
+            }
+        }
+    }
 }
 
 @Composable
-private fun GuideGridRow(row: GuideChannelRow, onWatch: () -> Unit) {
-    AstraWaveFocusableCard(
-        Modifier.fillMaxWidth().padding(vertical = 2.dp)
-            .clickable(enabled = row.playableUrls.isNotEmpty() || row.externalUrl != null, onClick = onWatch),
-    ) {
-        Row(Modifier.fillMaxWidth()) {
-            Column(Modifier.width(210.dp).padding(end = 12.dp)) {
+private fun GuideTimelineRow(
+    row: GuideChannelRow,
+    windowStart: Long,
+    windowEnd: Long,
+    nowMs: Long,
+    scrollState: ScrollState,
+    onWatch: () -> Unit,
+) {
+    val visiblePrograms = row.programmes.mapNotNull { programme ->
+        val start = LiveTvRepository.parseXmlTvEpochMs(programme.start) ?: return@mapNotNull null
+        val stop = LiveTvRepository.parseXmlTvEpochMs(programme.stop) ?: return@mapNotNull null
+        if (stop <= windowStart || start >= windowEnd) return@mapNotNull null
+        Triple(programme, maxOf(start, windowStart), minOf(stop, windowEnd))
+    }
+
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        AstraWaveFocusableCard(
+            Modifier.width(210.dp).clickable(enabled = row.playableUrls.isNotEmpty() || row.externalUrl != null, onClick = onWatch),
+        ) {
+            Column {
                 Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                Text(row.group ?: "Live TV", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-            }
-            ProgramCell(row.now?.title ?: "No guide data", row.now?.start, 410, isNow = true)
-            ProgramCell(row.next?.title ?: "No upcoming data", row.next?.start, 410, isNow = false)
-            Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                Text(
+                    if (row.hasRealEpg) row.group ?: "Live TV" else "No matched EPG",
+                    color = if (row.hasRealEpg) AstraWaveColors.TertiaryText else AstraWaveColors.Warning,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
                 if (row.playableUrls.isNotEmpty() || row.externalUrl != null) {
-                    Text("▶ WATCH", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+                    Text("▶ WATCH", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+        Row(
+            Modifier.weight(1f).height(74.dp).horizontalScroll(scrollState).background(AstraWaveColors.GuidePast),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (visiblePrograms.isEmpty()) {
+                Box(
+                    Modifier.width(720.dp).fillMaxHeight()
+                        .background(AstraWaveColors.GuideFuture)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Text("No real EPG data for this time window", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                visiblePrograms.forEach { (programme, start, stop) ->
+                    TimelineProgramCell(programme, start, stop, nowMs)
                 }
             }
         }
@@ -596,23 +667,28 @@ private fun GuideGridRow(row: GuideChannelRow, onWatch: () -> Unit) {
 }
 
 @Composable
-private fun ProgramCell(title: String, time: String?, width: Int, isNow: Boolean) {
+private fun TimelineProgramCell(programme: XmlTvProgramme, startMs: Long, stopMs: Long, nowMs: Long) {
+    val durationMinutes = ((stopMs - startMs).coerceAtLeast(1L) / 60_000f)
+    val width = (durationMinutes * 4f).coerceAtLeast(72f).dp
+    val isNow = nowMs in startMs until stopMs
     Column(
-        Modifier.width(width.dp)
-            .background(if (isNow) AstraWaveColors.GuideNow.copy(alpha = 0.13f) else AstraWaveColors.GuideFuture, MaterialTheme.shapes.small)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.widthIn(min = 72.dp).width(width).fillMaxHeight()
+            .background(if (isNow) AstraWaveColors.GuideNow.copy(alpha = 0.28f) else AstraWaveColors.GuideFuture, MaterialTheme.shapes.small)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-        if (!time.isNullOrBlank()) {
-            Text(
-                if (isNow) "NOW • ${time.take(12)}" else time.take(12),
-                color = if (isNow) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-            )
-        }
+        Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+        Spacer(Modifier.height(3.dp))
+        Text(
+            "${if (isNow) "NOW • " else ""}${formatGuideTime(startMs)}–${formatGuideTime(stopMs)}",
+            color = if (isNow) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+        )
     }
 }
+
+private fun formatGuideTime(epochMs: Long): String =
+    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(epochMs))
 
 @Composable
 private fun SportsEventRow(item: SportsGuideItem, selected: Boolean, onClick: () -> Unit) {
