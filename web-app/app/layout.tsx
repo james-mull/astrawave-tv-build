@@ -5,6 +5,7 @@ import './app-polish.css';
 import './ui-premium-v2.css';
 import './ui-premium-v3.css';
 import './ui-competitive-v4.css';
+import './ui-platform-v5.css';
 import './control-polish.css';
 import './mobile-primary-nav.css';
 import MobilePrimaryNav from './MobilePrimaryNav';
