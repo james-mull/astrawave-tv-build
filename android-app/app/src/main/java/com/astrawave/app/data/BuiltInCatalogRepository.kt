@@ -26,15 +26,17 @@ class BuiltInCatalogRepository(
 
     private val appContext = context.applicationContext
     private val preferences = BuiltInCatalogPreferences(appContext)
-    private val diskCache = appContext.getSharedPreferences("astrawave_builtin_catalog_cache_v1", Context.MODE_PRIVATE)
+    // v2 prevents retired mood/theme payloads from being reused by their migration-safe service IDs.
+    private val diskCache = appContext.getSharedPreferences("astrawave_builtin_catalog_cache_v2", Context.MODE_PRIVATE)
 
     fun load(
         catalogId: String,
         profileId: String = "default",
         limit: Int = 60,
     ): Result {
-        val definition = AstraWaveBuiltInCatalogRegistry.all.firstOrNull { it.id == catalogId }
+        val rawDefinition = AstraWaveBuiltInCatalogRegistry.all.firstOrNull { it.id == catalogId }
             ?: error("Unknown built-in catalog: $catalogId")
+        val definition = CatalogServiceOverrides.apply(rawDefinition)
         val normalizedLimit = limit.coerceIn(1, 100)
         val cacheKey = "$catalogId:$normalizedLimit"
         val now = System.currentTimeMillis()
@@ -63,7 +65,7 @@ class BuiltInCatalogRepository(
         } else {
             items = loadFallback(definition, normalizedLimit)
             label = when {
-                definition.documentedUrl != null -> "MDBList mapping available • live metadata fallback"
+                definition.id in VerifiedMdbListCatalogs -> "MDBList mapping available • live metadata fallback"
                 else -> "AstraWave live metadata"
             }
         }
@@ -114,7 +116,8 @@ class BuiltInCatalogRepository(
             DynamicCollectionRepository.Media.SERIES
         }
 
-        val id = definition.id.substringAfter(':')
+        // Service overrides should never inherit the retired legacy ID's genre semantics.
+        val id = if (definition.id in CatalogServiceOverrides) "service-catalog" else definition.id.substringAfter(':')
         val genre = genreFor(id)
         val items = when {
             id.contains("popular") || id.contains("trending") || id.contains("most-watched") || id.contains("top-rated") ->
