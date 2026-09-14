@@ -16,6 +16,7 @@ class BuiltInCatalogPreferences(context: Context) {
         }
         return source
             .filterNot { isHidden(profileId, it.id) }
+            .map(CatalogServiceOverrides::apply)
             .sortedWith(compareBy<BuiltInCatalogDefinition> { order(profileId, it.id) }.thenBy { it.title })
     }
 
