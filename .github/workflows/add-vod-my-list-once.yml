@@ -1,0 +1,53 @@
+name: Add VOD My List Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/add-vod-my-list-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  add-my-list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+      - name: Add My List action to VOD detail
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('android-app/app/src/main/java/com/astrawave/app/PremiumVodDetailActivity.kt')
+          text = path.read_text()
+          imports_anchor = 'import com.astrawave.app.data.AppSettingsStore\n'
+          imports_new = '''import com.astrawave.app.core.LibraryItemRef\nimport com.astrawave.app.core.LibraryMediaType\nimport com.astrawave.app.core.WatchlistEntry\nimport com.astrawave.app.data.AppSettingsStore\n'''
+          if imports_anchor not in text:
+              raise SystemExit('imports anchor not found')
+          text = text.replace(imports_anchor, imports_new, 1)
+
+          state_anchor = '    var sourceError by remember { mutableStateOf<String?>(null) }\n'
+          state_new = '''    var sourceError by remember { mutableStateOf<String?>(null) }\n    val libraryItem = remember(title, sourceId, seriesMode) {\n        LibraryItemRef(\n            id = sourceId ?: "${if (seriesMode) "series" else "movie"}:${title.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')}",\n            type = if (seriesMode) LibraryMediaType.SERIES else LibraryMediaType.MOVIE,\n            title = title,\n            sourceId = sourceId,\n        )\n    }\n    var inMyList by remember(profileId, libraryItem.id) {\n        mutableStateOf(library.watchlist(profileId).any { it.item.id == libraryItem.id })\n    }\n'''
+          if state_anchor not in text:
+              raise SystemExit('state anchor not found')
+          text = text.replace(state_anchor, state_new, 1)
+
+          button_anchor = '                    AstraWaveSecondaryButton(if (showSources) "Hide Options" else "Watch Options") {\n'
+          button_new = '''                    AstraWaveSecondaryButton(if (inMyList) "✓ My List" else "+ My List") {\n                        val enabled = !inMyList\n                        library.setWatchlist(\n                            WatchlistEntry(profileId = profileId, item = libraryItem),\n                            enabled = enabled,\n                        )\n                        inMyList = enabled\n                    }\n                    AstraWaveSecondaryButton(if (showSources) "Hide Options" else "Watch Options") {\n'''
+          if button_anchor not in text:
+              raise SystemExit('button anchor not found')
+          text = text.replace(button_anchor, button_new, 1)
+          path.write_text(text)
+      - name: Commit VOD My List action
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/PremiumVodDetailActivity.kt
+          git commit -m "Add My List action to VOD detail"
+          git push origin HEAD:feature/nuvio-core-rebuild
