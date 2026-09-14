@@ -78,6 +78,7 @@ fun MyAstraWaveHub(
     var showSafety by remember { mutableStateOf(false) }
     var showSubscription by remember { mutableStateOf(false) }
     var showExperienceSettings by remember { mutableStateOf(false) }
+    var showHelpLegal by remember { mutableStateOf(false) }
     var showDebrid by remember { mutableStateOf(false) }
     var showDiagnostics by remember { mutableStateOf(false) }
     var showTmdbSetup by remember { mutableStateOf(false) }
@@ -131,6 +132,11 @@ fun MyAstraWaveHub(
 
     if (showExperienceSettings) {
         AstraWaveExperienceSettingsScreen(profileId = profileId, onBack = { showExperienceSettings = false })
+        return
+    }
+
+    if (showHelpLegal) {
+        HelpLegalScreen(onBack = { showHelpLegal = false })
         return
     }
 
@@ -233,6 +239,17 @@ fun MyAstraWaveHub(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         SetupRow { showSetup = true }
         ExperienceSettingsRow { showExperienceSettings = true }
+        AstraWaveFocusableCard(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 5.dp).clickable { showHelpLegal = true }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Settings, null, tint = AstraWaveColors.Accent)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Help & Legal", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                    Text("Support, Privacy Policy, Terms & app version", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = AstraWaveColors.TertiaryText)
+            }
+        }
 
         val preferenceSections = listOf(
             AccountSection.PROFILES,
