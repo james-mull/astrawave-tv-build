@@ -35,6 +35,7 @@ import com.astrawave.app.data.BuiltInCatalogCategory
 import com.astrawave.app.data.BuiltInCatalogDefinition
 import com.astrawave.app.data.BuiltInCatalogMediaType
 import com.astrawave.app.data.BuiltInCatalogPreferences
+import com.astrawave.app.data.VerifiedMdbListCatalogs
 
 @Composable
 fun BuiltInCatalogHubScreen(
@@ -54,6 +55,7 @@ fun BuiltInCatalogHubScreen(
     }
     val visible = remember(profileId, mediaType, revision) { prefs.visible(mediaType, profileId) }
     val rows = visible.filter { selectedCategory == null || it.category == selectedCategory }
+    val mappedCount = allDefinitions.count { it.id in VerifiedMdbListCatalogs }
 
     fun open(definition: BuiltInCatalogDefinition) {
         val intent = if (mediaType == BuiltInCatalogMediaType.MOVIE) {
@@ -81,7 +83,7 @@ fun BuiltInCatalogHubScreen(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AstraWavePageHeader(
                     title = if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movies" else "TV Shows",
-                    subtitle = "${allDefinitions.size} built-in dynamic catalogs • MDBList-backed where verified • live metadata fallback everywhere",
+                    subtitle = "${allDefinitions.size} built-in dynamic catalogs • $mappedCount verified MDBList mappings • metadata fallback everywhere",
                 )
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -113,7 +115,7 @@ fun BuiltInCatalogHubScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(definition.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (definition.documentedUrl != null) Text("MDBLIST", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
+                            if (definition.id in VerifiedMdbListCatalogs) Text("MDBLIST", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
                             if (definition.featured) Text("FEATURED", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelSmall)
                         }
                     }
@@ -176,8 +178,8 @@ fun BuiltInCatalogHubScreen(
 }
 
 private fun sourceSubtitle(definition: BuiltInCatalogDefinition): String = when {
-    definition.documentedUrl != null -> "Verified MDBList catalog identity • cached live results with metadata fallback"
-    else -> "Dynamic AstraWave catalog • ready for MDBList mapping • live metadata fallback"
+    definition.id in VerifiedMdbListCatalogs -> "Verified MDBList mapping • server-resolved when available • cached metadata fallback"
+    else -> "Dynamic AstraWave catalog • live metadata fallback"
 }
 
 private fun categoryLabel(category: BuiltInCatalogCategory): String = when (category) {
