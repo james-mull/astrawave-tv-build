@@ -16,7 +16,9 @@ data class GuideChannelRow(
     val playableUrl: String?,
     val playableUrls: List<String> = emptyList(),
     val externalUrl: String? = null,
-)
+) {
+    val hasRealEpg: Boolean get() = programmes.isNotEmpty()
+}
 
 data class GuideSnapshot(
     val rows: List<GuideChannelRow>,
@@ -24,6 +26,8 @@ data class GuideSnapshot(
     val freeChannelCount: Int,
     val handoffCount: Int,
     val userChannelCount: Int,
+    val epgChannelCount: Int = 0,
+    val epgProgramCount: Int = 0,
 )
 
 /** Guide-facing projection over direct Live TV plus reviewed official-provider handoffs. */
@@ -65,12 +69,19 @@ class GuideRepository(private val combined: CombinedLiveTvRepository = CombinedL
                 playableUrl = null, playableUrls = emptyList(), externalUrl = handoff.actionUrl,
             )
         }
+        val orderedRows = (directRows + handoffRows).sortedWith(
+            compareByDescending<GuideChannelRow> { it.hasRealEpg }
+                .thenBy { it.group ?: "ZZZ" }
+                .thenBy { it.name },
+        )
         return GuideSnapshot(
-            rows = (directRows + handoffRows).sortedWith(compareBy<GuideChannelRow> { it.group ?: "ZZZ" }.thenBy { it.name }),
+            rows = orderedRows,
             sourceGroups = live.totalChannelGroups,
             freeChannelCount = live.freeChannelCount,
             handoffCount = live.handoffCount,
             userChannelCount = live.userChannelCount,
+            epgChannelCount = directRows.count { it.hasRealEpg },
+            epgProgramCount = directRows.sumOf { it.programmes.size },
         )
     }
 }
