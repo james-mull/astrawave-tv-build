@@ -9,6 +9,8 @@ A build is not customer-promotion eligible unless all of the following are true:
 - The deployed billing verifier has a Google Play service account with Android Publisher access and permission to write AstraWave entitlements.
 - `RELEASE_METADATA.txt` reports `promotion_eligible=true`.
 - Phone, tablet, and Android TV smoke checks pass for the customer-facing app code.
+- Live TV, Search, first-run onboarding, subscription screens and Guide are customer-facing and free of internal implementation jargon.
+- Guide timeline geometry preserves actual program durations so the NOW marker and later programs stay time-aligned.
 - A real Google Play test purchase and restore completes and produces a verified Premium entitlement before launch.
 - Public privacy, terms, and support destinations are configured for store distribution.
 
