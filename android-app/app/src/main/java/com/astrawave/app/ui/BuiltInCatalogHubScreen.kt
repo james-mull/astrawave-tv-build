@@ -113,7 +113,7 @@ fun BuiltInCatalogHubScreen(
         }
 
         if (selectedCategory == null) {
-            catalogSections(rows).forEach { (section, definitions) ->
+            catalogSections(rows, mediaType).forEach { (section, definitions) ->
                 item(key = "section-$section") {
                     Column(Modifier.padding(top = 10.dp, bottom = 2.dp)) {
                         Text(section, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
@@ -233,32 +233,54 @@ private fun LazyListScope.catalogRows(
     }
 }
 
-private fun catalogSections(rows: List<BuiltInCatalogDefinition>): List<Pair<String, List<BuiltInCatalogDefinition>>> {
-    val order = listOf("Streaming Services", "Trending & Popular", "New & Notable", "Genres", "Moods & Themes", "Premium & World")
+private fun catalogSections(
+    rows: List<BuiltInCatalogDefinition>,
+    mediaType: BuiltInCatalogMediaType,
+): List<Pair<String, List<BuiltInCatalogDefinition>>> {
+    val order = if (mediaType == BuiltInCatalogMediaType.MOVIE) {
+        listOf("Streaming Services", "Trending & Box Office", "New Releases & Awards", "Movie Genres", "Seasonal & Occasion", "Premium Cinema & World")
+    } else {
+        listOf("Streaming Services", "Trending & Popular", "New Episodes & Prestige", "TV Genres", "Reality, Docs & Lifestyle", "Kids, Anime & International")
+    }
     return order.mapNotNull { section ->
-        rows.filter { sectionFor(it) == section }.takeIf { it.isNotEmpty() }?.let { section to it }
+        rows.filter { sectionFor(it, mediaType) == section }.takeIf { it.isNotEmpty() }?.let { section to it }
     }
 }
 
-private fun sectionFor(definition: BuiltInCatalogDefinition): String = when {
-    definition.id in CatalogServiceOverrides -> "Streaming Services"
-    definition.category == BuiltInCatalogCategory.DISCOVERY -> "Trending & Popular"
-    definition.category == BuiltInCatalogCategory.EDITORIAL -> "New & Notable"
-    definition.category == BuiltInCatalogCategory.GENRE_THEME -> "Genres"
-    definition.category == BuiltInCatalogCategory.MOOD_SEASONAL -> "Moods & Themes"
-    else -> "Premium & World"
+private fun sectionFor(definition: BuiltInCatalogDefinition, mediaType: BuiltInCatalogMediaType): String {
+    if (definition.id in CatalogServiceOverrides) return "Streaming Services"
+    return if (mediaType == BuiltInCatalogMediaType.MOVIE) {
+        when (definition.category) {
+            BuiltInCatalogCategory.DISCOVERY -> "Trending & Box Office"
+            BuiltInCatalogCategory.EDITORIAL -> "New Releases & Awards"
+            BuiltInCatalogCategory.GENRE_THEME -> "Movie Genres"
+            BuiltInCatalogCategory.MOOD_SEASONAL -> "Seasonal & Occasion"
+            BuiltInCatalogCategory.PREMIUM_INTERNATIONAL -> "Premium Cinema & World"
+        }
+    } else {
+        when (definition.category) {
+            BuiltInCatalogCategory.DISCOVERY -> "Trending & Popular"
+            BuiltInCatalogCategory.EDITORIAL -> "New Episodes & Prestige"
+            BuiltInCatalogCategory.GENRE_THEME -> "TV Genres"
+            BuiltInCatalogCategory.MOOD_SEASONAL -> "Reality, Docs & Lifestyle"
+            BuiltInCatalogCategory.PREMIUM_INTERNATIONAL -> "Kids, Anime & International"
+        }
+    }
 }
 
-private fun sectionSubtitle(section: String, mediaType: BuiltInCatalogMediaType): String {
-    val noun = if (mediaType == BuiltInCatalogMediaType.MOVIE) "movies" else "shows"
-    return when (section) {
-        "Streaming Services" -> "Browse $noun by Netflix, Prime Video, Disney+, Max, Apple TV+, Hulu, Peacock and Paramount+."
-        "Trending & Popular" -> "What people are watching, rating and anticipating now."
-        "New & Notable" -> "Fresh releases, critics' picks, awards and standout collections."
-        "Genres" -> "Jump directly into the kind of $noun you want."
-        "Moods & Themes" -> "Occasion, tone and theme-based discovery."
-        else -> "International, premium-format and specialty discovery."
-    }
+private fun sectionSubtitle(section: String, mediaType: BuiltInCatalogMediaType): String = when (section) {
+    "Streaming Services" -> "Browse ${if (mediaType == BuiltInCatalogMediaType.MOVIE) "movies" else "shows"} by Netflix, Prime Video, Disney+, Max, Apple TV+, Hulu, Peacock and Paramount+."
+    "Trending & Box Office" -> "Popular, most watched, anticipated and theatrical movie discovery."
+    "New Releases & Awards" -> "Fresh movies, critics' picks, festivals, awards and standout cinema."
+    "Movie Genres" -> "Action, comedy, drama, horror, sci-fi, documentary and more."
+    "Seasonal & Occasion" -> "Holiday, theme, runtime and occasion-based movie discovery."
+    "Premium Cinema & World" -> "4K/HDR, Dolby, anime and international cinema."
+    "Trending & Popular" -> "The shows audiences are watching, rating and anticipating now."
+    "New Episodes & Prestige" -> "New series, fresh episodes, airing shows, limited series and prestige TV."
+    "TV Genres" -> "Crime, comedy, drama, mystery, sci-fi, fantasy, horror and more."
+    "Reality, Docs & Lifestyle" -> "Reality, true crime, sports, food, travel, nature and documentary TV."
+    "Kids, Anime & International" -> "Kids TV, anime, K-dramas, British TV and series from around the world."
+    else -> "Curated AstraWave discovery."
 }
 
 private fun sourceSubtitle(definition: BuiltInCatalogDefinition): String = when {
