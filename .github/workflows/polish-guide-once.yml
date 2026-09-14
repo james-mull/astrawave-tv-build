@@ -24,22 +24,17 @@ jobs:
           from pathlib import Path
           path = Path('android-app/app/src/main/java/com/astrawave/app/ui/GuideScreen.kt')
           text = path.read_text()
-          old_width = 'val width = timeWidth(end - effectiveStart).coerceAtLeast(72.dp)'
-          new_width = 'val width = timeWidth(end - effectiveStart)'
-          old_summary = '''        GuideStatPill("CHANNELS", snapshot.rows.size.toString())
-          GuideStatPill("FREE", snapshot.freeChannelCount.toString())
-          GuideStatPill("MY IPTV", snapshot.userChannelCount.toString())
-          GuideStatPill("CUSTOM", customized.toString())
-          GuideStatPill("EPG MAPS", epgOverrides.toString())'''
-          new_summary = '''        GuideStatPill("CHANNELS", snapshot.rows.size.toString())
-          GuideStatPill("FREE TV", snapshot.freeChannelCount.toString())
-          GuideStatPill("MY CHANNELS", snapshot.userChannelCount.toString())
-          if (customized > 0) GuideStatPill("FAVORITES & CUSTOM", customized.toString())'''
-          if old_width not in text:
-              raise SystemExit('timeline width target not found')
-          if old_summary not in text:
-              raise SystemExit('summary target not found')
-          text = text.replace(old_width, new_width, 1).replace(old_summary, new_summary, 1)
+          replacements = [
+              ('val width = timeWidth(end - effectiveStart).coerceAtLeast(72.dp)', 'val width = timeWidth(end - effectiveStart)'),
+              ('GuideStatPill("FREE", snapshot.freeChannelCount.toString())', 'GuideStatPill("FREE TV", snapshot.freeChannelCount.toString())'),
+              ('GuideStatPill("MY IPTV", snapshot.userChannelCount.toString())', 'GuideStatPill("MY CHANNELS", snapshot.userChannelCount.toString())'),
+              ('GuideStatPill("CUSTOM", customized.toString())', 'if (customized > 0) GuideStatPill("CUSTOMIZED", customized.toString())'),
+              ('GuideStatPill("EPG MAPS", epgOverrides.toString())', ''),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'target not found: {old}')
+              text = text.replace(old, new, 1)
           path.write_text(text)
       - name: Commit Guide fixes
         shell: bash
