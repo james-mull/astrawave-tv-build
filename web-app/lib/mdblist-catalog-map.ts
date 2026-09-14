@@ -20,11 +20,18 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:top-rated-movies':{owner:'ndg3270',slug:'top-rated-movies'},
   'show:top-rated-shows':{owner:'ndg3270',slug:'top-rated-tv-shows'},
   'movie:imdb-top-movies':{owner:'peri0dic1',slug:'imdb-top-rated-movies'},
+  'show:imdb-top-shows':{owner:'nobnobz',slug:'collction-imdb-top-250-movies-1uns8mazuu'},
   'movie:new-releases':{owner:'ndg3270',slug:'latest-movies'},
   'show:new-series':{owner:'ndg3270',slug:'latest-series'},
   'movie:critics-favorites':{owner:'ndg3270',slug:'rotten-tomatoes-fresh-movies'},
   'show:critics-favorites-tv':{owner:'ndg3270',slug:'certified-fresh-tv-shows'},
   'show:limited-series':{owner:'ndg3270',slug:'tv-mini-series'},
+
+  // Awards and prestige collections.
+  'movie:oscar-winners':{owner:'nobnobz',slug:'awards-oscar-winners'},
+  'movie:golden-globe-winners':{owner:'nobnobz',slug:'awards-golden-globe-winners'},
+  'movie:cannes-favorites':{owner:'nobnobz',slug:'awards-cannes-winners'},
+  'show:emmy-winners':{owner:'nobnobz',slug:'awards-emmy-winner'},
 
   // High-traffic genre collections with verified dynamic MDBList pages.
   'movie:action-essentials':{owner:'ndg3270',slug:'action-movies'},
@@ -70,7 +77,9 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
 
   // International discovery collections.
   'movie:international-cinema':{owner:'xsampsonxxsampsonx',slug:'critically-acclaimed-foreign-films'},
+  'movie:korean-movies':{owner:'bttm00',slug:'korean-movies'},
   'movie:japanese-movies':{owner:'coreyh047',slug:'popular-japanese-movies'},
+  'movie:indian-cinema':{owner:'tools-agent',slug:'latest-indian-movies'},
   'movie:french-cinema':{owner:'coreyh047',slug:'popular-french-movies'},
   'show:british-tv':{owner:'amything',slug:'latest-uk-shows'},
   'show:k-dramas':{owner:'egmi1',slug:'all-kdramas'},
