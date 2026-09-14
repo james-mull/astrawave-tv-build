@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application>
         <!-- Debug-only exports for automated visual gallery capture. Production manifest remains unchanged. -->
-        <activity android:name=".RebuildMainActivity" android:exported="true" />
-        <activity android:name=".OnboardingActivity" android:exported="true" />
-        <activity android:name=".TitleDetailsActivity" android:exported="true" />
-        <activity android:name=".PremiumVodDetailActivity" android:exported="true" />
-        <activity android:name=".PlayerActivity" android:exported="true" />
+        <activity android:name=".RebuildMainActivity" android:exported="true" tools:replace="android:exported" />
+        <activity android:name=".OnboardingActivity" android:exported="true" tools:replace="android:exported" />
+        <activity android:name=".TitleDetailsActivity" android:exported="true" tools:replace="android:exported" />
+        <activity android:name=".PremiumVodDetailActivity" android:exported="true" tools:replace="android:exported" />
+        <activity android:name=".PlayerActivity" android:exported="true" tools:replace="android:exported" />
         <activity
             android:name=".CustomerPageGalleryActivity"
             android:exported="true"
