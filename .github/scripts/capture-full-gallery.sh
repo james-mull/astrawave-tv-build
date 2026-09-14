@@ -10,15 +10,25 @@ test -s "$APK"
 adb install -r "$APK"
 adb shell settings put system accelerometer_rotation 0 || true
 adb shell settings put system user_rotation 0 || true
+adb shell settings put global hide_error_dialogs 1 || true
+adb shell settings put global anr_show_background 0 || true
 adb shell wm size 1080x2400 || true
 adb shell wm density 420 || true
+adb shell am force-stop com.google.android.apps.nexuslauncher || true
+
+clear_system_dialogs() {
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+}
 
 capture() {
   local name="$1"
   shift
   adb shell am force-stop com.astrawave.app
+  adb shell am force-stop com.google.android.apps.nexuslauncher || true
   adb shell am start -W "$@" >/dev/null
   sleep 5
+  clear_system_dialogs
+  sleep 1
   adb exec-out screencap -p > "$OUT/${name}.png"
 }
 
@@ -44,12 +54,15 @@ capture "vod-detail" -n com.astrawave.app/.PremiumVodDetailActivity \
 
 # Real player surface using a public test HLS stream; tap once so controls are visible.
 adb shell am force-stop com.astrawave.app
+adb shell am force-stop com.google.android.apps.nexuslauncher || true
 adb shell am start -W -n com.astrawave.app/.PlayerActivity \
   --es url "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" \
   --es library_title "AstraWave Player Preview" >/dev/null || true
 sleep 8
+clear_system_dialogs
 adb shell input tap 540 1200 || true
 sleep 2
+clear_system_dialogs
 adb exec-out screencap -p > "$OUT/player.png" || true
 
 # Capture UI hierarchy for troubleshooting and an index of the generated pages.
