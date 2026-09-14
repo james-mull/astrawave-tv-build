@@ -87,17 +87,26 @@ fun BuiltInCatalogHubScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Column {
+                    Text(
+                        if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movies" else "TV Shows",
+                        color = AstraWaveColors.PrimaryText,
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (!manageMode) {
+                        Text(
+                            if (mediaType == BuiltInCatalogMediaType.MOVIE) "Find something worth watching" else "Series, new episodes and favorites",
+                            color = AstraWaveColors.TertiaryText,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
                 Text(
-                    if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movies" else "TV Shows",
-                    color = AstraWaveColors.PrimaryText,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    if (manageMode) "Done" else "Manage",
-                    color = AstraWaveColors.SecondaryText,
+                    if (manageMode) "Done" else "Customize",
+                    color = if (manageMode) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clickable { manageMode = !manageMode },
+                    modifier = Modifier.clickable { manageMode = !manageMode }.padding(8.dp),
                 )
             }
         }
@@ -107,10 +116,10 @@ fun BuiltInCatalogHubScreen(
                 item("section-$section") {
                     Text(
                         section,
-                        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 4.dp),
-                        color = AstraWaveColors.SecondaryText,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 6.dp),
+                        color = AstraWaveColors.PrimaryText,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
                 items(definitions, key = { "rail-${it.id}" }) { definition ->
@@ -126,13 +135,13 @@ fun BuiltInCatalogHubScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
-                        "Manage rows",
+                        "Customize your rows",
                         color = AstraWaveColors.PrimaryText,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Pin, order or hide catalog rows. These controls stay out of normal browsing.",
+                        "Choose what appears first and hide anything you do not use.",
                         color = AstraWaveColors.SecondaryText,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -240,9 +249,9 @@ private fun sectionFor(definition: BuiltInCatalogDefinition, mediaType: BuiltInC
 }
 
 private fun sourceSubtitle(definition: BuiltInCatalogDefinition): String = when {
-    definition.id in CatalogServiceOverrides -> "Streaming service • verified catalog mapping"
-    definition.id in VerifiedMdbListCatalogs -> "Verified source-backed catalog"
-    else -> "Dynamic AstraWave catalog"
+    definition.id in CatalogServiceOverrides -> "Streaming service collection"
+    definition.id in VerifiedMdbListCatalogs -> "Curated collection"
+    else -> "AstraWave collection"
 }
 
 private fun categoryLabel(category: BuiltInCatalogCategory): String = when (category) {
