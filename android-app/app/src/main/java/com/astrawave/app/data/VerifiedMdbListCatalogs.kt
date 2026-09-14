@@ -71,8 +71,13 @@ object VerifiedMdbListCatalogs {
         "show:thriller-series",
         "show:war-series",
         "show:western-series",
+        "show:true-story-series",
         "show:reality-favorites",
         "show:sports-series",
+        "show:music-series",
+        "show:talk-shows",
+        "show:travel-series",
+        "show:nature-series",
         "show:true-crime",
         "show:kids-tv",
         "movie:anime-movies",
@@ -85,6 +90,7 @@ object VerifiedMdbListCatalogs {
         "show:british-tv",
         "show:k-dramas",
         "show:indian-series",
+        "show:international-tv",
 
         // Stable legacy IDs now represent the eight major streaming-service catalogs.
         "movie:girls-night",
