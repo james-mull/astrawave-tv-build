@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.astrawave.app.PremiumVodDetailActivity
@@ -41,8 +44,6 @@ fun CatalogPreviewShelf(
     definitions: List<BuiltInCatalogDefinition>,
     profileId: String,
 ) {
-    val context = LocalContext.current
-    val repository = remember { BuiltInCatalogRepository(context) }
     val lead = remember(section, definitions) {
         when (section) {
             "Streaming Services" -> definitions.firstOrNull { it.id in CatalogServiceOverrides }
@@ -50,13 +51,22 @@ fun CatalogPreviewShelf(
         } ?: definitions.firstOrNull { it.featured }
             ?: definitions.firstOrNull()
     } ?: return
+    CatalogContentShelf(lead, profileId)
+}
 
-    var items by remember(lead.id, profileId) { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
-    var source by remember(lead.id, profileId) { mutableStateOf("") }
+@Composable
+fun CatalogContentShelf(
+    definition: BuiltInCatalogDefinition,
+    profileId: String,
+) {
+    val context = LocalContext.current
+    val repository = remember { BuiltInCatalogRepository(context) }
+    var items by remember(definition.id, profileId) { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
+    var source by remember(definition.id, profileId) { mutableStateOf("") }
 
-    LaunchedEffect(lead.id, profileId) {
+    LaunchedEffect(definition.id, profileId) {
         val result = withContext(Dispatchers.IO) {
-            runCatching { repository.page(lead.id, profileId, offset = 0, pageSize = 14) }.getOrNull()
+            runCatching { repository.page(definition.id, profileId, offset = 0, pageSize = 18) }.getOrNull()
         }
         items = result?.items.orEmpty()
         source = result?.sourceLabel.orEmpty()
@@ -65,22 +75,31 @@ fun CatalogPreviewShelf(
     if (items.isEmpty()) return
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Featured in $section",
-            color = AstraWaveColors.SecondaryText,
-            style = MaterialTheme.typography.labelLarge,
-        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text(
+                    definition.title,
+                    color = AstraWaveColors.PrimaryText,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (source.isNotBlank()) {
+                    Text(source, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            Text("See all  ›", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+        }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(end = 18.dp),
+            contentPadding = PaddingValues(end = 28.dp),
         ) {
-            items(items, key = { item -> "${lead.id}:${item.id}:${item.name}" }) { item ->
+            items(items, key = { item -> "${definition.id}:${item.id}:${item.name}" }) { item ->
                 Column(
                     modifier = Modifier
-                        .width(132.dp)
+                        .width(142.dp)
                         .clickable {
                             val mediaType = if (
-                                lead.mediaType == BuiltInCatalogMediaType.SHOW ||
+                                definition.mediaType == BuiltInCatalogMediaType.SHOW ||
                                 item.type.equals("series", true) || item.type.equals("tv", true)
                             ) "SERIES" else "MOVIE"
                             val sourceId = when {
@@ -96,12 +115,12 @@ fun CatalogPreviewShelf(
                                     .putExtra(PremiumVodDetailActivity.EXTRA_PROFILE_ID, profileId),
                             )
                         },
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Box(
                         modifier = Modifier
-                            .width(132.dp)
-                            .height(198.dp)
+                            .width(142.dp)
+                            .height(213.dp)
                             .clip(MaterialTheme.shapes.medium),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -123,9 +142,6 @@ fun CatalogPreviewShelf(
                     )
                 }
             }
-        }
-        if (source.isNotBlank()) {
-            Text("${lead.title} • $source", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
