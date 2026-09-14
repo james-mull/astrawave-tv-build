@@ -34,6 +34,12 @@ object VerifiedMdbListCatalogs {
         "movie:drama-essentials",
         "movie:crime-movies",
         "movie:sci-fi-essentials",
+        "movie:sports-movies",
+        "show:true-crime",
+        "movie:anime-movies",
+        "show:anime-series",
+        "show:k-dramas",
+        "show:indian-series",
     )
 
     operator fun contains(catalogId: String): Boolean = catalogId in ids
