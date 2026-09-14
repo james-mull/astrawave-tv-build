@@ -563,7 +563,7 @@ private fun AddonDiscoverRow(row: StremioCatalogRow, profileId: String) {
                             Spacer(Modifier.height(10.dp))
                             LibraryActionRow(item = libraryItem, profileId = profileId)
                         }
-                    )
+                    }
                 }
             }
         }
