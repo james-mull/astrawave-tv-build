@@ -1,0 +1,52 @@
+name: Polish AstraWave Guide Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/polish-guide-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  polish-guide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+      - name: Apply focused Guide fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('android-app/app/src/main/java/com/astrawave/app/ui/GuideScreen.kt')
+          text = path.read_text()
+          old_width = 'val width = timeWidth(end - effectiveStart).coerceAtLeast(72.dp)'
+          new_width = 'val width = timeWidth(end - effectiveStart)'
+          old_summary = '''        GuideStatPill("CHANNELS", snapshot.rows.size.toString())
+          GuideStatPill("FREE", snapshot.freeChannelCount.toString())
+          GuideStatPill("MY IPTV", snapshot.userChannelCount.toString())
+          GuideStatPill("CUSTOM", customized.toString())
+          GuideStatPill("EPG MAPS", epgOverrides.toString())'''
+          new_summary = '''        GuideStatPill("CHANNELS", snapshot.rows.size.toString())
+          GuideStatPill("FREE TV", snapshot.freeChannelCount.toString())
+          GuideStatPill("MY CHANNELS", snapshot.userChannelCount.toString())
+          if (customized > 0) GuideStatPill("FAVORITES & CUSTOM", customized.toString())'''
+          if old_width not in text:
+              raise SystemExit('timeline width target not found')
+          if old_summary not in text:
+              raise SystemExit('summary target not found')
+          text = text.replace(old_width, new_width, 1).replace(old_summary, new_summary, 1)
+          path.write_text(text)
+      - name: Commit Guide fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/ui/GuideScreen.kt
+          git commit -m "Keep Guide timeline true to time and customer-facing"
+          git push origin HEAD:feature/nuvio-core-rebuild
