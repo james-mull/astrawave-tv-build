@@ -159,7 +159,7 @@ class CombinedLiveTvRepository(
                 publicEpgUrls
                     .map { url -> pool.submit<List<XmlTvProgramme>> { runCatching { liveTv.loadXmlTv(url) }.getOrDefault(emptyList()) } }
                     .flatMap { future -> runCatching { future.get(12, TimeUnit.SECONDS) }.getOrDefault(emptyList()) }
-                    .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+                    .distinctBy { "${it.channelId}:${it.start}:${it.stop}" }
             } finally {
                 pool.shutdownNow()
             }
@@ -185,7 +185,10 @@ class CombinedLiveTvRepository(
             runCatching { userSources.loadGuide(source) }.getOrDefault(emptyList())
         } else emptyList()
         val programmes = if (includeEpg) {
-            (publicProgrammes + userProgrammes).distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+            // User/provider XMLTV is authoritative. Public EPG is only a gap-fill for an otherwise
+            // identical channel/time slot, so a generic public feed cannot overwrite a customer's
+            // Xtream/M3U guide entry with a different title.
+            (userProgrammes + publicProgrammes).distinctBy { "${it.channelId}:${it.start}:${it.stop}" }
         } else emptyList()
         val orderedChannels = free + userChannels
         val baseGroups = if (providerOrder) providerGroups(orderedChannels, programmes) else liveTv.merge(channelLists = listOf(free, userChannels), programmes = programmes)
@@ -208,7 +211,7 @@ class CombinedLiveTvRepository(
         val now = System.currentTimeMillis()
         return channels.filter { it.url.isNotBlank() }.mapIndexed { index, channel ->
             val schedule = channel.tvgId?.takeIf(String::isNotBlank)?.let { byTvg[it] }.orEmpty()
-                .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
+                .distinctBy { "${it.channelId}:${it.start}:${it.stop}" }
                 .sortedBy { LiveTvRepository.parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
             val current = schedule.firstOrNull { programme ->
                 val start = LiveTvRepository.parseXmlTvEpochMs(programme.start) ?: return@firstOrNull false
@@ -241,7 +244,7 @@ class CombinedLiveTvRepository(
         return groups.map { group ->
             val overrideId = overrides[group.canonicalName]?.trim().takeUnless { it.isNullOrBlank() } ?: return@map group
             val schedule = byChannel[overrideId].orEmpty()
-                .distinctBy { "${it.start}:${it.stop}:${it.title}" }
+                .distinctBy { "${it.start}:${it.stop}" }
                 .sortedBy { LiveTvRepository.parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
             if (schedule.isEmpty()) return@map group
             val current = schedule.firstOrNull { programme ->
