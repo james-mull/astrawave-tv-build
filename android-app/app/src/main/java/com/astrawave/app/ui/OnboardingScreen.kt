@@ -38,7 +38,7 @@ private enum class QuickStartPreset(
     JUST_WATCH(
         "Start Watching",
         "Use AstraWave's ready-to-use experience now. You can add your own sources later.",
-        OnboardingStep.TMDB,
+        null,
     ),
     LIVE_TV(
         "Add My Live TV",
@@ -87,7 +87,25 @@ fun AstraWaveOnboardingScreen(
     fun chooseQuickStart(preset: QuickStartPreset) {
         when (preset) {
             QuickStartPreset.JUST_WATCH -> {
-                if (health.readyToWatch) onFinished() else routeTo(OnboardingStep.TMDB)
+                if (health.readyToWatch) {
+                    onFinished()
+                } else if (!repairing) {
+                    repairing = true
+                    repairMessage = null
+                    scope.launch {
+                        val report = runCatching { repairRepository.repair(profileId) }
+                        repairing = false
+                        refreshHealth()
+                        if (health.readyToWatch) {
+                            onFinished()
+                        } else {
+                            repairMessage = report.fold(
+                                onSuccess = { "AstraWave restored safe defaults, but one setup item still needs attention below." },
+                                onFailure = { it.message ?: "AstraWave could not restore the default setup." },
+                            )
+                        }
+                    }
+                }
             }
             QuickStartPreset.EVERYTHING -> {
                 showAdvanced = true
@@ -167,7 +185,11 @@ fun AstraWaveOnboardingScreen(
                     .clickable { chooseQuickStart(preset) },
             ) {
                 Column {
-                    Text(preset.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (preset == QuickStartPreset.JUST_WATCH && repairing) "Getting AstraWave Ready…" else preset.title,
+                        color = AstraWaveColors.PrimaryText,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     Spacer(Modifier.height(3.dp))
                     Text(preset.description, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
                 }
@@ -189,7 +211,7 @@ fun AstraWaveOnboardingScreen(
             }
             Spacer(Modifier.height(10.dp))
             AstraWaveSecondaryButton(
-                label = if (repairing) "Checking Setup…" else "Fix Safe Setup Issues",
+                label = if (repairing) "Checking Setup…" else "Restore Recommended Setup",
                 onClick = {
                     if (repairing) return@AstraWaveSecondaryButton
                     repairing = true
@@ -199,7 +221,7 @@ fun AstraWaveOnboardingScreen(
                         repairing = false
                         repairMessage = report.fold(
                             onSuccess = { it.messages.joinToString(" ") },
-                            onFailure = { it.message ?: "Safe setup repair could not complete." },
+                            onFailure = { it.message ?: "AstraWave could not restore the recommended setup." },
                         )
                         refreshHealth()
                     }
@@ -214,7 +236,7 @@ fun AstraWaveOnboardingScreen(
 
         if (health.readyToWatch && optionalSuggestions.isNotEmpty()) {
             Spacer(Modifier.height(22.dp))
-            AstraWaveSectionHeader("Optional Upgrades", "Useful additions, not requirements")
+            AstraWaveSectionHeader("Make It Yours", "Optional additions you can set up anytime")
             Spacer(Modifier.height(8.dp))
             optionalSuggestions.forEach { item ->
                 val target = recommendationTarget(item.id)
@@ -328,7 +350,7 @@ private fun recommendationTarget(id: String): OnboardingStep? = when (id) {
 private fun stepTitle(step: OnboardingStep): String = when (step) {
     OnboardingStep.WELCOME -> "Welcome"
     OnboardingStep.PROFILE -> "Profile & Household"
-    OnboardingStep.TMDB -> "Movies & TV Discovery"
+    OnboardingStep.TMDB -> "Enhanced Movie & TV Metadata"
     OnboardingStep.LIVE_TV -> "Live TV Sources"
     OnboardingStep.ADDONS -> "Extensions & Addons"
     OnboardingStep.PERSONAL_MEDIA -> "Personal Media"
@@ -341,7 +363,7 @@ private fun stepTitle(step: OnboardingStep): String = when (step) {
 private fun stepDescription(step: OnboardingStep): String = when (step) {
     OnboardingStep.WELCOME -> "Choose only the parts of AstraWave you want to configure now."
     OnboardingStep.PROFILE -> "Set the active profile and household preferences."
-    OnboardingStep.TMDB -> "Enable movie and TV metadata discovery."
+    OnboardingStep.TMDB -> "Optional advanced metadata setup. Built-in discovery works without it."
     OnboardingStep.LIVE_TV -> "Connect your own M3U/Xtream source or use eligible AstraWave Free TV."
     OnboardingStep.ADDONS -> "Enable compatible addons you trust for catalogs and metadata."
     OnboardingStep.PERSONAL_MEDIA -> "Connect your own Jellyfin, Emby, Plex, WebDAV or NAS library."
