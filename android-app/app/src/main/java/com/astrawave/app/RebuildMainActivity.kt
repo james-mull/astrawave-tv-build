@@ -104,9 +104,10 @@ import kotlinx.coroutines.withContext
 class RebuildMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val qaStartRoute = intent.getStringExtra("qa_start_route")
         setContent {
             AstraWaveTheme {
-                Surface(color = AstraWaveColors.Background) { RebuildRoot() }
+                Surface(color = AstraWaveColors.Background) { RebuildRoot(qaStartRoute) }
             }
         }
     }
@@ -141,7 +142,7 @@ private sealed interface AddonCatalogLoadState {
 }
 
 @Composable
-private fun RebuildRoot() {
+private fun RebuildRoot(initialRoute: String? = null) {
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
     val profileStore = remember { HouseholdProfileStore(context) }
@@ -202,7 +203,7 @@ private fun RebuildRoot() {
     var tvRailExpanded by remember(isTv) { mutableStateOf(!isTv) }
     var tvRailCollapseJob by remember(isTv) { mutableStateOf<Job?>(null) }
     var iptvSources by remember(activeProfileId) { mutableStateOf(IptvSourceStore(context).load(activeProfileId)) }
-    var current by remember { mutableStateOf(RebuildDestination.Home) }
+    var current by remember(initialRoute) { mutableStateOf(RebuildDestination.entries.firstOrNull { it.route == initialRoute } ?: RebuildDestination.Home) }
     var multiviewPanes by remember { mutableStateOf<List<MultiviewPane>>(emptyList()) }
     var multiviewAudioPaneId by remember { mutableStateOf<String?>(null) }
 
@@ -562,7 +563,7 @@ private fun AddonDiscoverRow(row: StremioCatalogRow, profileId: String) {
                             Spacer(Modifier.height(10.dp))
                             LibraryActionRow(item = libraryItem, profileId = profileId)
                         }
-                    }
+                    )
                 }
             }
         }
