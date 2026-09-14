@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 type Kind='movie'|'series';
-type Def={id:string;title:string;kind:Kind;category:string;featured?:boolean};
+type Def={id:string;title:string;kind:Kind;category:string;featured?:boolean;service?:boolean};
 type Item={id:string;kind:Kind;title:string;subtitle?:string;posterUrl?:string;overview?:string};
 
 type Prefs={hidden:string[];pinned:string[];order:string[]};
@@ -60,7 +60,7 @@ export default function BuiltInCatalogBrowser({kind}:{kind:Kind}){
     {!mdblistConfigured&&mappedCount>0&&<div className="setupNotice"><small>{mappedCount} catalogs have verified MDBList mappings. They automatically use AstraWave metadata fallback until the server MDBList connection is configured.</small></div>}
     <div className="sourceChips">{categories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
     <div className="builtinCatalogDirectory">{visible.map(def=><article key={def.id} className={selected?.id===def.id?'active':''}>
-      <button className="catalogOpen" onClick={()=>open(def)}><b>{def.title}</b><small>{def.category}{def.featured?' • Featured':''}{mappedIds.has(def.id)?' • MDBList':''}</small></button>
+      <button className="catalogOpen" onClick={()=>open(def)}><b>{def.title}</b><small>{def.category}{def.featured?' • Featured':''}{def.service?' • Service':''}{mappedIds.has(def.id)?' • MDBList':''}</small></button>
       {manage&&<div className="catalogManage"><button onClick={()=>togglePinned(def.id)}>{prefs.pinned.includes(def.id)?'Unpin':'Pin'}</button><button onClick={()=>move(def.id,-1)}>↑</button><button onClick={()=>move(def.id,1)}>↓</button><button onClick={()=>hide(def.id)}>Hide</button></div>}
     </article>)}</div>
     {manage&&prefs.hidden.length>0&&<div className="setupNotice"><b>{prefs.hidden.length} hidden catalogs</b><button className="ghostBtn" onClick={reset}>Reset catalog layout</button></div>}
