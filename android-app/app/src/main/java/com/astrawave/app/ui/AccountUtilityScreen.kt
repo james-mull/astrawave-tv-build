@@ -3,6 +3,7 @@ package com.astrawave.app.ui
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,8 @@ import com.astrawave.app.data.FirebaseCloudRepository
 import com.astrawave.app.data.LibraryCloudSync
 import com.astrawave.app.data.LocalDeviceSessionGateway
 import com.astrawave.app.data.LocalDvrGateway
+import com.astrawave.app.data.PlaybackPreferenceStore
+import com.astrawave.app.data.PlaybackPreset
 import com.astrawave.app.data.SportsPreferenceStore
 
 /**
@@ -213,24 +216,109 @@ private fun BackupSyncUtility(profileId: String, onBack: () -> Unit) {
 @Composable
 private fun PlaybackPreferenceUtility(section: AccountSection, profileId: String, onBack: () -> Unit) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("astrawave_experience", Context.MODE_PRIVATE) }
-    fun key(name: String) = "$profileId:$name"
-    var quality by remember(profileId) { mutableStateOf(prefs.getString(key("quality"), "Auto") ?: "Auto") }
-    var subtitle by remember(profileId) { mutableStateOf(prefs.getString(key("subtitleLanguage"), "English") ?: "English") }
-    var density by remember(profileId) { mutableStateOf(prefs.getString(key("density"), "Standard") ?: "Standard") }
-    var autoplay by remember(profileId) { mutableStateOf(prefs.getBoolean(key("autoplayBest"), true)) }
+    val store = remember { PlaybackPreferenceStore(context) }
+    var settings by remember(profileId) { mutableStateOf(store.load(profileId)) }
 
-    UtilityShell(section.title, "Profile-scoped settings used by AstraWave's native playback and TV presentation layers.", onBack) {
+    fun save(next: com.astrawave.app.data.PlaybackPreferences) {
+        settings = next
+        store.save(profileId, next)
+    }
+
+    UtilityShell(section.title, "Profile-scoped playback, language and presentation policy used across AstraWave.", onBack) {
         when (section) {
             AccountSection.PLAYBACK -> {
-                UtilityToggle("Autoplay best healthy source", "Use source ranking and failover automatically", autoplay) { autoplay = it; prefs.edit().putBoolean(key("autoplayBest"), it).apply() }
-                ChoiceRow("Preferred quality", listOf("Auto","Best","4K","1080p","720p","Data Saver"), quality) { quality = it; prefs.edit().putString(key("quality"), it).apply() }
+                ChoiceRow(
+                    "Playback preset",
+                    listOf("Auto", "Best Quality", "Fastest Start", "Data Saver", "HDR Preferred", "Surround Preferred", "Debrid Only", "Direct Only"),
+                    presetLabel(settings.preset),
+                ) { label -> save(settings.copy(preset = presetForLabel(label))) }
+                Spacer(Modifier.height(8.dp))
+                UtilityToggle("Prefer Real-Debrid / debrid", "Boost eligible debrid-backed sources in Play Best ranking", settings.preferDebrid) { save(settings.copy(preferDebrid = it)) }
+                UtilityToggle("Prefer HDR / Dolby Vision", "Boost HDR-capable candidates when metadata advertises it", settings.preferHdr) { save(settings.copy(preferHdr = it)) }
+                UtilityToggle("Prefer surround / Atmos", "Boost 5.1, 7.1, Atmos, TrueHD and DTS candidates", settings.preferSurround) { save(settings.copy(preferSurround = it)) }
+                UtilityToggle("AutoNext", "Prepares the next episode policy and continues series playback", settings.autoNextEnabled) { save(settings.copy(autoNextEnabled = it)) }
+                UtilityToggle("Skip Intro", "Allow intro skipping when timing metadata is available", settings.skipIntroEnabled) { save(settings.copy(skipIntroEnabled = it)) }
+                UtilityToggle("Skip Recap", "Allow recap skipping when timing metadata is available", settings.skipRecapEnabled) { save(settings.copy(skipRecapEnabled = it)) }
+                UtilityToggle("Skip Credits", "Allow next-episode actions during credits when timing metadata is available", settings.skipCreditsEnabled) { save(settings.copy(skipCreditsEnabled = it)) }
             }
-            AccountSection.SUBTITLES_AUDIO -> ChoiceRow("Subtitle language", listOf("English","Spanish","French","German","Portuguese","Off"), subtitle) { subtitle = it; prefs.edit().putString(key("subtitleLanguage"), it).apply() }
-            AccountSection.APPEARANCE -> ChoiceRow("Interface density", listOf("Compact","Standard","Cinematic"), density) { density = it; prefs.edit().putString(key("density"), it).apply() }
+            AccountSection.SUBTITLES_AUDIO -> {
+                ChoiceRow("Preferred audio language", languageOptions, displayLanguage(settings.preferredAudioLanguage)) {
+                    save(settings.copy(preferredAudioLanguage = languageCode(it)))
+                }
+                ChoiceRow("Preferred subtitle language", languageOptions, displayLanguage(settings.preferredSubtitleLanguage)) {
+                    save(settings.copy(preferredSubtitleLanguage = languageCode(it)))
+                }
+                UtilityToggle("Subtitles on by default", "Enable subtitles automatically when a preferred track exists", settings.subtitlesEnabledByDefault) { save(settings.copy(subtitlesEnabledByDefault = it)) }
+                UtilityToggle("Prefer forced subtitles", "Prioritize forced/foreign-dialogue tracks when available", settings.preferForcedSubtitles) { save(settings.copy(preferForcedSubtitles = it)) }
+                UtilityToggle("Prefer hearing-impaired subtitles", "Prefer SDH/HI tracks when available", settings.preferHearingImpairedSubtitles) { save(settings.copy(preferHearingImpairedSubtitles = it)) }
+                UtilityToggle("Prefer surround audio", "Prefer multi-channel audio on capable devices", settings.preferSurround) { save(settings.copy(preferSurround = it)) }
+            }
+            AccountSection.APPEARANCE -> {
+                ChoiceRow("Guide density", listOf("Compact", "Balanced", "Comfortable"), densityLabel(settings.guideDensity)) {
+                    val density = when (it) { "Compact" -> 1; "Comfortable" -> 3; else -> 2 }
+                    save(settings.copy(guideDensity = density))
+                }
+                ChoiceRow("UI scale", listOf("85%", "100%", "110%", "125%"), "${settings.uiScalePercent}%") {
+                    save(settings.copy(uiScalePercent = it.removeSuffix("%").toIntOrNull()?.coerceIn(85, 125) ?: 100))
+                }
+                AstraWaveStatePanel(
+                    "Per-device design remains automatic",
+                    "Phone, tablet and Android TV keep separate density, typography and focus behavior. UI scale fine-tunes that device-specific layout rather than forcing one layout everywhere.",
+                )
+            }
             else -> Unit
         }
     }
+}
+
+private val languageOptions = listOf("Auto", "English", "Spanish", "French", "German", "Portuguese", "Japanese", "Korean", "Off")
+
+private fun presetLabel(preset: PlaybackPreset): String = when (preset) {
+    PlaybackPreset.AUTO -> "Auto"
+    PlaybackPreset.BEST_QUALITY -> "Best Quality"
+    PlaybackPreset.FASTEST_START -> "Fastest Start"
+    PlaybackPreset.DATA_SAVER -> "Data Saver"
+    PlaybackPreset.HDR_PREFERRED -> "HDR Preferred"
+    PlaybackPreset.SURROUND_PREFERRED -> "Surround Preferred"
+    PlaybackPreset.DEBRID_ONLY -> "Debrid Only"
+    PlaybackPreset.DIRECT_ONLY -> "Direct Only"
+}
+
+private fun presetForLabel(label: String): PlaybackPreset = when (label) {
+    "Best Quality" -> PlaybackPreset.BEST_QUALITY
+    "Fastest Start" -> PlaybackPreset.FASTEST_START
+    "Data Saver" -> PlaybackPreset.DATA_SAVER
+    "HDR Preferred" -> PlaybackPreset.HDR_PREFERRED
+    "Surround Preferred" -> PlaybackPreset.SURROUND_PREFERRED
+    "Debrid Only" -> PlaybackPreset.DEBRID_ONLY
+    "Direct Only" -> PlaybackPreset.DIRECT_ONLY
+    else -> PlaybackPreset.AUTO
+}
+
+private fun densityLabel(value: Int): String = when (value) { 1 -> "Compact"; 3 -> "Comfortable"; else -> "Balanced" }
+
+private fun languageCode(label: String): String = when (label) {
+    "English" -> "en"
+    "Spanish" -> "es"
+    "French" -> "fr"
+    "German" -> "de"
+    "Portuguese" -> "pt"
+    "Japanese" -> "ja"
+    "Korean" -> "ko"
+    "Off" -> "off"
+    else -> "auto"
+}
+
+private fun displayLanguage(code: String): String = when (code.lowercase()) {
+    "en" -> "English"
+    "es" -> "Spanish"
+    "fr" -> "French"
+    "de" -> "German"
+    "pt" -> "Portuguese"
+    "ja" -> "Japanese"
+    "ko" -> "Korean"
+    "off" -> "Off"
+    else -> "Auto"
 }
 
 @Composable
@@ -269,7 +357,7 @@ private fun ChoiceRow(title: String, options: List<String>, selected: String, on
     Column(Modifier.fillMaxWidth()) {
         Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { option -> FilterChip(selected = selected == option, onClick = { onSelect(option) }, label = { Text(option) }) }
         }
     }
