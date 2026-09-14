@@ -14,6 +14,7 @@ on:
 permissions:
   contents: read
 
+# Captures the real customer-facing pages from the debug APK for visual review.
 jobs:
   capture-gallery:
     runs-on: ubuntu-22.04
