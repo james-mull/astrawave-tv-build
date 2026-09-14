@@ -72,8 +72,13 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:thriller-series':{owner:'MaxtronTV',slug:'thriller-tv-shows'},
   'show:war-series':{owner:'MaxtronTV',slug:'war-tv-shows'},
   'show:western-series':{owner:'MaxtronTV',slug:'western-tv-shows'},
+  'show:true-story-series':{owner:'king4ninja',slug:'based-on-true-story-with-1000-imdb-votes'},
   'show:reality-favorites':{owner:'MaxtronTV',slug:'reality-tv-shows'},
   'show:sports-series':{owner:'MaxtronTV',slug:'sports-tv-shows'},
+  'show:music-series':{owner:'MaxtronTV',slug:'music-tv-shows'},
+  'show:talk-shows':{owner:'MaxtronTV',slug:'talk-shows'},
+  'show:travel-series':{owner:'faler',slug:'travel-tv-shows'},
+  'show:nature-series':{owner:'manu-081',slug:'latest-tv-shows-nature-documentary'},
   'show:true-crime':{owner:'an-kah',slug:'best-true-crime-shows'},
   'show:kids-tv':{owner:'baruchin',slug:'kids-tv-shows'},
   'movie:anime-movies':{owner:'apg2886',slug:'top-anime-movies'},
@@ -88,6 +93,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:british-tv':{owner:'amything',slug:'latest-uk-shows'},
   'show:k-dramas':{owner:'egmi1',slug:'all-kdramas'},
   'show:indian-series':{owner:'apollocat',slug:'indian-tv-shows-hindi-english'},
+  'show:international-tv':{owner:'fuzi0n',slug:'international-tv-top-rated'},
 
   // Streaming-service substitutions. Stable legacy IDs preserve saved user layout/preferences.
   'movie:girls-night':{owner:'snoak',slug:'latest-netflix-movies'},
