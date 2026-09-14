@@ -23,14 +23,15 @@ class VodPlaybackCoordinator(context: Context) {
     private val cloud = FirebaseCloudRepository(appContext)
 
     suspend fun prepare(request: VodPlaybackRequest): VodPlaybackLaunch = coroutineScope {
+        val sourceIdentity = stremioIdentityFromSourceId(request.sourceId)
         val scrapeRequest = ScrapeRequest(
             title = request.title,
             year = request.year,
             season = request.season,
             episode = request.episode,
             externalIds = buildMap {
-                request.stremioId?.takeIf(String::isNotBlank)?.let { put("stremio_id", it) }
-                request.stremioType?.takeIf(String::isNotBlank)?.let { put("stremio_type", it) }
+                (request.stremioId ?: sourceIdentity?.second)?.takeIf(String::isNotBlank)?.let { put("stremio_id", it) }
+                (request.stremioType ?: sourceIdentity?.first)?.takeIf(String::isNotBlank)?.let { put("stremio_type", it) }
             },
         )
         val online = async { resolver.plan(scrapeRequest, request.profileId) }
@@ -91,6 +92,14 @@ class VodPlaybackCoordinator(context: Context) {
     suspend fun prepareIntent(request: VodPlaybackRequest): Pair<VodPlaybackLaunch, Intent?> {
         val launch = prepare(request)
         return launch to intent(launch)
+    }
+
+    private fun stremioIdentityFromSourceId(sourceId: String?): Pair<String, String>? {
+        val parts = sourceId?.split(':').orEmpty()
+        if (parts.size < 4 || !parts.first().equals("stremio", true)) return null
+        val type = parts[2].trim().lowercase().takeIf { it == "movie" || it == "series" } ?: return null
+        val id = parts.drop(3).joinToString(":").trim().takeIf(String::isNotBlank) ?: return null
+        return type to id
     }
 }
 
