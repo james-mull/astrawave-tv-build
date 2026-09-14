@@ -28,7 +28,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.astrawave.app.MovieListDetailActivity
 import com.astrawave.app.PremiumVodDetailActivity
+import com.astrawave.app.TvListDetailActivity
 import com.astrawave.app.data.AstraWaveMetadataGateway
 import com.astrawave.app.data.BuiltInCatalogDefinition
 import com.astrawave.app.data.BuiltInCatalogMediaType
@@ -60,6 +62,7 @@ fun CatalogContentShelf(
     profileId: String,
 ) {
     val context = LocalContext.current
+    val device = LocalAstraWaveDeviceClass.current
     val repository = remember { BuiltInCatalogRepository(context) }
     var items by remember(definition.id, profileId) { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
     var source by remember(definition.id, profileId) { mutableStateOf("") }
@@ -74,8 +77,45 @@ fun CatalogContentShelf(
 
     if (items.isEmpty()) return
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    fun openCatalog() {
+        val intent = if (definition.mediaType == BuiltInCatalogMediaType.MOVIE) {
+            Intent(context, MovieListDetailActivity::class.java)
+                .putExtra(MovieListDetailActivity.EXTRA_CATALOG_ID, definition.id)
+                .putExtra(MovieListDetailActivity.EXTRA_TITLE, definition.title)
+                .putExtra(MovieListDetailActivity.EXTRA_PROFILE_ID, profileId)
+        } else {
+            Intent(context, TvListDetailActivity::class.java)
+                .putExtra(TvListDetailActivity.EXTRA_CATALOG_ID, definition.id)
+                .putExtra(TvListDetailActivity.EXTRA_TITLE, definition.title)
+                .putExtra(TvListDetailActivity.EXTRA_PROFILE_ID, profileId)
+        }
+        context.startActivity(intent)
+    }
+
+    fun openItem(item: AstraWaveMetadataGateway.Item) {
+        val mediaType = if (
+            definition.mediaType == BuiltInCatalogMediaType.SHOW ||
+            item.type.equals("series", true) || item.type.equals("tv", true)
+        ) "SERIES" else "MOVIE"
+        val sourceId = when {
+            item.id.startsWith("tt", true) -> "stremio:cinemeta:${if (mediaType == "SERIES") "series" else "movie"}:${item.id}"
+            item.id.toLongOrNull() != null -> "tmdb:${item.id}"
+            else -> null
+        }
+        context.startActivity(
+            Intent(context, PremiumVodDetailActivity::class.java)
+                .putExtra(PremiumVodDetailActivity.EXTRA_TITLE, item.name)
+                .putExtra(PremiumVodDetailActivity.EXTRA_MEDIA_TYPE, mediaType)
+                .putExtra(PremiumVodDetailActivity.EXTRA_SOURCE_ID, sourceId)
+                .putExtra(PremiumVodDetailActivity.EXTRA_PROFILE_ID, profileId),
+        )
+    }
+
+    val cardWidth = if (device == AstraWaveDeviceClass.TV) 164.dp else 142.dp
+    val posterHeight = if (device == AstraWaveDeviceClass.TV) 246.dp else 213.dp
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Column {
                 Text(
                     definition.title,
@@ -83,63 +123,60 @@ fun CatalogContentShelf(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                if (source.isNotBlank()) {
+                if (source.isNotBlank() && device != AstraWaveDeviceClass.PHONE) {
                     Text(source, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
                 }
             }
-            Text("See all  ›", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+            Text(
+                "See all  ›",
+                color = AstraWaveColors.AccentStrong,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.clickable { openCatalog() },
+            )
         }
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(end = 28.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.TV) 14.dp else 12.dp),
+            contentPadding = PaddingValues(end = 34.dp, bottom = 4.dp),
         ) {
             items(items, key = { item -> "${definition.id}:${item.id}:${item.name}" }) { item ->
-                Column(
-                    modifier = Modifier
-                        .width(142.dp)
-                        .clickable {
-                            val mediaType = if (
-                                definition.mediaType == BuiltInCatalogMediaType.SHOW ||
-                                item.type.equals("series", true) || item.type.equals("tv", true)
-                            ) "SERIES" else "MOVIE"
-                            val sourceId = when {
-                                item.id.startsWith("tt", true) -> "stremio:cinemeta:${if (mediaType == "SERIES") "series" else "movie"}:${item.id}"
-                                item.id.toLongOrNull() != null -> "tmdb:${item.id}"
-                                else -> null
-                            }
-                            context.startActivity(
-                                Intent(context, PremiumVodDetailActivity::class.java)
-                                    .putExtra(PremiumVodDetailActivity.EXTRA_TITLE, item.name)
-                                    .putExtra(PremiumVodDetailActivity.EXTRA_MEDIA_TYPE, mediaType)
-                                    .putExtra(PremiumVodDetailActivity.EXTRA_SOURCE_ID, sourceId)
-                                    .putExtra(PremiumVodDetailActivity.EXTRA_PROFILE_ID, profileId),
-                            )
-                        },
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                AstraWaveFocusableCard(
+                    Modifier
+                        .width(cardWidth)
+                        .clickable { openItem(item) },
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(142.dp)
-                            .height(213.dp)
-                            .clip(MaterialTheme.shapes.medium),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AsyncImage(
-                            model = item.posterUrl ?: item.backdropUrl,
-                            contentDescription = item.name,
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop,
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(posterHeight)
+                                .clip(MaterialTheme.shapes.medium),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AsyncImage(
+                                model = item.posterUrl ?: item.backdropUrl,
+                                contentDescription = item.name,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                            if (item.posterUrl.isNullOrBlank() && item.backdropUrl.isNullOrBlank()) {
+                                Text(item.name.take(1), color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)
+                            }
+                        }
+                        Text(
+                            item.name,
+                            color = AstraWaveColors.PrimaryText,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
                         )
-                        if (item.posterUrl.isNullOrBlank() && item.backdropUrl.isNullOrBlank()) {
-                            Text(item.name.take(1), color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)
+                        item.releaseInfo?.takeIf(String::isNotBlank)?.let { release ->
+                            Text(
+                                release.take(16),
+                                color = AstraWaveColors.TertiaryText,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
                         }
                     }
-                    Text(
-                        item.name,
-                        color = AstraWaveColors.PrimaryText,
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 2,
-                    )
                 }
             }
         }
