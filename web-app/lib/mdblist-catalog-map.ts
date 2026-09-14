@@ -45,6 +45,9 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:anime-series':{owner:'aaron713',slug:'anime-shows'},
 
   // International discovery collections.
+  'movie:international-cinema':{owner:'xsampsonxxsampsonx',slug:'critically-acclaimed-foreign-films'},
+  'movie:japanese-movies':{owner:'coreyh047',slug:'popular-japanese-movies'},
+  'movie:french-cinema':{owner:'coreyh047',slug:'popular-french-movies'},
   'show:k-dramas':{owner:'egmi1',slug:'all-kdramas'},
   'show:indian-series':{owner:'apollocat',slug:'indian-tv-shows-hindi-english'},
 
