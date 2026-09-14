@@ -209,7 +209,7 @@ class PlayerActivity : ComponentActivity() {
                         when {
                             retryCountForCurrentStream < MAX_RETRIES_PER_STREAM -> {
                                 retryCountForCurrentStream++
-                                Toast.makeText(this@PlayerActivity, "Stream interrupted. Reconnecting current source…", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@PlayerActivity, "Playback interrupted. Reconnecting…", Toast.LENGTH_SHORT).show()
                                 handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, RETRY_DELAY_MS)
                             }
                             streamIndex + 1 < streamUrls.size -> {
@@ -218,12 +218,12 @@ class PlayerActivity : ComponentActivity() {
                                 updateSourceButton()
                                 Toast.makeText(
                                     this@PlayerActivity,
-                                    "Current source failed. Trying backup ${streamIndex + 1} of ${streamUrls.size}…",
+                                    "Trying another playback option…",
                                     Toast.LENGTH_SHORT,
                                 ).show()
                                 handler.postDelayed({ player?.let { playCurrent(it, lastKnownPositionMs) } }, BACKUP_FAILOVER_DELAY_MS)
                             }
-                            else -> Toast.makeText(this@PlayerActivity, "All available sources failed. Open Sources to retry or choose another source.", Toast.LENGTH_LONG).show()
+                            else -> Toast.makeText(this@PlayerActivity, "Playback could not start. Open Playback Options to retry or choose another option.", Toast.LENGTH_LONG).show()
                         }
                     }
 
@@ -317,7 +317,7 @@ class PlayerActivity : ComponentActivity() {
         quickControls?.addView(quickButton(if (compact) "Subs" else "Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })
         skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
         skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
-        quickControls?.addView(quickButton(if (compact) "Info" else "Stats") { showDiagnostics() })
+        quickControls?.addView(quickButton(if (compact) "Info" else "Playback Info") { showDiagnostics() })
 
         quickControlsScroller = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -440,23 +440,23 @@ class PlayerActivity : ComponentActivity() {
         exo.prepare(); exo.playWhenReady = true; updateSourceButton()
     }
 
-    private fun sourceLabel(): String = if (streamUrls.size <= 1) "Source" else "Source ${streamIndex + 1}/${streamUrls.size}"
+    private fun sourceLabel(): String = if (streamUrls.size <= 1) "Playback" else "Options"
     private fun updateSourceButton() { sourceButton?.text = sourceLabel() }
 
     private fun showSourcePicker() {
-        if (streamUrls.size <= 1) { Toast.makeText(this, "Only one source is available.", Toast.LENGTH_SHORT).show(); return }
+        if (streamUrls.size <= 1) { Toast.makeText(this, "No alternate playback options are available.", Toast.LENGTH_SHORT).show(); return }
         val labels = streamUrls.mapIndexed { index, url ->
             val host = runCatching { Uri.parse(url).host }.getOrNull().orEmpty().ifBlank { "Stream ${index + 1}" }
-            "${if (index == streamIndex) "✓ " else ""}Source ${index + 1} • $host"
+            "${if (index == streamIndex) "✓ " else ""}Option ${index + 1} • $host"
         }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Playback sources").setMessage("AstraWave automatically fails over when a source stops working. You can also switch manually.").setItems(labels) { _, which ->
+        AlertDialog.Builder(this).setTitle("Playback Options").setMessage("AstraWave automatically switches when playback fails. You can also choose an option manually.").setItems(labels) { _, which ->
             if (which == streamIndex) return@setItems
             val exo = player ?: return@setItems
             lastKnownPositionMs = maxOf(lastKnownPositionMs, exo.currentPosition.coerceAtLeast(0L))
             streamIndex = which
             retryCountForCurrentStream = 0
             playCurrent(exo, lastKnownPositionMs)
-            Toast.makeText(this, "Switched to source ${which + 1} of ${streamUrls.size}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Playback option changed.", Toast.LENGTH_SHORT).show()
         }.setNegativeButton("Cancel", null).show()
     }
 
