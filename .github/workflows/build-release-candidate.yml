@@ -7,10 +7,7 @@ on:
       - feature/nuvio-core-rebuild
     paths:
       - "android-app/**"
-      - "web-app/app/api/astrawave/billing/**"
-      - "web-app/package.json"
-      - "web-app/package-lock.json"
-      - "web-app/.env.example"
+      - "web-app/**"
       - "astrawave-free-tv/**"
       - "docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md"
       - "docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md"
@@ -58,6 +55,9 @@ jobs:
           test -f android-app/app/build.gradle.kts
           test -f android-app/app/src/main/AndroidManifest.xml
           test -f web-app/app/api/astrawave/billing/verify/route.ts
+          test -f web-app/app/privacy/page.tsx
+          test -f web-app/app/terms/page.tsx
+          test -f web-app/app/support/page.tsx
           test -f web-app/package-lock.json
           test -f astrawave-free-tv/check_free_tv.py
           test -f docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md
@@ -203,6 +203,7 @@ jobs:
             echo "signed=${ASTRAWAVE_RELEASE_SIGNED:-false}"
             echo "production_configured=${ASTRAWAVE_PRODUCTION_CONFIGURED:-false}"
             echo "billing_backend_built=true"
+            echo "customer_web_pages_built=true"
             echo "promotion_eligible=${promotion_eligible}"
             echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } > RELEASE_METADATA.txt
