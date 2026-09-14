@@ -30,12 +30,17 @@ class HomeIntelligenceRepository(context: Context) {
     private val tmdbEpisodes = TmdbSeriesEpisodeRepository()
     private val dynamic = DynamicCollectionRepository()
     private val feedback = ProfileRecommendationStore(appContext)
+    private val builtIn = BuiltInCatalogRepository(appContext)
 
     suspend fun rows(profileId: String, forceRefresh: Boolean = false): List<Row> {
         val history = library.history(profileId)
         val progressList = library.progress(profileId)
         val progress = progressList.associateBy { it.item.id }
         val prefs = feedback.snapshot(profileId)
+        val homeCatalogs = (
+            builtIn.homeDefinitions(BuiltInCatalogMediaType.MOVIE, profileId, maxRows = 3) +
+                builtIn.homeDefinitions(BuiltInCatalogMediaType.SHOW, profileId, maxRows = 3)
+            ).distinctBy { it.id }
         val signature = buildString {
             append(history.firstOrNull()?.playedAtEpochMs ?: 0L)
             append(':')
@@ -44,6 +49,8 @@ class HomeIntelligenceRepository(context: Context) {
             append(prefs.preferredGenres.sorted().joinToString(","))
             append(':')
             append(prefs.dislikedGenres.sorted().joinToString(","))
+            append(':')
+            append(homeCatalogs.joinToString(",") { it.id })
         }
         val now = System.currentTimeMillis()
         if (!forceRefresh) {
@@ -153,6 +160,21 @@ class HomeIntelligenceRepository(context: Context) {
                 badge = "TRENDING",
                 priority = 50,
             )
+        }
+
+        // Only project a small curated slice of the 150 catalogs onto Home. Users can pin/reorder
+        // catalogs in Movies/TV; all other catalogs remain available in their dedicated hubs.
+        homeCatalogs.forEachIndexed { index, definition ->
+            val result = runCatching { builtIn.load(definition.id, profileId, limit = 20) }.getOrNull() ?: return@forEachIndexed
+            if (result.items.isNotEmpty()) {
+                rows += Row(
+                    title = definition.title,
+                    subtitle = result.sourceLabel,
+                    items = result.items.take(20),
+                    badge = if (definition.documentedUrl != null) "MDBLIST" else "ASTRAWAVE",
+                    priority = 60 + index,
+                )
+            }
         }
 
         val seriesHeavy = history.take(20).count { it.item.type == LibraryMediaType.EPISODE || it.item.type == LibraryMediaType.SERIES } >
