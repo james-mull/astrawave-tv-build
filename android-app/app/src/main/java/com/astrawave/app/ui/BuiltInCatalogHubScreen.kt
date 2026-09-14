@@ -120,6 +120,11 @@ fun BuiltInCatalogHubScreen(
                         Text(sectionSubtitle(section, mediaType), color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                 }
+                if (!manageMode) {
+                    item(key = "preview-$section") {
+                        CatalogPreviewShelf(section, definitions, profileId)
+                    }
+                }
                 catalogRows(
                     definitions = definitions,
                     manageMode = manageMode,
@@ -131,6 +136,11 @@ fun BuiltInCatalogHubScreen(
                 )
             }
         } else {
+            if (!manageMode && rows.isNotEmpty()) {
+                item(key = "filtered-preview-${selectedCategory.name}") {
+                    CatalogPreviewShelf(categoryLabel(selectedCategory!!), rows, profileId)
+                }
+            }
             catalogRows(
                 definitions = rows,
                 manageMode = manageMode,
