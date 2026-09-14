@@ -53,7 +53,8 @@ class LiveTvRepository {
         AstraWaveHttp.openDecoded(url).use(XmlTvParser::parse)
 
     fun merge(channelLists: List<List<LiveChannel>>, programmes: List<XmlTvProgramme> = emptyList()): List<LiveChannelGroup> {
-        val byTvg = programmes.groupBy { it.channelId }
+        val byTvg = programmes.groupBy { it.channelId.trim() }
+        val byNormalizedEpgId = programmes.groupBy { normalizeEpgChannelId(it.channelId) }
         val nowMs = System.currentTimeMillis()
         return channelLists.flatten()
             .filter { it.url.isNotBlank() && it.normalizedName.isNotBlank() }
@@ -62,8 +63,9 @@ class LiveTvRepository {
             .map { (identityKey, candidates) ->
                 val ordered = candidates.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.source })
                 val schedule = ordered.asSequence()
-                    .mapNotNull { it.tvgId?.takeIf(String::isNotBlank) }
-                    .flatMap { byTvg[it].orEmpty().asSequence() }
+                    .flatMap { channel ->
+                        scheduleForChannel(channel, byTvg, byNormalizedEpgId).asSequence()
+                    }
                     .distinctBy { "${it.channelId}:${it.start}:${it.stop}:${it.title}" }
                     .sortedBy { parseXmlTvEpochMs(it.start) ?: Long.MAX_VALUE }
                     .toList()
@@ -86,6 +88,33 @@ class LiveTvRepository {
                 )
             }
             .sortedWith(compareBy<LiveChannelGroup> { it.candidates.firstOrNull()?.group ?: "ZZZ" }.thenBy { it.displayName })
+    }
+
+    private fun scheduleForChannel(
+        channel: LiveChannel,
+        byTvg: Map<String, List<XmlTvProgramme>>,
+        byNormalizedEpgId: Map<String, List<XmlTvProgramme>>,
+    ): List<XmlTvProgramme> {
+        val exactIds = listOfNotNull(
+            channel.tvgId?.trim()?.takeIf(String::isNotBlank),
+            channel.id.trim().takeIf(String::isNotBlank),
+        ).distinct()
+        exactIds.firstNotNullOfOrNull { id -> byTvg[id]?.takeIf { it.isNotEmpty() } }?.let { return it }
+
+        // Built-in public playlists sometimes omit tvg-id or use a decorated XMLTV id such as
+        // "CNN.us" while the M3U channel is simply "CNN". Fall back only to strong normalized
+        // equality. We deliberately do not use contains/fuzzy matching because that can put the
+        // wrong schedule on sibling networks such as ESPN/ESPN2 or CNN/CNN International.
+        val channelKeys = buildList {
+            add(channel.normalizedName)
+            channel.tvgId?.let { add(normalizeEpgChannelId(it)) }
+            add(normalizeEpgChannelId(channel.name))
+        }.filter { it.length >= 3 }.distinct()
+
+        channelKeys.forEach { key ->
+            byNormalizedEpgId[key]?.takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        return emptyList()
     }
 
     fun healthyCandidates(group: LiveChannelGroup): List<LiveChannel> = group.candidates.filter { candidate ->
@@ -116,6 +145,15 @@ class LiveTvRepository {
             .replace(Regex("\\b(us|usa|east|west|central|backup|alt|alternative|feed)\\b"), " ")
             .replace(Regex("\\[[^]]*]"), " ").replace(Regex("\\([^)]*(?:hd|sd|uhd|4k|feed|backup)[^)]*\\)"), " ")
             .replace(Regex("[^a-z0-9]+"), " ").trim().replace(Regex("\\s+"), " ")
+
+        private fun normalizeEpgChannelId(raw: String): String = raw.lowercase(Locale.US)
+            .substringBeforeLast('.', raw.lowercase(Locale.US))
+            .replace("+", " plus ")
+            .replace("&", " and ")
+            .replace(Regex("\\b(us|usa|east|west|central|hd|fhd|uhd|4k)\\b"), " ")
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+            .replace(Regex("\\s+"), " ")
 
         private fun preferredDisplayName(channels: List<LiveChannel>): String = channels.sortedWith(compareBy<LiveChannel> { it.priority }.thenBy { it.name.length }).firstOrNull()?.name ?: channels.first().name
     }
