@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,10 +38,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.astrawave.app.core.ScrapeRequest
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.LocalLibraryStore
+import com.astrawave.app.data.ResolvedSource
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.data.TmdbTitleDetails
+import com.astrawave.app.data.UnifiedVodSourceRepository
 import com.astrawave.app.data.VodPlaybackCoordinator
 import com.astrawave.app.data.VodPlaybackRequest
 import com.astrawave.app.ui.AstraWaveArtwork
@@ -91,6 +95,7 @@ private fun PremiumVodDetailScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val coordinator = remember { VodPlaybackCoordinator(context) }
+    val sourceRepository = remember { UnifiedVodSourceRepository(context) }
     val library = remember { LocalLibraryStore(context) }
     val tmdbToken = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val tmdbRepository = remember(tmdbToken) { TmdbCatalogRepository(tmdbToken) }
@@ -100,6 +105,10 @@ private fun PremiumVodDetailScreen(
     var loadingDetails by remember { mutableStateOf(tmdbId != null && tmdbRepository.isConfigured()) }
     var playLoading by remember { mutableStateOf(false) }
     var playError by remember { mutableStateOf<String?>(null) }
+    var showSources by remember { mutableStateOf(false) }
+    var sourcesLoading by remember { mutableStateOf(false) }
+    var sources by remember { mutableStateOf<List<ResolvedSource>>(emptyList()) }
+    var sourceError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(tmdbId, tmdbToken) {
         if (tmdbId == null || !tmdbRepository.isConfigured()) {
@@ -117,15 +126,48 @@ private fun PremiumVodDetailScreen(
         library.progress(profileId).firstOrNull { saved -> saved.item.title.startsWith(title, ignoreCase = true) && !saved.completed }
     }
 
-    fun openDeepDetails(openSources: Boolean = false) {
+    fun openDeepDetails() {
         context.startActivity(
             Intent(context, TitleDetailsActivity::class.java)
                 .putExtra(TitleDetailsActivity.EXTRA_TITLE, title)
                 .putExtra(TitleDetailsActivity.EXTRA_YEAR, year ?: 0)
                 .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, mediaType)
                 .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, sourceId)
-                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId)
-                .putExtra("open_sources", openSources),
+                .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+        )
+    }
+
+    fun loadSources() {
+        if (seriesMode) {
+            openDeepDetails()
+            return
+        }
+        showSources = true
+        sourcesLoading = true
+        sourceError = null
+        scope.launch {
+            val request = ScrapeRequest(
+                title = title,
+                year = year ?: details?.releaseDate?.take(4)?.toIntOrNull(),
+            )
+            val result = runCatching { withContext(Dispatchers.IO) { sourceRepository.discover(request, profileId) } }
+            sources = result.getOrDefault(emptyList())
+            sourceError = result.exceptionOrNull()?.message
+            sourcesLoading = false
+        }
+    }
+
+    fun playResolvedSource(source: ResolvedSource) {
+        val ordered = listOf(source.link.url) + sources.map { it.link.url }.filterNot { it == source.link.url }
+        context.startActivity(
+            Intent(context, PlayerActivity::class.java)
+                .putExtra(PlayerActivity.EXTRA_URL, ordered.first())
+                .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(ordered.distinct()))
+                .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true)
+                .putExtra(PlayerActivity.EXTRA_PROFILE_ID, profileId)
+                .putExtra(PlayerActivity.EXTRA_LIBRARY_TITLE, title)
+                .putExtra(PlayerActivity.EXTRA_LIBRARY_TYPE, if (seriesMode) "SERIES" else "MOVIE")
+                .putExtra(PlayerActivity.EXTRA_LIBRARY_SOURCE_ID, sourceId),
         )
     }
 
@@ -146,7 +188,7 @@ private fun PremiumVodDetailScreen(
             if (intent != null) context.startActivity(intent)
             else {
                 playError = if (seriesMode) "Choose an episode to continue." else "No automatic source was ready. Review Sources for available options."
-                openDeepDetails(openSources = true)
+                if (seriesMode) openDeepDetails() else loadSources()
             }
         }
     }
@@ -196,8 +238,60 @@ private fun PremiumVodDetailScreen(
                             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}"))) }
                         }
                     }
-                    AstraWaveSecondaryButton("Sources") { openDeepDetails(openSources = true) }
+                    AstraWaveSecondaryButton(if (showSources) "Hide Sources" else "Sources") {
+                        if (showSources) showSources = false else loadSources()
+                    }
                     AstraWaveSecondaryButton("More") { openDeepDetails() }
+                }
+            }
+        }
+
+        if (showSources && !seriesMode) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 34.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("AVAILABLE SOURCES", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("${sources.size} found", color = if (sources.isNotEmpty()) AstraWaveColors.Success else AstraWaveColors.TertiaryText)
+                }
+                when {
+                    sourcesLoading -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.height(22.dp), strokeWidth = 2.dp, color = AstraWaveColors.AccentStrong)
+                        Text("Checking your authorized providers…", color = AstraWaveColors.SecondaryText)
+                    }
+                    sources.isEmpty() -> {
+                        Text(
+                            sourceError ?: "No authorized direct sources were returned. Connect or enable a compatible Stremio/Xtream provider under My AstraWave → Content Sources, then refresh.",
+                            color = AstraWaveColors.Warning,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        AstraWaveSecondaryButton("Refresh Sources") { loadSources() }
+                    }
+                    else -> sources.take(24).forEachIndexed { index, source ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
+                                .clickable { playResolvedSource(source) }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    if (index == 0) "BEST • ${source.link.sourceName}" else source.link.sourceName,
+                                    color = if (index == 0) AstraWaveColors.Success else AstraWaveColors.PrimaryText,
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    listOfNotNull(source.link.quality, source.link.licenseLabel).joinToString(" • "),
+                                    color = AstraWaveColors.SecondaryText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Text("PLAY  ›", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
             }
         }
@@ -222,7 +316,7 @@ private fun PremiumVodDetailScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 AstraWaveSecondaryButton("Back", onBack)
                 Text(
-                    "Episodes, recommendations, collections and playback diagnostics live under More.",
+                    "Episodes and deeper title information are under More.",
                     color = AstraWaveColors.TertiaryText,
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(top = 12.dp),
