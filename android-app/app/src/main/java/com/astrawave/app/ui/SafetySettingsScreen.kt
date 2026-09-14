@@ -77,7 +77,7 @@ fun SafetySettingsScreen(
     ) {
         AstraWavePageHeader(
             title = "Privacy & Parental Controls",
-            subtitle = "Profile-specific controls are stored locally. Kids ratings, approvals, search and bedtime rules apply immediately.",
+            subtitle = "Manage Kids Mode, Parent PIN, viewing limits and privacy choices for this profile.",
         )
         Spacer(Modifier.height(18.dp))
 
@@ -144,7 +144,7 @@ fun SafetySettingsScreen(
             )
             SafetyToggle(
                 title = "Allow Kids Search",
-                description = "Search uses built-in AstraWave metadata only; external addon results never appear in Kids Mode.",
+                description = "Search stays limited to kid-safe results that meet this profile’s rules.",
                 checked = kidsPolicy.allowSearch && !kidsPolicy.approvedOnly,
                 enabled = !kidsPolicy.approvedOnly,
                 onCheckedChange = { enabled -> updateKids { it.copy(allowSearch = enabled) } },
@@ -193,21 +193,21 @@ fun SafetySettingsScreen(
 
         SafetyToggle(
             title = "Allow Live TV & Guide",
-            description = "When off, Live TV and the Guide stop before any channel data is loaded.",
+            description = "Turn this off to hide Live TV and the Guide from this Kids profile.",
             checked = preferences.kids.allowLiveTv,
             enabled = kidsEnabled,
             onCheckedChange = { allowed -> update { it.copy(kids = it.kids.copy(allowLiveTv = allowed)) } },
         )
         SafetyToggle(
             title = "Allow Sports",
-            description = "Controls access to the Sports/Game Day schedule and matched Watch actions.",
+            description = "Turn this off to hide Sports and Game Day from this Kids profile.",
             checked = preferences.kids.allowSports,
             enabled = kidsEnabled,
             onCheckedChange = { allowed -> update { it.copy(kids = it.kids.copy(allowSports = allowed)) } },
         )
         SafetyToggle(
-            title = "Allow External Addons",
-            description = "When off, addon catalogs are blocked centrally from Addons, Discover and Search.",
+            title = "Allow Connected Extensions",
+            description = "Leave this off to keep Kids Mode limited to AstraWave’s built-in kid-safe experience.",
             checked = preferences.kids.allowExternalAddons,
             enabled = kidsEnabled,
             onCheckedChange = { allowed -> update { it.copy(kids = it.kids.copy(allowExternalAddons = allowed)) } },
@@ -225,26 +225,26 @@ fun SafetySettingsScreen(
         Spacer(Modifier.height(8.dp))
         SafetyToggle(
             title = "Local-only mode",
-            description = "Prefer local state and avoid cloud sync behavior for this profile.",
+            description = "Keep this profile’s activity on this device and turn off cloud syncing.",
             checked = preferences.privacy.localOnlyMode,
             onCheckedChange = { enabled -> update { it.copy(privacy = it.privacy.copy(localOnlyMode = enabled, cloudSyncEnabled = if (enabled) false else it.privacy.cloudSyncEnabled)) } },
         )
         SafetyToggle(
             title = "Cloud Sync",
-            description = "Allow profile state to sync when Firebase/account configuration is available.",
+            description = "Sync this profile’s library and watch progress across supported AstraWave devices when signed in.",
             checked = preferences.privacy.cloudSyncEnabled,
             enabled = !preferences.privacy.localOnlyMode,
             onCheckedChange = { enabled -> update { it.copy(privacy = it.privacy.copy(cloudSyncEnabled = enabled)) } },
         )
         SafetyToggle(
             title = "Analytics",
-            description = "Opt in to analytics. This remains disabled by default.",
+            description = "Share optional usage analytics to help improve AstraWave. Off by default.",
             checked = preferences.privacy.analyticsEnabled,
             onCheckedChange = { enabled -> update { it.copy(privacy = it.privacy.copy(analyticsEnabled = enabled)) } },
         )
         SafetyToggle(
             title = "Recommendation learning",
-            description = "Allow watch/listening behavior to influence personalized recommendations.",
+            description = "Use viewing and listening activity to improve recommendations for this profile.",
             checked = preferences.privacy.recommendationLearningEnabled,
             onCheckedChange = { enabled -> update { it.copy(privacy = it.privacy.copy(recommendationLearningEnabled = enabled)) } },
         )
