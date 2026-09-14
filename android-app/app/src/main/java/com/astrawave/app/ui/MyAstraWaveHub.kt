@@ -85,6 +85,24 @@ fun MyAstraWaveHub(
 
     fun refresh() { snapshot = store.snapshot(profileId) }
 
+    fun openSection(section: AccountSection) {
+        when (section) {
+            AccountSection.SUBSCRIPTION -> showSubscription = true
+            AccountSection.PARENTAL_CONTROLS, AccountSection.PRIVACY -> showSafety = true
+            AccountSection.CLOUD_DEBRID -> showDebrid = true
+            AccountSection.DIAGNOSTICS -> showDiagnostics = true
+            AccountSection.PLAYBACK,
+            AccountSection.SUBTITLES_AUDIO,
+            AccountSection.DOWNLOADS_STORAGE,
+            AccountSection.NOTIFICATIONS,
+            AccountSection.APPEARANCE,
+            AccountSection.BACKUP_SYNC,
+            AccountSection.DEVICES,
+            -> utilitySection = section
+            else -> onOpenAccountSection(section)
+        }
+    }
+
     LaunchedEffect(profileId) {
         cloudSync.restore(profileId) { result ->
             if (result.isSuccess) refresh()
@@ -215,25 +233,45 @@ fun MyAstraWaveHub(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         SetupRow { showSetup = true }
         ExperienceSettingsRow { showExperienceSettings = true }
-        AccountSection.entries.forEach { section ->
-            AccountRow(section) {
-                when (section) {
-                    AccountSection.SUBSCRIPTION -> showSubscription = true
-                    AccountSection.PARENTAL_CONTROLS, AccountSection.PRIVACY -> showSafety = true
-                    AccountSection.CLOUD_DEBRID -> showDebrid = true
-                    AccountSection.DIAGNOSTICS -> showDiagnostics = true
-                    AccountSection.PLAYBACK,
-                    AccountSection.SUBTITLES_AUDIO,
-                    AccountSection.DOWNLOADS_STORAGE,
-                    AccountSection.NOTIFICATIONS,
-                    AccountSection.APPEARANCE,
-                    AccountSection.BACKUP_SYNC,
-                    AccountSection.DEVICES,
-                    -> utilitySection = section
-                    else -> onOpenAccountSection(section)
-                }
-            }
-        }
+
+        val preferenceSections = listOf(
+            AccountSection.PROFILES,
+            AccountSection.SUBSCRIPTION,
+            AccountSection.PLAYBACK,
+            AccountSection.SUBTITLES_AUDIO,
+            AccountSection.DOWNLOADS_STORAGE,
+            AccountSection.NOTIFICATIONS,
+            AccountSection.APPEARANCE,
+            AccountSection.DEVICES,
+            AccountSection.BACKUP_SYNC,
+            AccountSection.PARENTAL_CONTROLS,
+            AccountSection.PRIVACY,
+            AccountSection.SPORTS,
+        )
+        preferenceSections.forEach { section -> AccountRow(section) { openSection(section) } }
+
+        Spacer(Modifier.height(22.dp))
+        Text(
+            "CONNECTED SERVICES",
+            color = AstraWaveColors.SecondaryText,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+        )
+        listOf(
+            AccountSection.IPTV,
+            AccountSection.PERSONAL_MEDIA,
+            AccountSection.CLOUD_DEBRID,
+            AccountSection.ADDONS,
+        ).forEach { section -> AccountRow(section) { openSection(section) } }
+
+        Spacer(Modifier.height(22.dp))
+        Text(
+            "ADVANCED",
+            color = AstraWaveColors.SecondaryText,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+        )
+        AccountRow(AccountSection.DIAGNOSTICS) { openSection(AccountSection.DIAGNOSTICS) }
     }
 
     if (createList) {
