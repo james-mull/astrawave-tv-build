@@ -30,6 +30,8 @@ import com.astrawave.app.data.AstraWaveMetadataGateway
 import com.astrawave.app.data.BuiltInCatalogDefinition
 import com.astrawave.app.data.BuiltInCatalogMediaType
 import com.astrawave.app.data.BuiltInCatalogRepository
+import com.astrawave.app.data.CatalogServiceOverrides
+import com.astrawave.app.data.VerifiedMdbListCatalogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -41,8 +43,12 @@ fun CatalogPreviewShelf(
 ) {
     val context = LocalContext.current
     val repository = remember { BuiltInCatalogRepository(context) }
-    val lead = remember(definitions) {
-        definitions.firstOrNull { it.featured } ?: definitions.firstOrNull()
+    val lead = remember(section, definitions) {
+        when (section) {
+            "Streaming Services" -> definitions.firstOrNull { it.id in CatalogServiceOverrides }
+            else -> definitions.firstOrNull { it.id in VerifiedMdbListCatalogs }
+        } ?: definitions.firstOrNull { it.featured }
+            ?: definitions.firstOrNull()
     } ?: return
 
     var items by remember(lead.id, profileId) { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
@@ -119,7 +125,7 @@ fun CatalogPreviewShelf(
             }
         }
         if (source.isNotBlank()) {
-            Text(source, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("${lead.title} • $source", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
