@@ -77,6 +77,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:sports-series':{owner:'MaxtronTV',slug:'sports-tv-shows'},
   'show:music-series':{owner:'MaxtronTV',slug:'music-tv-shows'},
   'show:talk-shows':{owner:'MaxtronTV',slug:'talk-shows'},
+  'show:food-cooking':{owner:'jefland',slug:'cooking'},
   'show:travel-series':{owner:'faler',slug:'travel-tv-shows'},
   'show:nature-series':{owner:'manu-081',slug:'latest-tv-shows-nature-documentary'},
   'show:true-crime':{owner:'an-kah',slug:'best-true-crime-shows'},
@@ -116,6 +117,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   // Curated premium/editorial collections.
   'movie:psychological-thrillers':{owner:'ndg3270',slug:'psychological-thrillers'},
   'movie:comfort-movies':{owner:'billryan',slug:'comfort-movies'},
+  'movie:cult-classics':{owner:'rizreflects',slug:'cult-classics'},
   'movie:dolby-vision-picks':{owner:'ndg3270',slug:'dolby-vision-releases'},
   'movie:4k-hdr-showcase':{owner:'littlerooster',slug:'the-complete-dolby-vision-4k-remux-list'},
   'movie:audience-favorites':{owner:'billryan',slug:'letterboxds-top-500-films'},
