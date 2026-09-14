@@ -9,6 +9,7 @@ import './ui-platform-v5.css';
 import './control-polish.css';
 import './mobile-primary-nav.css';
 import './command-palette.css';
+import './catalog-browser-v1.css';
 import MobilePrimaryNav from './MobilePrimaryNav';
 import AstraWaveCommandPalette from './AstraWaveCommandPalette';
 
