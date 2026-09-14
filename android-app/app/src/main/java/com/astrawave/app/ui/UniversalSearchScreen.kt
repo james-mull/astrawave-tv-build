@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.MovieListDetailActivity
 import com.astrawave.app.PlayerActivity
@@ -53,15 +55,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private enum class SearchFilter(val label: String) {
-    ALL("All"),
-    MOVIES("Movies"),
-    TV("TV"),
-    LIVE("Live TV"),
-    SPORTS("Sports"),
-    AUDIO("Audio"),
-    PERSONAL("Personal"),
-    LISTS("Lists"),
-    ADDONS("Addons"),
+    ALL("All"), MOVIES("Movies"), TV("TV"), LIVE("Live"), SPORTS("Sports"), AUDIO("Audio"), PERSONAL("My Media"), LISTS("Collections"), ADDONS("More")
 }
 
 private sealed interface SearchState {
@@ -78,6 +72,7 @@ private sealed interface SearchState {
 @Composable
 fun UniversalSearchScreen(profileId: String = "default") {
     val context = LocalContext.current
+    val device = LocalAstraWaveDeviceClass.current
     val unified = remember { UnifiedSearchRepository(context) }
     val addonSearch = remember { StremioCatalogAggregator(context) }
     val household = remember { HouseholdProfileStore(context) }
@@ -97,9 +92,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
 
     val recents = remember(profileId, recentsVersion) { unified.recentSearches(profileId) }
     val suggestions = remember(query, profileId, recentsVersion) { unified.suggestions(query, profileId) }
-    val filters = remember(isKids) {
-        if (isKids) listOf(SearchFilter.ALL, SearchFilter.MOVIES, SearchFilter.TV) else SearchFilter.entries
-    }
+    val filters = remember(isKids) { if (isKids) listOf(SearchFilter.ALL, SearchFilter.MOVIES, SearchFilter.TV) else SearchFilter.entries }
 
     LaunchedEffect(query, searchNonce, profileId, isKids) {
         val trimmed = query.trim()
@@ -111,54 +104,36 @@ fun UniversalSearchScreen(profileId: String = "default") {
             state = SearchState.Error("That search is not available in Kids Mode.")
             return@LaunchedEffect
         }
-
-        delay(if (searchNonce == 0) 420 else 120)
+        delay(if (searchNonce == 0) 350 else 100)
         state = SearchState.Loading
         state = try {
             withContext(Dispatchers.IO) {
                 val unifiedResult = runCatching { unified.search(trimmed, profileId, restrictedToKids = isKids) }
                 var results = unifiedResult.getOrDefault(emptyList())
-
                 if (isKids) {
                     results = results.filter { it.kind == UnifiedSearchRepository.Kind.MOVIE || it.kind == UnifiedSearchRepository.Kind.TV }
-                    val movies = results.filter { it.kind == UnifiedSearchRepository.Kind.MOVIE }
-                    val series = results.filter { it.kind == UnifiedSearchRepository.Kind.TV }
-
                     fun providerId(result: UnifiedSearchRepository.Result): String = when {
                         result.sourceId?.startsWith("stremio:", true) == true -> result.sourceId.substringAfterLast(':')
                         result.sourceId?.startsWith("tmdb:", true) == true -> result.sourceId.substringAfterLast(':')
                         result.id.startsWith("library:") -> result.id.removePrefix("library:")
                         else -> result.id
                     }
-
-                    val movieRatings = kidsRating.ratings(
-                        DynamicCollectionRepository.Media.MOVIE,
-                        movies.map(::providerId),
-                    )
-                    val seriesRatings = kidsRating.ratings(
-                        DynamicCollectionRepository.Media.SERIES,
-                        series.map(::providerId),
-                    )
+                    val movies = results.filter { it.kind == UnifiedSearchRepository.Kind.MOVIE }
+                    val series = results.filter { it.kind == UnifiedSearchRepository.Kind.TV }
+                    val movieRatings = kidsRating.ratings(DynamicCollectionRepository.Media.MOVIE, movies.map(::providerId))
+                    val seriesRatings = kidsRating.ratings(DynamicCollectionRepository.Media.SERIES, series.map(::providerId))
                     results = results.filter { result ->
                         val id = providerId(result)
                         val rating = if (result.kind == UnifiedSearchRepository.Kind.MOVIE) movieRatings[id]?.rating else seriesRatings[id]?.rating
                         kidsPolicyStore.ratingAllowed(profileId, rating, id)
                     }
                 }
-
-                val addonResult = if (isKids) {
-                    Result.success(emptyList())
-                } else {
-                    runCatching { addonSearch.search(trimmed, profileId) }
-                }
+                val addonResult = if (isKids) Result.success(emptyList()) else runCatching { addonSearch.search(trimmed, profileId) }
                 unified.rememberSearch(profileId, trimmed)
                 SearchState.Ready(
                     results = results,
                     addonItems = addonResult.getOrDefault(emptyList()),
-                    partialError = listOfNotNull(
-                        unifiedResult.exceptionOrNull()?.message,
-                        addonResult.exceptionOrNull()?.message,
-                    ).joinToString(" • ").ifBlank { null },
+                    partialError = listOfNotNull(unifiedResult.exceptionOrNull()?.message, addonResult.exceptionOrNull()?.message).joinToString(" • ").ifBlank { null },
                 )
             }
         } catch (error: Exception) {
@@ -168,29 +143,22 @@ fun UniversalSearchScreen(profileId: String = "default") {
     }
 
     LazyColumn(
-        Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().background(AstraWaveColors.Background),
+        contentPadding = PaddingValues(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
             AstraWavePageHeader(
-                title = if (isKids) "Kids Search" else "Search Everything",
-                subtitle = if (isKids) {
-                    "AstraWave filters movie and TV results through this profile's rating policy before showing them."
-                } else {
-                    "One search across movies, TV, live channels, today's sports, audio, every AstraWave collection, connected personal libraries and enabled addons."
-                },
+                title = if (isKids) "Kids Search" else "Search",
+                subtitle = if (isKids) "Find movies and shows allowed for this profile." else "Find movies, shows, live TV, sports, music and your own media.",
             )
         }
 
         if (isKids && !searchAllowed) {
             item {
                 AstraWaveStatePanel(
-                    title = if (bedtime) "Search paused for bedtime" else "Search disabled in Approved Only mode",
-                    message = if (bedtime) {
-                        "Kids viewing and search are paused during the parent-set bedtime window."
-                    } else {
-                        "Browse Kids Movies and Kids TV instead. Individual titles must be parent-approved in Approved Only mode."
-                    },
+                    title = if (bedtime) "Search paused" else "Search unavailable",
+                    message = if (bedtime) "Search is paused during bedtime." else "Use the Kids Movies and Kids TV sections for approved viewing.",
                 )
             }
             return@LazyColumn
@@ -202,11 +170,9 @@ fun UniversalSearchScreen(profileId: String = "default") {
                 onValueChange = { query = it; searchNonce = 0 },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text(if (isKids) "Movies and shows" else "Title, team, channel, artist, server, collection…") },
+                placeholder = { Text(if (isKids) "Search movies and shows" else "Search titles, teams, channels, artists…") },
                 trailingIcon = {
-                    if (query.isNotBlank()) {
-                        TextButton(onClick = { query = ""; state = SearchState.Idle }) { Text("Clear") }
-                    }
+                    if (query.isNotBlank()) TextButton(onClick = { query = ""; state = SearchState.Idle }) { Text("Clear") }
                 },
             )
         }
@@ -214,70 +180,44 @@ fun UniversalSearchScreen(profileId: String = "default") {
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(filters) { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(filter.label) },
-                    )
+                    FilterChip(selected = selectedFilter == filter, onClick = { selectedFilter = filter }, label = { Text(filter.label) })
                 }
             }
         }
 
         if (query.isBlank() && recents.isNotEmpty()) {
             item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Recent Searches",
-                        color = AstraWaveColors.PrimaryText,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { unified.clearRecent(profileId); recentsVersion++ }) { Text("Clear") }
-                }
+                AstraWaveSectionHeader(
+                    title = "Recent Searches",
+                    trailing = { TextButton(onClick = { unified.clearRecent(profileId); recentsVersion++ }) { Text("Clear") } },
+                )
             }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(recents) { recent ->
-                        FilterChip(selected = false, onClick = { query = recent; searchNonce++ }, label = { Text(recent) })
-                    }
+                    items(recents) { recent -> FilterChip(selected = false, onClick = { query = recent; searchNonce++ }, label = { Text(recent) }) }
                 }
             }
         }
 
-        if (suggestions.isNotEmpty() && query.length < 3) {
+        if (query.isBlank() && suggestions.isNotEmpty()) {
+            item { AstraWaveSectionHeader("Try Searching") }
             item {
-                Text("Suggestions", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(suggestions) { suggestion ->
-                        FilterChip(selected = false, onClick = { query = suggestion; searchNonce++ }, label = { Text(suggestion) })
-                    }
+                    items(suggestions.take(10)) { suggestion -> FilterChip(selected = false, onClick = { query = suggestion; searchNonce++ }, label = { Text(suggestion) }) }
                 }
             }
         }
 
         when (val current = state) {
-            SearchState.Idle -> item {
-                SearchMessage(
-                    "Start typing",
-                    if (isKids) {
-                        "Search approved movie and TV metadata."
-                    } else {
-                        "Results begin automatically after two characters. Connected personal servers and major network sources search in parallel."
-                    },
-                )
-            }
+            SearchState.Idle -> item { SearchMessage("Discover something to watch", if (isKids) "Start typing to search this profile's approved catalog." else "Type at least two characters to begin.") }
             SearchState.Loading -> item {
                 Row(
-                    Modifier.fillMaxWidth().background(AstraWaveColors.Surface, RoundedCornerShape(16.dp)).padding(18.dp),
+                    Modifier.fillMaxWidth().background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(18.dp)).padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        if (isKids) "Searching and checking ratings…" else "Searching AstraWave and your connected libraries…",
-                        color = AstraWaveColors.SecondaryText,
-                    )
+                    Text("Searching…", color = AstraWaveColors.SecondaryText)
                 }
             }
             is SearchState.Error -> item { SearchMessage("Search unavailable", current.message) }
@@ -289,11 +229,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
                         SearchFilter.TV -> result.kind == UnifiedSearchRepository.Kind.TV
                         SearchFilter.LIVE -> result.kind == UnifiedSearchRepository.Kind.LIVE
                         SearchFilter.SPORTS -> result.kind == UnifiedSearchRepository.Kind.SPORTS
-                        SearchFilter.AUDIO -> result.kind in setOf(
-                            UnifiedSearchRepository.Kind.RADIO,
-                            UnifiedSearchRepository.Kind.MUSIC,
-                            UnifiedSearchRepository.Kind.PODCAST,
-                        )
+                        SearchFilter.AUDIO -> result.kind in setOf(UnifiedSearchRepository.Kind.RADIO, UnifiedSearchRepository.Kind.MUSIC, UnifiedSearchRepository.Kind.PODCAST)
                         SearchFilter.PERSONAL -> result.kind == UnifiedSearchRepository.Kind.PERSONAL
                         SearchFilter.LISTS -> result.kind == UnifiedSearchRepository.Kind.LIST
                         SearchFilter.ADDONS -> false
@@ -302,50 +238,21 @@ fun UniversalSearchScreen(profileId: String = "default") {
                 val showAddons = !isKids && (selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.ADDONS)
 
                 if (filtered.isEmpty() && (!showAddons || current.addonItems.isEmpty())) {
-                    item {
-                        SearchMessage(
-                            "No matches",
-                            if (isKids) {
-                                "No results passed this profile's rating and approval rules."
-                            } else {
-                                "Try a title, team, channel, artist, personal-library item or AstraWave collection name."
-                            },
-                        )
-                    }
+                    item { SearchMessage("No matches", "Try another title, team, channel, artist or collection.") }
                 } else {
                     if (filtered.isNotEmpty()) {
-                        item {
-                            AstraWaveSectionHeader(
-                                title = resultHeading(selectedFilter),
-                                subtitle = "${filtered.size} ranked result${if (filtered.size == 1) "" else "s"}",
-                            )
-                        }
-                        items(filtered, key = { "${it.kind}:${it.id}" }) { result ->
-                            UnifiedResultCard(result, profileId)
-                        }
+                        item { AstraWaveSectionHeader(resultHeading(selectedFilter), "${filtered.size} result${if (filtered.size == 1) "" else "s"}") }
+                        items(filtered, key = { "${it.kind}:${it.id}" }) { result -> UnifiedResultCard(result, profileId) }
                     }
-
                     if (showAddons && current.addonItems.isNotEmpty()) {
-                        item {
-                            Spacer(Modifier.height(8.dp))
-                            AstraWaveSectionHeader(
-                                title = "From Your Addons",
-                                subtitle = "Provider-attributed metadata from enabled compatible addons.",
-                            )
-                        }
-                        items(current.addonItems.take(30), key = { "${it.addonId}:${it.item.type}:${it.item.id}" }) { hit ->
-                            AddonSearchCard(hit, profileId)
-                        }
+                        item { AstraWaveSectionHeader("More Results", "Additional matches from your connected sources") }
+                        items(current.addonItems.take(24), key = { "${it.addonId}:${it.item.type}:${it.item.id}" }) { hit -> AddonSearchCard(hit, profileId) }
                     }
                 }
-
-                current.partialError?.let { message ->
-                    item { SearchMessage("Partial source failure", message) }
-                }
+                current.partialError?.let { item { SearchMessage("Some results may be missing", "One connected source did not respond.") } }
             }
         }
-
-        item { Spacer(Modifier.height(32.dp)) }
+        item { Spacer(Modifier.height(28.dp)) }
     }
 }
 
@@ -354,109 +261,55 @@ private fun UnifiedResultCard(result: UnifiedSearchRepository.Result, profileId:
     val context = LocalContext.current
     result.artworkUrl?.let { ArtworkRegistry.register(result.title, it) }
     val canOpen = when (result.kind) {
-        UnifiedSearchRepository.Kind.PERSONAL -> result.streamUrls.isNotEmpty()
-        UnifiedSearchRepository.Kind.SPORTS -> result.streamUrls.isNotEmpty()
+        UnifiedSearchRepository.Kind.PERSONAL, UnifiedSearchRepository.Kind.SPORTS -> result.streamUrls.isNotEmpty()
         else -> true
     }
-
     AstraWaveFocusableCard(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).then(
-            if (canOpen) {
-                Modifier.clickable {
-                    when (result.kind) {
-                        UnifiedSearchRepository.Kind.MOVIE,
-                        UnifiedSearchRepository.Kind.TV,
-                        UnifiedSearchRepository.Kind.LIBRARY,
-                        -> {
-                            context.startActivity(
-                                Intent(context, TitleDetailsActivity::class.java)
-                                    .putExtra(TitleDetailsActivity.EXTRA_TITLE, result.title)
-                                    .putExtra(
-                                        TitleDetailsActivity.EXTRA_MEDIA_TYPE,
-                                        if (result.kind == UnifiedSearchRepository.Kind.TV) "SERIES" else "MOVIE",
-                                    )
-                                    .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, result.sourceId)
-                                    .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
-                            )
-                        }
-                        UnifiedSearchRepository.Kind.LIVE,
-                        UnifiedSearchRepository.Kind.RADIO,
-                        UnifiedSearchRepository.Kind.MUSIC,
-                        UnifiedSearchRepository.Kind.SPORTS,
-                        UnifiedSearchRepository.Kind.PERSONAL,
-                        -> {
-                            if (result.streamUrls.isNotEmpty()) {
-                                context.startActivity(
-                                    Intent(context, PlayerActivity::class.java)
-                                        .putExtra(PlayerActivity.EXTRA_URL, result.streamUrls.first())
-                                        .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(result.streamUrls))
-                                        .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true)
-                                        .putExtra(PlayerActivity.EXTRA_PROFILE_ID, profileId),
-                                )
-                            }
-                        }
-                        UnifiedSearchRepository.Kind.PODCAST -> result.sourceId?.let {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
-                        }
-                        UnifiedSearchRepository.Kind.LIST -> {
-                            val isSeries = result.listMediaType == LibraryMediaType.SERIES
-                            val intent = Intent(
-                                context,
-                                if (isSeries) TvListDetailActivity::class.java else MovieListDetailActivity::class.java,
-                            )
-                                .putExtra(if (isSeries) TvListDetailActivity.EXTRA_TITLE else MovieListDetailActivity.EXTRA_TITLE, result.title)
-                                .putExtra(if (isSeries) TvListDetailActivity.EXTRA_REASON else MovieListDetailActivity.EXTRA_REASON, result.subtitle.orEmpty())
-                                .putExtra(if (isSeries) TvListDetailActivity.EXTRA_QUERY else MovieListDetailActivity.EXTRA_QUERY, result.listQuery)
-                                .putStringArrayListExtra(
-                                    if (isSeries) TvListDetailActivity.EXTRA_QUERIES else MovieListDetailActivity.EXTRA_QUERIES,
-                                    ArrayList(result.listQueries),
-                                )
-                                .putExtra(if (isSeries) TvListDetailActivity.EXTRA_GENRE else MovieListDetailActivity.EXTRA_GENRE, result.listGenre)
-                                .putExtra(if (isSeries) TvListDetailActivity.EXTRA_PROFILE_ID else MovieListDetailActivity.EXTRA_PROFILE_ID, profileId)
-                            context.startActivity(intent)
-                        }
+        Modifier.fillMaxWidth().then(if (canOpen) Modifier.clickable {
+            when (result.kind) {
+                UnifiedSearchRepository.Kind.MOVIE, UnifiedSearchRepository.Kind.TV, UnifiedSearchRepository.Kind.LIBRARY -> {
+                    context.startActivity(
+                        Intent(context, TitleDetailsActivity::class.java)
+                            .putExtra(TitleDetailsActivity.EXTRA_TITLE, result.title)
+                            .putExtra(TitleDetailsActivity.EXTRA_MEDIA_TYPE, if (result.kind == UnifiedSearchRepository.Kind.TV) "SERIES" else "MOVIE")
+                            .putExtra(TitleDetailsActivity.EXTRA_SOURCE_ID, result.sourceId)
+                            .putExtra(TitleDetailsActivity.EXTRA_PROFILE_ID, profileId),
+                    )
+                }
+                UnifiedSearchRepository.Kind.LIVE, UnifiedSearchRepository.Kind.RADIO, UnifiedSearchRepository.Kind.MUSIC, UnifiedSearchRepository.Kind.SPORTS, UnifiedSearchRepository.Kind.PERSONAL -> {
+                    if (result.streamUrls.isNotEmpty()) {
+                        context.startActivity(
+                            Intent(context, PlayerActivity::class.java)
+                                .putExtra(PlayerActivity.EXTRA_URL, result.streamUrls.first())
+                                .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(result.streamUrls))
+                                .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true)
+                                .putExtra(PlayerActivity.EXTRA_PROFILE_ID, profileId),
+                        )
                     }
                 }
-            } else {
-                Modifier
-            },
-        ),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.width(150.dp)) {
-                AstraWaveArtwork(result.title, Modifier.fillMaxWidth(), kind = AstraWaveArtworkKind.Backdrop)
+                UnifiedSearchRepository.Kind.PODCAST -> result.sourceId?.let { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
+                UnifiedSearchRepository.Kind.LIST -> {
+                    val isSeries = result.listMediaType == LibraryMediaType.SERIES
+                    val intent = Intent(context, if (isSeries) TvListDetailActivity::class.java else MovieListDetailActivity::class.java)
+                        .putExtra(if (isSeries) TvListDetailActivity.EXTRA_TITLE else MovieListDetailActivity.EXTRA_TITLE, result.title)
+                        .putExtra(if (isSeries) TvListDetailActivity.EXTRA_REASON else MovieListDetailActivity.EXTRA_REASON, result.subtitle.orEmpty())
+                        .putExtra(if (isSeries) TvListDetailActivity.EXTRA_QUERY else MovieListDetailActivity.EXTRA_QUERY, result.listQuery)
+                        .putStringArrayListExtra(if (isSeries) TvListDetailActivity.EXTRA_QUERIES else MovieListDetailActivity.EXTRA_QUERIES, ArrayList(result.listQueries))
+                        .putExtra(if (isSeries) TvListDetailActivity.EXTRA_GENRE else MovieListDetailActivity.EXTRA_GENRE, result.listGenre)
+                        .putExtra(if (isSeries) TvListDetailActivity.EXTRA_PROFILE_ID else MovieListDetailActivity.EXTRA_PROFILE_ID, profileId)
+                    context.startActivity(intent)
+                }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(kindLabel(result.kind), color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium)
-                Text(result.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                result.subtitle?.takeIf(String::isNotBlank)?.let {
-                    Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium, maxLines = 2)
-                }
-                result.description?.takeIf(String::isNotBlank)?.let {
-                    Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2)
-                }
-                Text(
-                    when {
-                        result.kind == UnifiedSearchRepository.Kind.PERSONAL && result.streamUrls.isNotEmpty() -> "Play personal media →"
-                        result.kind == UnifiedSearchRepository.Kind.PERSONAL -> "Found in your personal library"
-                        result.kind == UnifiedSearchRepository.Kind.SPORTS && result.streamUrls.isEmpty() -> "Event found • no verified channel match yet"
-                        result.kind in setOf(
-                            UnifiedSearchRepository.Kind.LIVE,
-                            UnifiedSearchRepository.Kind.RADIO,
-                            UnifiedSearchRepository.Kind.MUSIC,
-                            UnifiedSearchRepository.Kind.SPORTS,
-                        ) -> "Play now →"
-                        result.kind == UnifiedSearchRepository.Kind.PODCAST -> "Open podcast feed →"
-                        result.kind == UnifiedSearchRepository.Kind.LIST -> "Open full collection →"
-                        else -> "Open details →"
-                    },
-                    color = if (canOpen) AstraWaveColors.Accent else AstraWaveColors.TertiaryText,
-                    style = MaterialTheme.typography.labelMedium,
-                )
+        } else Modifier),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(160.dp)) { AstraWaveArtwork(result.title, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(kindLabel(result.kind), color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(result.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                result.subtitle?.takeIf(String::isNotBlank)?.let { Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2) }
+                result.description?.takeIf(String::isNotBlank)?.let { Text(it, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2) }
+                Text(resultAction(result, canOpen), color = if (canOpen) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -468,7 +321,7 @@ private fun AddonSearchCard(hit: StremioSearchHit, profileId: String) {
     hit.item.posterUrl?.let { ArtworkRegistry.register(hit.item.name, it) }
     val libraryItem = hit.item.toLibraryItemRef(hit.addonId)
     AstraWaveFocusableCard(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+        Modifier.fillMaxWidth().clickable {
             context.startActivity(
                 Intent(context, TitleDetailsActivity::class.java)
                     .putExtra(TitleDetailsActivity.EXTRA_TITLE, libraryItem.title)
@@ -478,44 +331,51 @@ private fun AddonSearchCard(hit: StremioSearchHit, profileId: String) {
             )
         },
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Text(hit.item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "${hit.addonName} • ${hit.catalogName} • ${hit.item.type}",
-                color = AstraWaveColors.Accent,
-                style = MaterialTheme.typography.labelMedium,
-            )
-            hit.item.description?.takeIf(String::isNotBlank)?.let {
-                Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+        Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(160.dp)) { AstraWaveArtwork(hit.item.name, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("MORE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(hit.item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                hit.item.description?.takeIf(String::isNotBlank)?.let { Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2) }
+                Text("Open details ›", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelMedium)
             }
         }
     }
 }
 
+private fun resultAction(result: UnifiedSearchRepository.Result, canOpen: Boolean): String = when {
+    !canOpen && result.kind == UnifiedSearchRepository.Kind.SPORTS -> "No channel available yet"
+    !canOpen -> "Unavailable right now"
+    result.kind == UnifiedSearchRepository.Kind.PERSONAL -> "Play ›"
+    result.kind in setOf(UnifiedSearchRepository.Kind.LIVE, UnifiedSearchRepository.Kind.RADIO, UnifiedSearchRepository.Kind.MUSIC, UnifiedSearchRepository.Kind.SPORTS) -> "Play now ›"
+    result.kind == UnifiedSearchRepository.Kind.PODCAST -> "Open ›"
+    result.kind == UnifiedSearchRepository.Kind.LIST -> "View collection ›"
+    else -> "Open details ›"
+}
+
 private fun resultHeading(filter: SearchFilter): String = when (filter) {
-    SearchFilter.ALL -> "Across AstraWave"
+    SearchFilter.ALL -> "Top Results"
     SearchFilter.MOVIES -> "Movies"
     SearchFilter.TV -> "TV Shows"
     SearchFilter.LIVE -> "Live TV"
-    SearchFilter.SPORTS -> "Sports Today"
-    SearchFilter.AUDIO -> "Music, Radio & Podcasts"
-    SearchFilter.PERSONAL -> "Your Personal Libraries"
-    SearchFilter.LISTS -> "AstraWave Collections"
-    SearchFilter.ADDONS -> "Addons"
+    SearchFilter.SPORTS -> "Sports"
+    SearchFilter.AUDIO -> "Audio"
+    SearchFilter.PERSONAL -> "My Media"
+    SearchFilter.LISTS -> "Collections"
+    SearchFilter.ADDONS -> "More Results"
 }
 
 private fun kindLabel(kind: UnifiedSearchRepository.Kind): String = when (kind) {
     UnifiedSearchRepository.Kind.MOVIE -> "MOVIE"
-    UnifiedSearchRepository.Kind.TV -> "TV"
-    UnifiedSearchRepository.Kind.LIVE -> "LIVE TV"
+    UnifiedSearchRepository.Kind.TV -> "TV SHOW"
+    UnifiedSearchRepository.Kind.LIVE -> "LIVE"
     UnifiedSearchRepository.Kind.SPORTS -> "SPORTS"
     UnifiedSearchRepository.Kind.RADIO -> "RADIO"
-    UnifiedSearchRepository.Kind.MUSIC -> "MUSIC PREVIEW"
+    UnifiedSearchRepository.Kind.MUSIC -> "MUSIC"
     UnifiedSearchRepository.Kind.PODCAST -> "PODCAST"
-    UnifiedSearchRepository.Kind.PERSONAL -> "PERSONAL MEDIA"
-    UnifiedSearchRepository.Kind.LIST -> "ASTRAWAVE COLLECTION"
-    UnifiedSearchRepository.Kind.LIBRARY -> "YOUR LIBRARY"
+    UnifiedSearchRepository.Kind.PERSONAL -> "MY MEDIA"
+    UnifiedSearchRepository.Kind.LIST -> "COLLECTION"
+    UnifiedSearchRepository.Kind.LIBRARY -> "MY LIST"
 }
 
 @Composable
