@@ -8,9 +8,9 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Resolves AstraWave's 150 built-in catalog definitions into live metadata.
  *
- * Catalog identity is hardcoded, but item contents are not. Definitions with a verified MDBList
- * mapping are eligible for server-side MDBList resolution; this Android repository never embeds an
- * MDBList credential and safely falls back to live Cinemeta/metadata discovery.
+ * Catalog identity is hardcoded, but item contents are not. When the AstraWave backend is
+ * configured, this repository asks it first so MDBList/TMDB credentials remain server-side.
+ * Android then falls back to live Cinemeta/metadata discovery and preserves a four-hour disk cache.
  */
 class BuiltInCatalogRepository(
     context: Context,
@@ -46,11 +46,28 @@ class BuiltInCatalogRepository(
             return Result(definition, cached.items, cached.sourceLabel, true)
         }
 
-        val items = loadFallback(definition, normalizedLimit)
-        val label = when {
-            definition.documentedUrl != null -> "MDBList mapping available • live metadata fallback"
-            else -> "AstraWave live metadata"
+        val remote = metadata.loadBuiltInCatalog(definition.id)
+        val expectedType = if (definition.mediaType == BuiltInCatalogMediaType.MOVIE) "movie" else "series"
+        val remoteItems = remote?.items.orEmpty()
+            .asSequence()
+            .filter { item -> item.type.isBlank() || item.type.equals(expectedType, true) || (expectedType == "series" && item.type.equals("tv", true)) }
+            .distinctBy { canonicalKey(it) }
+            .take(normalizedLimit)
+            .toList()
+
+        val items: List<AstraWaveMetadataGateway.Item>
+        val label: String
+        if (remoteItems.isNotEmpty()) {
+            items = remoteItems
+            label = remote?.source ?: "AstraWave catalog service"
+        } else {
+            items = loadFallback(definition, normalizedLimit)
+            label = when {
+                definition.documentedUrl != null -> "MDBList mapping available • live metadata fallback"
+                else -> "AstraWave live metadata"
+            }
         }
+
         val entry = CacheEntry(now, items, label)
         cache[cacheKey] = entry
         writeDisk(cacheKey, entry)
