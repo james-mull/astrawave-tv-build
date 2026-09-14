@@ -8,37 +8,38 @@ import org.junit.Test
 class AstraWaveNavigationContractTest {
 
     @Test
-    fun phonePrimaryNavigationIsTouchFirstAndExactlyFiveItems() {
+    fun phonePrimaryNavigationIsContentFirstAndExactlyFiveItems() {
         val routes = AstraWaveNavigationContract.mobilePrimary.map { it.route }
-        assertEquals(listOf("home", "search", "live", "movies", "my"), routes)
+        assertEquals(listOf("home", "movies", "tv", "live", "my"), routes)
         assertEquals(5, routes.size)
         assertEquals(routes.size, routes.distinct().size)
-        assertEquals("VOD", AstraWaveNavigationContract.mobilePrimary.first { it.route == "movies" }.label)
-        assertEquals("Search", AstraWaveNavigationContract.mobilePrimary.first { it.route == "search" }.label)
+        assertEquals("Movies", AstraWaveNavigationContract.mobilePrimary.first { it.route == "movies" }.label)
+        assertEquals("TV", AstraWaveNavigationContract.mobilePrimary.first { it.route == "tv" }.label)
     }
 
     @Test
-    fun advancedDestinationsStayOutOfPhonePrimaryNavigation() {
+    fun utilitiesStayOutOfPhonePrimaryNavigation() {
         val primary = AstraWaveNavigationContract.mobilePrimary.map { it.route }.toSet()
-        listOf("guide", "tv", "discover", "multiview", "audio", "personal-media", "addons", "sports").forEach { route ->
+        listOf("guide", "discover", "multiview", "audio", "personal-media", "addons", "sports", "search").forEach { route ->
             assertFalse(route in primary)
         }
-        assertTrue("search" in primary)
+        assertTrue("movies" in primary)
+        assertTrue("tv" in primary)
+        assertTrue("live" in primary)
     }
 
     @Test
     fun phoneMoreKeepsEveryCriticalSecondaryDestinationReachable() {
         val more = AstraWaveNavigationContract.mobileMore.map { it.route }.toSet()
-        listOf("sports", "guide", "tv", "discover", "multiview", "audio", "personal-media", "addons", "settings").forEach { route ->
+        listOf("search", "sports", "guide", "multiview", "audio", "personal-media", "addons", "settings").forEach { route ->
             assertTrue(route in more)
         }
-        assertFalse("search" in more)
     }
 
     @Test
-    fun tabletUsesDedicatedTvClientOrderWithoutUtilitySprawl() {
+    fun tabletUsesContentFirstOrderWithoutUtilitySprawl() {
         val routes = AstraWaveNavigationContract.mobileTablet.map { it.route }
-        assertEquals(listOf("home", "live", "guide", "movies", "tv", "sports", "search", "my"), routes)
+        assertEquals(listOf("home", "movies", "tv", "live", "guide", "sports", "search", "my"), routes)
         assertFalse("discover" in routes)
         assertFalse("multiview" in routes)
         assertFalse("audio" in routes)
@@ -47,11 +48,11 @@ class AstraWaveNavigationContractTest {
     }
 
     @Test
-    fun tvRailMatchesTvFirstLiveGuideVodSeriesMentalModel() {
+    fun tvRailPrioritizesVodAndSeriesBeforeUtilities() {
         val routes = AstraWaveNavigationContract.tv.map { it.route }
-        assertEquals(listOf("home", "live", "guide", "movies", "tv", "sports", "search", "my"), routes)
-        assertEquals("VOD", AstraWaveNavigationContract.tv.first { it.route == "movies" }.label)
-        assertEquals("TV Series", AstraWaveNavigationContract.tv.first { it.route == "tv" }.label)
+        assertEquals(listOf("home", "movies", "tv", "live", "guide", "sports", "search", "my"), routes)
+        assertEquals("Movies", AstraWaveNavigationContract.tv.first { it.route == "movies" }.label)
+        assertEquals("TV Shows", AstraWaveNavigationContract.tv.first { it.route == "tv" }.label)
         assertEquals(routes.size, routes.distinct().size)
     }
 }
