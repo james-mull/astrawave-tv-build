@@ -1,16 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { Film, Home, RadioTower, Trophy, UserCircle2 } from 'lucide-react';
+import { Film, Home, RadioTower, Search, UserCircle2 } from 'lucide-react';
 
 const primary = [
   { label: 'Home', icon: Home, target: 'Home' },
+  { label: 'Search', icon: Search, target: 'Search' },
   { label: 'Live', icon: RadioTower, target: 'Live TV' },
-  { label: 'Sports', icon: Trophy, target: 'Sports' },
-  { label: 'Movies', icon: Film, target: 'Movies' },
+  { label: 'VOD', icon: Film, target: 'Movies' },
 ] as const;
 
 function clickShellDestination(target: string) {
+  if (target === 'Search') {
+    const input = document.querySelector<HTMLInputElement>('.top .search input');
+    input?.focus();
+    input?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return;
+  }
   const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.side nav button'));
   const button = buttons.find((item) => item.textContent?.trim() === target);
   button?.click();
