@@ -1,0 +1,50 @@
+name: Organize My AstraWave Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/organize-my-astrawave-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  organize-account:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+
+      - name: Group customer account settings
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/MyAstraWaveHub.kt')
+          text = p.read_text()
+
+          old_refresh = '''    fun refresh() { snapshot = store.snapshot(profileId) }\n'''
+          new_refresh = '''    fun refresh() { snapshot = store.snapshot(profileId) }\n\n    fun openSection(section: AccountSection) {\n        when (section) {\n            AccountSection.SUBSCRIPTION -> showSubscription = true\n            AccountSection.PARENTAL_CONTROLS, AccountSection.PRIVACY -> showSafety = true\n            AccountSection.CLOUD_DEBRID -> showDebrid = true\n            AccountSection.DIAGNOSTICS -> showDiagnostics = true\n            AccountSection.PLAYBACK,\n            AccountSection.SUBTITLES_AUDIO,\n            AccountSection.DOWNLOADS_STORAGE,\n            AccountSection.NOTIFICATIONS,\n            AccountSection.APPEARANCE,\n            AccountSection.BACKUP_SYNC,\n            AccountSection.DEVICES,\n            -> utilitySection = section\n            else -> onOpenAccountSection(section)\n        }\n    }\n'''
+          if old_refresh not in text:
+              raise SystemExit('refresh anchor not found')
+          text = text.replace(old_refresh, new_refresh, 1)
+
+          old_block = '''        SetupRow { showSetup = true }\n        ExperienceSettingsRow { showExperienceSettings = true }\n        AccountSection.entries.forEach { section ->\n            AccountRow(section) {\n                when (section) {\n                    AccountSection.SUBSCRIPTION -> showSubscription = true\n                    AccountSection.PARENTAL_CONTROLS, AccountSection.PRIVACY -> showSafety = true\n                    AccountSection.CLOUD_DEBRID -> showDebrid = true\n                    AccountSection.DIAGNOSTICS -> showDiagnostics = true\n                    AccountSection.PLAYBACK,\n                    AccountSection.SUBTITLES_AUDIO,\n                    AccountSection.DOWNLOADS_STORAGE,\n                    AccountSection.NOTIFICATIONS,\n                    AccountSection.APPEARANCE,\n                    AccountSection.BACKUP_SYNC,\n                    AccountSection.DEVICES,\n                    -> utilitySection = section\n                    else -> onOpenAccountSection(section)\n                }\n            }\n        }'''
+          new_block = '''        SetupRow { showSetup = true }\n        ExperienceSettingsRow { showExperienceSettings = true }\n\n        val preferenceSections = listOf(\n            AccountSection.PROFILES,\n            AccountSection.SUBSCRIPTION,\n            AccountSection.PLAYBACK,\n            AccountSection.SUBTITLES_AUDIO,\n            AccountSection.DOWNLOADS_STORAGE,\n            AccountSection.NOTIFICATIONS,\n            AccountSection.APPEARANCE,\n            AccountSection.DEVICES,\n            AccountSection.BACKUP_SYNC,\n            AccountSection.PARENTAL_CONTROLS,\n            AccountSection.PRIVACY,\n            AccountSection.SPORTS,\n        )\n        preferenceSections.forEach { section -> AccountRow(section) { openSection(section) } }\n\n        Spacer(Modifier.height(22.dp))\n        Text(\n            "CONNECTED SERVICES",\n            color = AstraWaveColors.SecondaryText,\n            style = MaterialTheme.typography.labelMedium,\n            modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),\n        )\n        listOf(\n            AccountSection.IPTV,\n            AccountSection.PERSONAL_MEDIA,\n            AccountSection.CLOUD_DEBRID,\n            AccountSection.ADDONS,\n        ).forEach { section -> AccountRow(section) { openSection(section) } }\n\n        Spacer(Modifier.height(22.dp))\n        Text(\n            "ADVANCED",\n            color = AstraWaveColors.SecondaryText,\n            style = MaterialTheme.typography.labelMedium,\n            modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),\n        )\n        AccountRow(AccountSection.DIAGNOSTICS) { openSection(AccountSection.DIAGNOSTICS) }'''
+          if old_block not in text:
+              raise SystemExit('account section block not found')
+          text = text.replace(old_block, new_block, 1)
+          p.write_text(text)
+
+      - name: Commit account hierarchy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/ui/MyAstraWaveHub.kt
+          git commit -m "Organize My AstraWave settings for customers"
+          git push origin HEAD:feature/nuvio-core-rebuild
