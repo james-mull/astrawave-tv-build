@@ -7,6 +7,10 @@ on:
       - feature/nuvio-core-rebuild
     paths:
       - "android-app/**"
+      - "web-app/app/api/astrawave/billing/**"
+      - "web-app/package.json"
+      - "web-app/package-lock.json"
+      - "web-app/.env.example"
       - "astrawave-free-tv/**"
       - "docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md"
       - "docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md"
@@ -22,7 +26,7 @@ concurrency:
 jobs:
   release-candidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     defaults:
       run:
         working-directory: android-app
@@ -53,6 +57,8 @@ jobs:
           test -f android-app/settings.gradle.kts
           test -f android-app/app/build.gradle.kts
           test -f android-app/app/src/main/AndroidManifest.xml
+          test -f web-app/app/api/astrawave/billing/verify/route.ts
+          test -f web-app/package-lock.json
           test -f astrawave-free-tv/check_free_tv.py
           test -f docs/ASTRAWAVE_MASTER_REBUILD_PLAN.md
           test -f docs/ASTRAWAVE_V1_SOURCE_OF_TRUTH.md
@@ -81,6 +87,21 @@ jobs:
             echo "ASTRAWAVE_PRODUCTION_CONFIGURED=false" >> "$GITHUB_ENV"
             echo "::warning::Not customer-promotion eligible. Missing production configuration: ${missing[*]}"
           fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Build billing backend and web app
+        working-directory: web-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -181,6 +202,7 @@ jobs:
             echo "workflow_run_id=${GITHUB_RUN_ID}"
             echo "signed=${ASTRAWAVE_RELEASE_SIGNED:-false}"
             echo "production_configured=${ASTRAWAVE_PRODUCTION_CONFIGURED:-false}"
+            echo "billing_backend_built=true"
             echo "promotion_eligible=${promotion_eligible}"
             echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } > RELEASE_METADATA.txt
