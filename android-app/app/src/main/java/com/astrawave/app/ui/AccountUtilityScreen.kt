@@ -69,7 +69,7 @@ private fun DeviceUtility(profileId: String, onBack: () -> Unit) {
     var generatedPayload by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    UtilityShell("Devices & Remote", "Pairing state and handoff capabilities that exist on this device. Live network remote transport remains capability-gated.", onBack) {
+    UtilityShell("Devices & Remote", "Pair another AstraWave device and manage remote-control or handoff features available on this device.", onBack) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AstraWavePrimaryButton("Create Pairing Session", {
                 generatedPayload = gateway.createPairingSession().qrPayload
@@ -78,13 +78,13 @@ private fun DeviceUtility(profileId: String, onBack: () -> Unit) {
         }
         generatedPayload?.let {
             Spacer(Modifier.height(10.dp))
-            AstraWaveStatePanel("Pairing payload", it)
+            AstraWaveStatePanel("Pairing details", it)
         }
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(
             value = pairingPayload,
             onValueChange = { pairingPayload = it },
-            label = { Text("Paste AstraWave pairing payload") },
+            label = { Text("Paste pairing code") },
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
@@ -107,7 +107,7 @@ private fun DeviceUtility(profileId: String, onBack: () -> Unit) {
                     Column {
                         Text(device.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                         Text("${device.type.name} • ${device.state.name}", color = if (device.state == DeviceSessionState.CONNECTED) AstraWaveColors.Success else AstraWaveColors.SecondaryText)
-                        Text("Remote ${if (device.supportsRemote) "supported" else "off"} • Handoff ${if (device.supportsHandoff) "supported" else "off"} • Cast ${if (device.supportsCasting) "supported" else "not advertised"}", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
+                        Text("Remote ${if (device.supportsRemote) "on" else "off"} • Handoff ${if (device.supportsHandoff) "on" else "off"} • Cast ${if (device.supportsCasting) "on" else "off"}", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(8.dp))
                         Text("Remove", color = AstraWaveColors.Warning, modifier = Modifier.clickable {
                             gateway.removeDevice(device.id)
@@ -134,7 +134,7 @@ private fun DownloadsUtility(profileId: String, onBack: () -> Unit) {
         return
     }
 
-    UtilityShell("Downloads & Storage", "Authorized offline downloads, Travel Mode and local DVR recordings stored on this device.", onBack) {
+    UtilityShell("Downloads & Storage", "Manage offline downloads, Travel Mode and recordings stored on this device.", onBack) {
         AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { showRecordings = true }) {
             Column {
                 Text("Recordings", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
@@ -183,7 +183,7 @@ private fun NotificationsUtility(profileId: String, onBack: () -> Unit) {
         UtilityToggle("Playback & downloads", "Playback completion and offline-media status", playbackEnabled) {
             playbackEnabled = it; prefs.edit().putBoolean("$profileId:playback", it).apply()
         }
-        UtilityToggle("Source health", "Warn when a preferred source repeatedly degrades", sourceHealthEnabled) {
+        UtilityToggle("Playback reliability", "Warn when a preferred playback option repeatedly has trouble", sourceHealthEnabled) {
             sourceHealthEnabled = it; prefs.edit().putBoolean("$profileId:sourceHealth", it).apply()
         }
     }
@@ -196,7 +196,7 @@ private fun BackupSyncUtility(profileId: String, onBack: () -> Unit) {
     val sync = remember { LibraryCloudSync(context) }
     var status by remember(profileId) { mutableStateOf(if (cloud.signedIn) "Signed in • ready to restore profile state" else "Sign in to use cloud restore") }
 
-    UtilityShell("Backup & Sync", "Restore private profile library/config state from AstraWave Cloud. Local data remains the fallback when cloud is unavailable.", onBack) {
+    UtilityShell("Backup & Sync", "Restore your profile, library and watch progress from AstraWave Cloud when you are signed in.", onBack) {
         AstraWaveStatePanel("Cloud status", status)
         Spacer(Modifier.height(10.dp))
         AstraWavePrimaryButton("Restore This Profile", {
@@ -209,7 +209,7 @@ private fun BackupSyncUtility(profileId: String, onBack: () -> Unit) {
             }
         }, enabled = cloud.signedIn)
         Spacer(Modifier.height(10.dp))
-        Text("Cloud restore does not upload provider passwords. Xtream/debrid/personal-media secrets stay device-local in encrypted storage.", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
+        Text("Connected-service passwords and private media credentials stay encrypted on this device and are not included in cloud restore.", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -224,19 +224,19 @@ private fun PlaybackPreferenceUtility(section: AccountSection, profileId: String
         store.save(profileId, next)
     }
 
-    UtilityShell(section.title, "Profile-scoped playback, language and presentation policy used across AstraWave.", onBack) {
+    UtilityShell(section.title, "Choose how AstraWave plays media, handles language and looks for this profile.", onBack) {
         when (section) {
             AccountSection.PLAYBACK -> {
                 ChoiceRow(
-                    "Playback preset",
+                    "Playback preference",
                     listOf("Auto", "Best Quality", "Fastest Start", "Data Saver", "HDR Preferred", "Surround Preferred", "Debrid Only", "Direct Only"),
                     presetLabel(settings.preset),
                 ) { label -> save(settings.copy(preset = presetForLabel(label))) }
                 Spacer(Modifier.height(8.dp))
-                UtilityToggle("Prefer Real-Debrid / debrid", "Boost eligible debrid-backed sources in Play Best ranking", settings.preferDebrid) { save(settings.copy(preferDebrid = it)) }
-                UtilityToggle("Prefer HDR / Dolby Vision", "Boost HDR-capable candidates when metadata advertises it", settings.preferHdr) { save(settings.copy(preferHdr = it)) }
-                UtilityToggle("Prefer surround / Atmos", "Boost 5.1, 7.1, Atmos, TrueHD and DTS candidates", settings.preferSurround) { save(settings.copy(preferSurround = it)) }
-                UtilityToggle("AutoNext", "Prepares the next episode policy and continues series playback", settings.autoNextEnabled) { save(settings.copy(autoNextEnabled = it)) }
+                UtilityToggle("Prefer connected debrid service", "Use your connected debrid service first when it has an eligible playback option", settings.preferDebrid) { save(settings.copy(preferDebrid = it)) }
+                UtilityToggle("Prefer HDR / Dolby Vision", "Choose HDR playback when your device and the available option support it", settings.preferHdr) { save(settings.copy(preferHdr = it)) }
+                UtilityToggle("Prefer surround / Atmos", "Choose multichannel audio when your device and the available option support it", settings.preferSurround) { save(settings.copy(preferSurround = it)) }
+                UtilityToggle("Autoplay next episode", "Continue to the next episode automatically when available", settings.autoNextEnabled) { save(settings.copy(autoNextEnabled = it)) }
                 UtilityToggle("Skip Intro", "Allow intro skipping when timing metadata is available", settings.skipIntroEnabled) { save(settings.copy(skipIntroEnabled = it)) }
                 UtilityToggle("Skip Recap", "Allow recap skipping when timing metadata is available", settings.skipRecapEnabled) { save(settings.copy(skipRecapEnabled = it)) }
                 UtilityToggle("Skip Credits", "Allow next-episode actions during credits when timing metadata is available", settings.skipCreditsEnabled) { save(settings.copy(skipCreditsEnabled = it)) }
@@ -262,8 +262,8 @@ private fun PlaybackPreferenceUtility(section: AccountSection, profileId: String
                     save(settings.copy(uiScalePercent = it.removeSuffix("%").toIntOrNull()?.coerceIn(85, 125) ?: 100))
                 }
                 AstraWaveStatePanel(
-                    "Per-device design remains automatic",
-                    "Phone, tablet and Android TV keep separate density, typography and focus behavior. UI scale fine-tunes that device-specific layout rather than forcing one layout everywhere.",
+                    "Optimized for this device",
+                    "AstraWave automatically adapts layout, text and focus behavior for phone, tablet and TV. UI scale lets you fine-tune the size.",
                 )
             }
             else -> Unit
@@ -323,8 +323,8 @@ private fun displayLanguage(code: String): String = when (code.lowercase()) {
 
 @Composable
 private fun GenericUtility(section: AccountSection, onBack: () -> Unit) {
-    UtilityShell(section.title, "This area is capability-gated until its underlying transport is production-ready.", onBack) {
-        AstraWaveStatePanel("Not enabled yet", "AstraWave keeps unfinished transports visible in the roadmap but does not label them as working integrations.")
+    UtilityShell(section.title, "This feature is not available in the current customer build yet.", onBack) {
+        AstraWaveStatePanel("Coming Soon", "This area will become available after its customer experience and reliability checks are complete.")
     }
 }
 

@@ -40,7 +40,7 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
     val iptv = remember(profileId) { IptvSourceStore(context).load(profileId) }
     var travel by remember(profileId) { mutableStateOf(downloads.travelPolicy(profileId)) }
     var astraQuery by remember { mutableStateOf("") }
-    var astraResult by remember { mutableStateOf("Ask Astra to find something, open sports, or narrow a watch by runtime and rating.") }
+    var astraResult by remember { mutableStateOf("Ask Astra to help you find something to watch.") }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -49,8 +49,8 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
     ) {
         Text("ASTRAWAVE PREMIUM", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
         AstraWavePageHeader(
-            title = "Power Center",
-            subtitle = "DVR, catch-up capability, predictive source health, downloads, Travel Mode, household viewing and Astra intelligence.",
+            title = "Premium Hub",
+            subtitle = "Your premium features, downloads, recordings, household tools and connected services in one place.",
         )
 
         PremiumMetricRail(
@@ -60,7 +60,7 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
             householdSessions = household.sessions().size,
         )
 
-        PremiumPanel("Astra Concierge", "Natural-language entertainment control") {
+        PremiumPanel("Astra Search", "Find something to watch using natural language") {
             androidx.compose.material3.OutlinedTextField(
                 value = astraQuery,
                 onValueChange = { astraQuery = it },
@@ -79,25 +79,25 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
             Text(astraResult, color = AstraWaveColors.SecondaryText)
         }
 
-        PremiumPanel("Smart Source Fusion", "Predictive health and automatic failover") {
+        PremiumPanel("Playback Reliability", "Automatic backup playback when available") {
             if (iptv.isEmpty()) {
-                Text("Connect an IPTV source to start building reliability history.", color = AstraWaveColors.SecondaryText)
+                Text("Connect a Live TV service to see playback reliability here.", color = AstraWaveColors.SecondaryText)
             } else {
                 iptv.take(10).forEach { source ->
                     val health = fusion.score(source.id)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(source.name, color = AstraWaveColors.PrimaryText)
-                        Text("${health.score}/100 • ${"%.0f".format(health.uptimePercent)}%", color = if (health.score >= 70) AstraWaveColors.Success else AstraWaveColors.SecondaryText)
+                        Text(when { health.score >= 85 -> "Excellent"; health.score >= 70 -> "Good"; else -> "Improving" }, color = if (health.score >= 70) AstraWaveColors.Success else AstraWaveColors.SecondaryText)
                     }
                     Spacer(Modifier.height(7.dp))
                 }
             }
         }
 
-        PremiumPanel("DVR, Catch-up & Timeshift", "Capability-gated recording for authorized providers") {
+        PremiumPanel("Recordings", "Recording features for supported connected TV services") {
             val recordings = dvr.recordings(profileId)
             Text("${recordings.size} scheduled or saved recordings", color = AstraWaveColors.PrimaryText)
-            Text("Record, catch-up and timeshift controls appear only when the connected provider advertises those capabilities.", color = AstraWaveColors.SecondaryText)
+            Text("Recording controls appear only when a connected service supports them and AstraWave can use them safely.", color = AstraWaveColors.SecondaryText)
         }
 
         PremiumPanel("Downloads & Travel Mode", downloads.travelSummary(profileId)) {
@@ -118,16 +118,16 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
             Text("Queue: ${downloads.downloads(profileId).count { it.state.name != "COMPLETE" }} pending • ${downloads.downloads(profileId).count { it.state.name == "COMPLETE" }} ready offline", color = AstraWaveColors.SecondaryText)
         }
 
-        PremiumPanel("Household Watch", "Movie Night voting and shared decisions") {
+        PremiumPanel("Watch Night", "Movie-night voting and shared picks") {
             val latest = household.sessions().firstOrNull()
             if (latest == null) {
-                Text("No active Watch Night yet. Create one from the web Control Center or household tools.", color = AstraWaveColors.SecondaryText)
+                Text("No active Watch Night yet. Create one from your household tools when you are ready.", color = AstraWaveColors.SecondaryText)
             } else {
                 Text("${latest.name} • ${latest.candidates.size} choices • leader: ${latest.winner()?.title ?: "waiting for votes"}", color = AstraWaveColors.PrimaryText)
             }
         }
 
-        PremiumPanel("Provider Compatibility", "One entertainment OS") {
+        PremiumPanel("Connected Services", "Services AstraWave can work with") {
             val providers = listOf(
                 LiveProviderType.M3U,
                 LiveProviderType.XTREAM,
@@ -143,7 +143,7 @@ fun AstraWavePremiumPowerCenter(profileId: String = "default") {
             )
             Text(providers.joinToString(" • ") { it.name.replace('_', ' ') }, color = AstraWaveColors.SecondaryText)
             Spacer(Modifier.height(6.dp))
-            Text("Provider-specific playback/catch-up/recording remains capability-gated until that adapter is connected and authorized.", color = AstraWaveColors.TertiaryText)
+            Text("Features appear only after a service is connected and the required capability is available.", color = AstraWaveColors.TertiaryText)
         }
     }
 }
@@ -153,7 +153,7 @@ private fun PremiumMetricRail(recordings: Int, downloads: Int, providers: Int, h
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         PremiumMetric("RECORDINGS", recordings.toString(), Modifier.weight(1f))
         PremiumMetric("OFFLINE", downloads.toString(), Modifier.weight(1f))
-        PremiumMetric("SOURCES", providers.toString(), Modifier.weight(1f))
+        PremiumMetric("CONNECTED", providers.toString(), Modifier.weight(1f))
         PremiumMetric("WATCH NIGHTS", householdSessions.toString(), Modifier.weight(1f))
     }
 }
