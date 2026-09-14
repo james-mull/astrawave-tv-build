@@ -298,10 +298,10 @@ private fun AstraWaveExperienceSettingsScreen(profileId: String, onBack: () -> U
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Experience & Parity Settings", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+            Text("Experience Settings", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             Text("Back", color = AstraWaveColors.Accent, modifier = Modifier.clickable(onClick = onBack).padding(10.dp))
         }
-        Text("These profile-scoped preferences keep the Android APK aligned with the web experience while preserving native Android TV behavior.", color = AstraWaveColors.SecondaryText)
+        Text("Choose how AstraWave looks, plays, and behaves for this profile.", color = AstraWaveColors.SecondaryText)
 
         ExperienceChoice("Theme", listOf("AstraWave", "OLED Black", "Blue Cinema"), theme) { value -> theme = value; saveString("theme", value) }
         ExperienceChoice("Density", listOf("Compact", "Standard", "Cinematic"), density) { value -> density = value; saveString("density", value) }
@@ -312,7 +312,7 @@ private fun AstraWaveExperienceSettingsScreen(profileId: String, onBack: () -> U
             saveInt("guideDays", guideDays)
         }
 
-        ExperienceToggle("Autoplay best healthy source", "Prefer AstraWave's highest-ranked verified source when available.", autoplayBest) { value -> autoplayBest = value; saveBoolean("autoplayBest", value) }
+        ExperienceToggle("Automatically choose best playback option", "Let AstraWave choose the strongest available option when you press Play.", autoplayBest) { value -> autoplayBest = value; saveBoolean("autoplayBest", value) }
         ExperienceToggle("Reduced motion", "Minimize decorative motion for accessibility and TV comfort.", reducedMotion) { value -> reducedMotion = value; saveBoolean("reducedMotion", value) }
 
         AstraWaveFocusableCard(Modifier.fillMaxWidth()) {
@@ -320,19 +320,19 @@ private fun AstraWaveExperienceSettingsScreen(profileId: String, onBack: () -> U
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Tune, null, tint = AstraWaveColors.Accent)
                     Spacer(Modifier.width(10.dp))
-                    Text("APK ↔ Web parity", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                    Text("Across Your Devices", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("Current shared feature families: profiles & Kids, expanded VOD/discovery, title/franchise context, watch progress, sports, Guide, Multiview, source management, personal media, player controls, onboarding, appearance preferences, and diagnostics.", color = AstraWaveColors.SecondaryText)
+                Text("Profiles, favorites, watch progress, discovery, sports, Guide, Multiview and personal-media features are designed to stay familiar across AstraWave devices.", color = AstraWaveColors.SecondaryText)
                 Spacer(Modifier.height(10.dp))
-                Text("Android-only capabilities remain native where appropriate, including TV remote focus, Media3 playback, secure personal-media credentials, and device-native PiP.", color = AstraWaveColors.TertiaryText)
+                Text("Phone, tablet and TV controls remain optimized for each device, including remote focus and picture-in-picture where supported.", color = AstraWaveColors.TertiaryText)
             }
         }
 
         AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable {
             Toast.makeText(context, "Experience settings saved for this profile.", Toast.LENGTH_SHORT).show()
         }) {
-            Text("Save / confirm profile settings", color = AstraWaveColors.Accent, style = MaterialTheme.typography.titleMedium)
+            Text("Settings saved automatically", color = AstraWaveColors.Accent, style = MaterialTheme.typography.titleMedium)
         }
     }
 }
