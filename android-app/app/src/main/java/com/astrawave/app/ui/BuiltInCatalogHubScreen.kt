@@ -35,6 +35,7 @@ import com.astrawave.app.data.BuiltInCatalogCategory
 import com.astrawave.app.data.BuiltInCatalogDefinition
 import com.astrawave.app.data.BuiltInCatalogMediaType
 import com.astrawave.app.data.BuiltInCatalogPreferences
+import com.astrawave.app.data.CatalogServiceOverrides
 import com.astrawave.app.data.VerifiedMdbListCatalogs
 
 @Composable
@@ -48,11 +49,11 @@ fun BuiltInCatalogHubScreen(
     var selectedCategory by remember { mutableStateOf<BuiltInCatalogCategory?>(null) }
     var manageMode by remember { mutableStateOf(false) }
 
-    val allDefinitions = if (mediaType == BuiltInCatalogMediaType.MOVIE) {
+    val allDefinitions = (if (mediaType == BuiltInCatalogMediaType.MOVIE) {
         AstraWaveBuiltInCatalogRegistry.movies
     } else {
         AstraWaveBuiltInCatalogRegistry.shows
-    }
+    }).map(CatalogServiceOverrides::apply)
     val visible = remember(profileId, mediaType, revision) { prefs.visible(mediaType, profileId) }
     val rows = visible.filter { selectedCategory == null || it.category == selectedCategory }
     val mappedCount = allDefinitions.count { it.id in VerifiedMdbListCatalogs }
@@ -116,6 +117,7 @@ fun BuiltInCatalogHubScreen(
                         Text(definition.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (definition.id in VerifiedMdbListCatalogs) Text("MDBLIST", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
+                            if (definition.id in CatalogServiceOverrides) Text("SERVICE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelSmall)
                             if (definition.featured) Text("FEATURED", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelSmall)
                         }
                     }
@@ -178,6 +180,7 @@ fun BuiltInCatalogHubScreen(
 }
 
 private fun sourceSubtitle(definition: BuiltInCatalogDefinition): String = when {
+    definition.id in CatalogServiceOverrides -> "Streaming-service discovery • verified MDBList mapping • server-resolved with metadata fallback"
     definition.id in VerifiedMdbListCatalogs -> "Verified MDBList mapping • server-resolved when available • cached metadata fallback"
     else -> "Dynamic AstraWave catalog • live metadata fallback"
 }
