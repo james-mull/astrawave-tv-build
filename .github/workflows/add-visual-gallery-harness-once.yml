@@ -1,0 +1,105 @@
+name: Add Visual Gallery Harness Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/add-visual-gallery-harness-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  add-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+
+      - name: Add direct-route QA support and nested-page gallery activity
+        shell: python
+        run: |
+          from pathlib import Path
+
+          main = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = main.read_text()
+          text = text.replace(
+              'setContent {\n            AstraWaveTheme {\n                Surface(color = AstraWaveColors.Background) { RebuildRoot() }',
+              'val qaStartRoute = intent.getStringExtra("qa_start_route")\n        setContent {\n            AstraWaveTheme {\n                Surface(color = AstraWaveColors.Background) { RebuildRoot(qaStartRoute) }',
+              1,
+          )
+          text = text.replace(
+              '@Composable\nprivate fun RebuildRoot() {',
+              '@Composable\nprivate fun RebuildRoot(initialRoute: String? = null) {',
+              1,
+          )
+          text = text.replace(
+              'var current by remember { mutableStateOf(RebuildDestination.Home) }',
+              'var current by remember(initialRoute) { mutableStateOf(RebuildDestination.entries.firstOrNull { it.route == initialRoute } ?: RebuildDestination.Home) }',
+              1,
+          )
+          main.write_text(text)
+
+          gallery = Path('android-app/app/src/debug/java/com/astrawave/app/CustomerPageGalleryActivity.kt')
+          gallery.write_text('''package com.astrawave.app
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.material3.Surface
+import com.astrawave.app.core.AccountSection
+import com.astrawave.app.ui.*
+
+class CustomerPageGalleryActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val page = intent.getStringExtra(EXTRA_PAGE).orEmpty()
+        setContent {
+            AstraWaveTheme {
+                Surface(color = AstraWaveColors.Background) {
+                    when (page) {
+                        "subscription" -> SubscriptionOverviewScreen("AstraWave Free", onBack = {}, profileId = "default")
+                        "playback" -> AccountUtilityScreen(AccountSection.PLAYBACK, "default", onBack = {})
+                        "audio-subtitles" -> AccountUtilityScreen(AccountSection.SUBTITLES_AUDIO, "default", onBack = {})
+                        "downloads" -> AccountUtilityScreen(AccountSection.DOWNLOADS_STORAGE, "default", onBack = {})
+                        "notifications" -> AccountUtilityScreen(AccountSection.NOTIFICATIONS, "default", onBack = {})
+                        "appearance" -> AccountUtilityScreen(AccountSection.APPEARANCE, "default", onBack = {})
+                        "backup" -> AccountUtilityScreen(AccountSection.BACKUP_SYNC, "default", onBack = {})
+                        "devices" -> AccountUtilityScreen(AccountSection.DEVICES, "default", onBack = {})
+                        "privacy-parental" -> SafetySettingsScreen("default", onBack = {})
+                        "premium-hub" -> AstraWavePremiumPowerCenter("default")
+                        "debrid" -> DebridAccountScreen("default", onBack = {})
+                        "diagnostics" -> VodPlaybackDiagnosticsScreen("default", onBack = {})
+                        else -> AstraWaveEmptyState("Gallery page unavailable", page.ifBlank { "No page requested" })
+                    }
+                }
+            }
+        }
+    }
+
+    companion object { const val EXTRA_PAGE = "page" }
+}
+''')
+
+          manifest = Path('android-app/app/src/debug/AndroidManifest.xml')
+          m = manifest.read_text()
+          anchor = '        <activity\n            android:name=".Phase2QaHubActivity"'
+          addition = '        <activity\n            android:name=".CustomerPageGalleryActivity"\n            android:exported="true"\n            android:label="AstraWave Customer Page Gallery" />\n'
+          if addition not in m:
+              m = m.replace(anchor, addition + anchor, 1)
+          manifest.write_text(m)
+
+      - name: Commit gallery harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt \
+                  android-app/app/src/debug/java/com/astrawave/app/CustomerPageGalleryActivity.kt \
+                  android-app/app/src/debug/AndroidManifest.xml
+          git commit -m "Add debug full-page screenshot harness"
+          git push origin HEAD:feature/nuvio-core-rebuild
