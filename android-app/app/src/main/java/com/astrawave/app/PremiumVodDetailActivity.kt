@@ -15,13 +15,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,7 +37,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.LocalLibraryStore
 import com.astrawave.app.data.TmdbCatalogRepository
@@ -47,7 +44,11 @@ import com.astrawave.app.data.TmdbTitleDetails
 import com.astrawave.app.data.VodPlaybackCoordinator
 import com.astrawave.app.data.VodPlaybackRequest
 import com.astrawave.app.ui.AstraWaveArtwork
+import com.astrawave.app.ui.AstraWaveArtworkKind
 import com.astrawave.app.ui.AstraWaveColors
+import com.astrawave.app.ui.AstraWavePrimaryButton
+import com.astrawave.app.ui.AstraWaveSecondaryButton
+import com.astrawave.app.ui.AstraWaveTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,7 +62,7 @@ class PremiumVodDetailActivity : ComponentActivity() {
         val sourceId = intent.getStringExtra(EXTRA_SOURCE_ID)
         val profileId = intent.getStringExtra(EXTRA_PROFILE_ID).orEmpty().ifBlank { "default" }
         setContent {
-            MaterialTheme {
+            AstraWaveTheme {
                 Surface(color = AstraWaveColors.Background) {
                     PremiumVodDetailScreen(title, year, mediaType, sourceId, profileId) { finish() }
                 }
@@ -93,9 +94,7 @@ private fun PremiumVodDetailScreen(
     val library = remember { LocalLibraryStore(context) }
     val tmdbToken = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val tmdbRepository = remember(tmdbToken) { TmdbCatalogRepository(tmdbToken) }
-    val tmdbId = remember(sourceId) {
-        sourceId?.takeIf { it.startsWith("tmdb:") }?.substringAfterLast(':')?.toLongOrNull()
-    }
+    val tmdbId = remember(sourceId) { sourceId?.takeIf { it.startsWith("tmdb:") }?.substringAfterLast(':')?.toLongOrNull() }
     val seriesMode = mediaType.equals("SERIES", true) || mediaType.equals("TV", true)
     var details by remember { mutableStateOf<TmdbTitleDetails?>(null) }
     var loadingDetails by remember { mutableStateOf(tmdbId != null && tmdbRepository.isConfigured()) }
@@ -146,89 +145,90 @@ private fun PremiumVodDetailScreen(
             playLoading = false
             if (intent != null) context.startActivity(intent)
             else {
-                playError = if (seriesMode) "Open episodes to choose where to continue." else "No automatic source was ready. Review Sources for available options."
+                playError = if (seriesMode) "Choose an episode to continue." else "No automatic source was ready. Review Sources for available options."
                 openDeepDetails(openSources = true)
             }
         }
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(AstraWaveColors.Background),
-    ) {
-        Box(Modifier.fillMaxWidth().height(430.dp)) {
-            AstraWaveArtwork(title, Modifier.fillMaxSize())
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(AstraWaveColors.Background)) {
+        Box(Modifier.fillMaxWidth().height(520.dp)) {
+            AstraWaveArtwork(title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color.Transparent, AstraWaveColors.Background.copy(alpha = 0.35f), AstraWaveColors.Background)),
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            AstraWaveColors.Background.copy(alpha = 0.24f),
+                            AstraWaveColors.Background.copy(alpha = 0.72f),
+                            AstraWaveColors.Background,
+                        ),
+                    ),
                 ),
             )
             Column(
-                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 34.dp, vertical = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(if (seriesMode) "SERIES" else "MOVIE", color = AstraWaveColors.Accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
-                Text(title, color = AstraWaveColors.PrimaryText, fontSize = 32.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(if (seriesMode) "SERIES" else "MOVIE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+                Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val meta = listOfNotNull(
                     details?.releaseDate?.take(4) ?: year?.toString(),
                     details?.runtimeMinutes?.let { "${it} min" },
                     details?.genres?.take(3)?.joinToString(" • ")?.takeIf { it.isNotBlank() },
                 ).joinToString("  •  ")
-                if (meta.isNotBlank()) Text(meta, color = AstraWaveColors.SecondaryText, fontSize = 13.sp)
+                if (meta.isNotBlank()) Text(meta, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AstraWavePrimaryButton(
+                        label = when {
+                            playLoading -> "Finding Best Source…"
+                            seriesMode && progress != null -> "▶ Continue Series"
+                            seriesMode -> "▶ Browse Episodes"
+                            progress != null -> "▶ Resume"
+                            else -> "▶ Play Best"
+                        },
+                        onClick = { if (seriesMode) openDeepDetails() else playBest() },
+                        enabled = !playLoading,
+                    )
+                    details?.videos?.firstOrNull { it.site.equals("YouTube", true) && (it.type.equals("Trailer", true) || it.official) }?.let { trailer ->
+                        AstraWaveSecondaryButton("Trailer") {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}"))) }
+                        }
+                    }
+                    AstraWaveSecondaryButton("Sources") { openDeepDetails(openSources = true) }
+                    AstraWaveSecondaryButton("More") { openDeepDetails() }
+                }
             }
         }
 
-        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                onClick = { if (seriesMode) openDeepDetails() else playBest() },
-                enabled = !playLoading,
-                modifier = Modifier.fillMaxWidth().height(58.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text(
-                    when {
-                        playLoading -> "Finding Best Source…"
-                        seriesMode && progress != null -> "▶ Continue Series"
-                        seriesMode -> "▶ Browse Episodes"
-                        progress != null -> "▶ Resume"
-                        else -> "▶ Play Best"
-                    },
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                details?.videos?.firstOrNull { it.site.equals("YouTube", true) && (it.type.equals("Trailer", true) || it.official) }?.let { trailer ->
-                    OutlinedButton(
-                        onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}"))) } },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Trailer") }
-                }
-                OutlinedButton(onClick = { openDeepDetails(openSources = true) }, modifier = Modifier.weight(1f)) { Text("Sources") }
-                OutlinedButton(onClick = { openDeepDetails() }, modifier = Modifier.weight(1f)) { Text("More") }
-            }
-
+        Column(Modifier.fillMaxWidth().padding(horizontal = 34.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when {
                 loadingDetails -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(Modifier.height(20.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(Modifier.height(20.dp), strokeWidth = 2.dp, color = AstraWaveColors.AccentStrong)
                     Text("Loading details…", color = AstraWaveColors.SecondaryText)
                 }
                 details != null -> {
-                    Text(details!!.overview.ifBlank { "No synopsis is available yet." }, color = AstraWaveColors.PrimaryText, fontSize = 14.sp, lineHeight = 21.sp)
+                    Text(details!!.overview.ifBlank { "No synopsis is available yet." }, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.width(900.dp))
                     if (details!!.cast.isNotEmpty()) {
-                        Text("Cast", color = AstraWaveColors.PrimaryText, fontWeight = FontWeight.Bold)
-                        Text(details!!.cast.take(8).joinToString(" • ") { it.name }, color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text("CAST", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                        Text(details!!.cast.take(8).joinToString(" • ") { it.name }, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
-
-            playError?.let { Text(it, color = AstraWaveColors.Warning, fontSize = 12.sp) }
-            Text(
-                "More opens AstraWave's full intelligence layer: seasons, episodes, recommendations, collections, universes, networks, cast context, manual source choice and playback diagnostics.",
-                color = AstraWaveColors.TertiaryText,
-                fontSize = 12.sp,
-            )
-            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
-            Spacer(Modifier.height(18.dp))
+            playError?.let { Text(it, color = AstraWaveColors.Warning, style = MaterialTheme.typography.bodyMedium) }
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AstraWaveSecondaryButton("Back", onBack)
+                Text(
+                    "Episodes, recommendations, collections and playback diagnostics live under More.",
+                    color = AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
