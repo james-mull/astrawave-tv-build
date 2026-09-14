@@ -96,8 +96,10 @@ object VerifiedMdbListCatalogs {
         "movie:japanese-movies",
         "movie:indian-cinema",
         "movie:french-cinema",
+        "movie:spanish-language-movies",
         "show:british-tv",
         "show:k-dramas",
+        "show:spanish-language-tv",
         "show:indian-series",
         "show:international-tv",
 
