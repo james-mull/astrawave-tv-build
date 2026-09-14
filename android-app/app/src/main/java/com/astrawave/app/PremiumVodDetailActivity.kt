@@ -38,13 +38,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.astrawave.app.core.ScrapeRequest
 import com.astrawave.app.data.AppSettingsStore
 import com.astrawave.app.data.LocalLibraryStore
 import com.astrawave.app.data.ResolvedSource
 import com.astrawave.app.data.TmdbCatalogRepository
 import com.astrawave.app.data.TmdbTitleDetails
-import com.astrawave.app.data.UnifiedVodSourceRepository
 import com.astrawave.app.data.VodPlaybackCoordinator
 import com.astrawave.app.data.VodPlaybackRequest
 import com.astrawave.app.ui.AstraWaveArtwork
@@ -95,7 +93,6 @@ private fun PremiumVodDetailScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val coordinator = remember { VodPlaybackCoordinator(context) }
-    val sourceRepository = remember { UnifiedVodSourceRepository(context) }
     val library = remember { LocalLibraryStore(context) }
     val tmdbToken = remember { AppSettingsStore(context).effectiveTmdbBearerToken() }
     val tmdbRepository = remember(tmdbToken) { TmdbCatalogRepository(tmdbToken) }
@@ -137,6 +134,14 @@ private fun PremiumVodDetailScreen(
         )
     }
 
+    fun playbackRequest() = VodPlaybackRequest(
+        title = title,
+        year = year ?: details?.releaseDate?.take(4)?.toIntOrNull(),
+        mediaType = if (seriesMode) "series" else "movie",
+        profileId = profileId,
+        sourceId = sourceId,
+    )
+
     fun loadSources() {
         if (seriesMode) {
             openDeepDetails()
@@ -146,13 +151,19 @@ private fun PremiumVodDetailScreen(
         sourcesLoading = true
         sourceError = null
         scope.launch {
-            val request = ScrapeRequest(
-                title = title,
-                year = year ?: details?.releaseDate?.take(4)?.toIntOrNull(),
-            )
-            val result = runCatching { withContext(Dispatchers.IO) { sourceRepository.discover(request, profileId) } }
-            sources = result.getOrDefault(emptyList())
-            sourceError = result.exceptionOrNull()?.message
+            val result = runCatching {
+                withContext(Dispatchers.IO) { coordinator.prepare(playbackRequest()).plan }
+            }
+            val plan = result.getOrNull()
+            sources = plan?.sources.orEmpty()
+            sourceError = when {
+                result.exceptionOrNull() != null -> result.exceptionOrNull()?.message ?: "Source discovery failed."
+                sources.isEmpty() && sourceId?.startsWith("stremio:", true) == true ->
+                    "No authorized streams were returned for this exact Stremio title ID. Check that at least one enabled stream addon is connected and authorized for direct HTTPS playback."
+                sources.isEmpty() ->
+                    "No authorized direct sources were returned. Check Content Sources and confirm the provider is enabled for this profile."
+                else -> null
+            }
             sourcesLoading = false
         }
     }
@@ -176,14 +187,7 @@ private fun PremiumVodDetailScreen(
         playLoading = true
         playError = null
         scope.launch {
-            val request = VodPlaybackRequest(
-                title = title,
-                year = year ?: details?.releaseDate?.take(4)?.toIntOrNull(),
-                mediaType = if (seriesMode) "series" else "movie",
-                profileId = profileId,
-                sourceId = sourceId,
-            )
-            val intent = runCatching { withContext(Dispatchers.IO) { coordinator.prepareIntent(request).second } }.getOrNull()
+            val intent = runCatching { withContext(Dispatchers.IO) { coordinator.prepareIntent(playbackRequest()).second } }.getOrNull()
             playLoading = false
             if (intent != null) context.startActivity(intent)
             else {
