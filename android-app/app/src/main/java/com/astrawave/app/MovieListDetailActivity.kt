@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.data.ArtworkRegistry
 import com.astrawave.app.data.AstraWaveMetadataGateway
+import com.astrawave.app.data.BuiltInCatalogRepository
 import com.astrawave.app.data.DynamicCollectionRepository
 import com.astrawave.app.ui.AstraWaveArtwork
 import com.astrawave.app.ui.AstraWaveColors
@@ -51,6 +52,7 @@ class MovieListDetailActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "AstraWave List" }
         val reason = intent.getStringExtra(EXTRA_REASON).orEmpty()
+        val catalogId = intent.getStringExtra(EXTRA_CATALOG_ID)
         val query = intent.getStringExtra(EXTRA_QUERY)
         val queries = intent.getStringArrayListExtra(EXTRA_QUERIES).orEmpty()
         val genre = intent.getStringExtra(EXTRA_GENRE)
@@ -58,7 +60,7 @@ class MovieListDetailActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(color = AstraWaveColors.Background) {
-                    MovieListDetailScreen(title, reason, query, queries, genre, profileId) { finish() }
+                    MovieListDetailScreen(title, reason, catalogId, query, queries, genre, profileId) { finish() }
                 }
             }
         }
@@ -67,6 +69,7 @@ class MovieListDetailActivity : ComponentActivity() {
     companion object {
         const val EXTRA_TITLE = "list_title"
         const val EXTRA_REASON = "list_reason"
+        const val EXTRA_CATALOG_ID = "catalog_id"
         const val EXTRA_QUERY = "list_query"
         const val EXTRA_QUERIES = "list_queries"
         const val EXTRA_GENRE = "list_genre"
@@ -78,6 +81,7 @@ class MovieListDetailActivity : ComponentActivity() {
 private fun MovieListDetailScreen(
     title: String,
     reason: String,
+    catalogId: String?,
     query: String?,
     queries: List<String>,
     genre: String?,
@@ -86,10 +90,12 @@ private fun MovieListDetailScreen(
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val builtIn = remember { BuiltInCatalogRepository(context) }
     val dynamic = remember { DynamicCollectionRepository() }
     val metadata = remember { AstraWaveMetadataGateway() }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var sourceLabel by remember { mutableStateOf<String?>(null) }
     var items by remember { mutableStateOf<List<AstraWaveMetadataGateway.Item>>(emptyList()) }
 
     val columns = when {
@@ -113,17 +119,23 @@ private fun MovieListDetailScreen(
         )
     }
 
-    LaunchedEffect(title, query, queries, genre) {
+    LaunchedEffect(title, catalogId, query, queries, genre, profileId) {
         loading = true
         error = null
+        sourceLabel = null
         items = runCatching {
             withContext(Dispatchers.IO) {
-                val seeds = (queries + listOfNotNull(query)).map(String::trim).filter(String::isNotBlank).distinctBy { it.lowercase() }
-                when {
-                    !genre.isNullOrBlank() -> dynamic.genre(DynamicCollectionRepository.Media.MOVIE, genre, pages = 3)
-                    seeds.isNotEmpty() -> seeds.flatMap { metadata.search(it) }
-                    else -> metadata.search(title)
+                val result = if (!catalogId.isNullOrBlank()) {
+                    builtIn.load(catalogId, profileId, limit = 60).also { sourceLabel = it.sourceLabel }.items
+                } else {
+                    val seeds = (queries + listOfNotNull(query)).map(String::trim).filter(String::isNotBlank).distinctBy { it.lowercase() }
+                    when {
+                        !genre.isNullOrBlank() -> dynamic.genre(DynamicCollectionRepository.Media.MOVIE, genre, pages = 3)
+                        seeds.isNotEmpty() -> seeds.flatMap { metadata.search(it) }
+                        else -> metadata.search(title)
+                    }
                 }
+                result
                     .filter { it.type.equals("movie", true) || it.type.isBlank() }
                     .distinctBy { it.id }
                     .take(60)
@@ -143,97 +155,47 @@ private fun MovieListDetailScreen(
             title = title,
             subtitle = reason.ifBlank { "A curated AstraWave movie collection" },
         )
+        sourceLabel?.let {
+            Spacer(Modifier.height(5.dp))
+            Text(it, color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium)
+        }
         Spacer(Modifier.height(10.dp))
         AstraWaveSecondaryButton(label = "← Back", onClick = onBack)
         Spacer(Modifier.height(18.dp))
 
         when {
-            loading -> AstraWaveStatePanel("Loading $title…", "Finding the best matching movies.", loading = true)
+            loading -> AstraWaveStatePanel("Loading $title…", "Refreshing the catalog and matching movie metadata.", loading = true)
             error != null -> AstraWaveStatePanel("List unavailable", error.orEmpty())
             items.isEmpty() -> AstraWaveStatePanel("No movies found", "This collection does not have matching titles right now.")
             else -> {
                 val featured = items.first()
-                AstraWaveFocusableCard(
-                    Modifier.fillMaxWidth().clickable { openDetails(featured) },
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            Modifier
-                                .weight(if (configuration.screenWidthDp < 600) 0.38f else 0.28f)
-                                .aspectRatio(2f / 3f),
-                        ) {
+                AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { openDetails(featured) }) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(if (configuration.screenWidthDp < 600) 0.38f else 0.28f).aspectRatio(2f / 3f)) {
                             AstraWaveArtwork(featured.name, Modifier.fillMaxSize())
                         }
                         Column(Modifier.weight(0.62f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text(
-                                "FEATURED IN THIS COLLECTION",
-                                color = AstraWaveColors.Accent,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                featured.name,
-                                color = AstraWaveColors.PrimaryText,
-                                style = if (configuration.screenWidthDp < 600) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Black,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            featured.releaseInfo?.takeIf { it.isNotBlank() }?.let {
-                                Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
-                            }
-                            Text(
-                                "Open details → Play Best, trailer, related movies, lists and source choices",
-                                color = AstraWaveColors.SecondaryText,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            Text("FEATURED IN THIS COLLECTION", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Text(featured.name, color = AstraWaveColors.PrimaryText, style = if (configuration.screenWidthDp < 600) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            featured.releaseInfo?.takeIf { it.isNotBlank() }?.let { Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium) }
+                            Text("Open details → Play Best, trailer, related movies, lists and source choices", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
 
                 Spacer(Modifier.height(22.dp))
-                Text(
-                    "${items.size} movies",
-                    color = AstraWaveColors.SecondaryText,
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                Text("${items.size} movies", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(12.dp))
 
                 items.chunked(columns).forEach { rowItems ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         rowItems.forEach { item ->
-                            AstraWaveFocusableCard(
-                                Modifier.weight(1f).clickable { openDetails(item) },
-                            ) {
+                            AstraWaveFocusableCard(Modifier.weight(1f).clickable { openDetails(item) }) {
                                 Column {
-                                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-                                        AstraWaveArtwork(item.name, Modifier.fillMaxSize())
-                                    }
+                                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) { AstraWaveArtwork(item.name, Modifier.fillMaxSize()) }
                                     Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        item.name,
-                                        color = AstraWaveColors.PrimaryText,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    item.releaseInfo?.takeIf { it.isNotBlank() }?.let {
-                                        Text(
-                                            it,
-                                            color = AstraWaveColors.SecondaryText,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
+                                    Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    item.releaseInfo?.takeIf { it.isNotBlank() }?.let { Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
                         }
