@@ -26,6 +26,14 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'show:critics-favorites-tv':{owner:'ndg3270',slug:'certified-fresh-tv-shows'},
   'show:limited-series':{owner:'ndg3270',slug:'tv-mini-series'},
 
+  // High-traffic genre collections with verified dynamic MDBList pages.
+  'movie:action-essentials':{owner:'ndg3270',slug:'action-movies'},
+  'movie:comedy-hits':{owner:'ndg3270',slug:'comedy-movies'},
+  'movie:drama-essentials':{owner:'ndg3270',slug:'drama'},
+  'movie:horror-hits':{owner:'ndg3270',slug:'horror'},
+  'movie:sci-fi-essentials':{owner:'ndg3270',slug:'science-fiction'},
+  'movie:crime-movies':{owner:'ndg3270',slug:'crime-movies'},
+
   // Curated premium/editorial collections.
   'movie:psychological-thrillers':{owner:'ndg3270',slug:'psychological-thrillers'},
   'movie:comfort-movies':{owner:'billryan',slug:'comfort-movies'},
@@ -33,7 +41,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:4k-hdr-showcase':{owner:'littlerooster',slug:'the-complete-dolby-vision-4k-remux-list'},
   'movie:audience-favorites':{owner:'billryan',slug:'letterboxds-top-500-films'},
   'show:prestige-drama':{owner:'billryan',slug:'metacritic-must-see-tv'},
-  'movie:horror-hits':{owner:'ndg3270',slug:'rotten-tomatoes-200-greatest-horror-movies'},
+  'movie:oscar-winners':{owner:'irfanh',slug:'best-picture-oscar-winners'},
 };
 
 export function mdblistPathForCatalog(id:string):string|undefined{
