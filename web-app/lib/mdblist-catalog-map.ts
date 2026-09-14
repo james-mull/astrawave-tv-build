@@ -48,6 +48,7 @@ export const mdblistCatalogMap:Record<string,MdbListCatalogMapping>={
   'movie:international-cinema':{owner:'xsampsonxxsampsonx',slug:'critically-acclaimed-foreign-films'},
   'movie:japanese-movies':{owner:'coreyh047',slug:'popular-japanese-movies'},
   'movie:french-cinema':{owner:'coreyh047',slug:'popular-french-movies'},
+  'show:british-tv':{owner:'amything',slug:'latest-uk-shows'},
   'show:k-dramas':{owner:'egmi1',slug:'all-kdramas'},
   'show:indian-series':{owner:'apollocat',slug:'indian-tv-shows-hindi-english'},
 
