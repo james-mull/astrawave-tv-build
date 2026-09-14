@@ -1,6 +1,8 @@
 package com.astrawave.app.data
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -22,7 +24,9 @@ class BuiltInCatalogRepository(
         val fromCache: Boolean,
     )
 
-    private val preferences = BuiltInCatalogPreferences(context)
+    private val appContext = context.applicationContext
+    private val preferences = BuiltInCatalogPreferences(appContext)
+    private val diskCache = appContext.getSharedPreferences("astrawave_builtin_catalog_cache_v1", Context.MODE_PRIVATE)
 
     fun load(
         catalogId: String,
@@ -31,19 +35,38 @@ class BuiltInCatalogRepository(
     ): Result {
         val definition = AstraWaveBuiltInCatalogRegistry.all.firstOrNull { it.id == catalogId }
             ?: error("Unknown built-in catalog: $catalogId")
-        val cacheKey = "$catalogId:${limit.coerceIn(1, 100)}"
+        val normalizedLimit = limit.coerceIn(1, 100)
+        val cacheKey = "$catalogId:$normalizedLimit"
         val now = System.currentTimeMillis()
         cache[cacheKey]?.takeIf { now - it.loadedAt < CACHE_MS }?.let { cached ->
             return Result(definition, cached.items, cached.sourceLabel, true)
         }
+        readDisk(cacheKey)?.takeIf { now - it.loadedAt < CACHE_MS }?.let { cached ->
+            cache[cacheKey] = cached
+            return Result(definition, cached.items, cached.sourceLabel, true)
+        }
 
-        val items = loadFallback(definition, limit.coerceIn(1, 100))
+        val items = loadFallback(definition, normalizedLimit)
         val label = when {
             definition.documentedUrl != null -> "MDBList mapping available • live metadata fallback"
             else -> "AstraWave live metadata"
         }
-        cache[cacheKey] = CacheEntry(now, items, label)
+        val entry = CacheEntry(now, items, label)
+        cache[cacheKey] = entry
+        writeDisk(cacheKey, entry)
         return Result(definition, items, label, false)
+    }
+
+    fun page(
+        catalogId: String,
+        profileId: String = "default",
+        offset: Int = 0,
+        pageSize: Int = 24,
+    ): Result {
+        val safeOffset = offset.coerceAtLeast(0)
+        val safeSize = pageSize.coerceIn(1, 40)
+        val loaded = load(catalogId, profileId, limit = 100)
+        return loaded.copy(items = loaded.items.drop(safeOffset).take(safeSize))
     }
 
     fun visibleDefinitions(
@@ -90,6 +113,64 @@ class BuiltInCatalogRepository(
             .distinctBy { canonicalKey(it) }
             .take(limit)
             .toList()
+    }
+
+    private fun readDisk(cacheKey: String): CacheEntry? {
+        val raw = diskCache.getString(cacheKey, null) ?: return null
+        return runCatching {
+            val root = JSONObject(raw)
+            val itemsArray = root.optJSONArray("items") ?: JSONArray()
+            val items = buildList {
+                for (i in 0 until itemsArray.length()) {
+                    val obj = itemsArray.optJSONObject(i) ?: continue
+                    val id = obj.optString("id")
+                    val name = obj.optString("name")
+                    if (id.isBlank() || name.isBlank()) continue
+                    add(
+                        AstraWaveMetadataGateway.Item(
+                            id = id,
+                            type = obj.optString("type"),
+                            name = name,
+                            description = obj.optString("description").takeIf { it.isNotBlank() },
+                            posterUrl = obj.optString("posterUrl").takeIf { it.isNotBlank() },
+                            backdropUrl = obj.optString("backdropUrl").takeIf { it.isNotBlank() },
+                            releaseInfo = obj.optString("releaseInfo").takeIf { it.isNotBlank() },
+                        ),
+                    )
+                }
+            }
+            CacheEntry(
+                loadedAt = root.optLong("loadedAt", 0L),
+                items = items,
+                sourceLabel = root.optString("sourceLabel").ifBlank { "AstraWave cached catalog" },
+            )
+        }.getOrNull()
+    }
+
+    private fun writeDisk(cacheKey: String, entry: CacheEntry) {
+        runCatching {
+            val items = JSONArray()
+            entry.items.forEach { item ->
+                items.put(
+                    JSONObject()
+                        .put("id", item.id)
+                        .put("type", item.type)
+                        .put("name", item.name)
+                        .put("description", item.description ?: "")
+                        .put("posterUrl", item.posterUrl ?: "")
+                        .put("backdropUrl", item.backdropUrl ?: "")
+                        .put("releaseInfo", item.releaseInfo ?: ""),
+                )
+            }
+            diskCache.edit().putString(
+                cacheKey,
+                JSONObject()
+                    .put("loadedAt", entry.loadedAt)
+                    .put("sourceLabel", entry.sourceLabel)
+                    .put("items", items)
+                    .toString(),
+            ).apply()
+        }
     }
 
     private fun genreFor(id: String): String? = when {
