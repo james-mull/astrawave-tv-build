@@ -1,0 +1,80 @@
+name: Polish Title Details Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - ".github/workflows/polish-title-details-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  polish-title-details:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+
+      - name: Make episode and watch-option UI customer-facing
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/TitleDetailsActivity.kt')
+          text = p.read_text()
+          replacements = [
+              ('No automatic source was eligible. Opening Sources so you can review available options.', 'A one-tap option was not ready. Opening Watch Options so you can choose another.'),
+              ('Automatic playback resolution failed.', 'Playback could not start automatically.'),
+              ('sourcesMode && seriesMode -> "Episodes & Sources"', 'sourcesMode && seriesMode -> "Episodes & Watch Options"'),
+              ('sourcesMode -> "Sources"', 'sourcesMode -> "Watch Options"'),
+              ('contentDescription = "Refresh sources"', 'contentDescription = "Refresh watch options"'),
+              ('"Finding Best Source…" else "▶ Play Best"', '"Finding a Stream…" else "▶ Play"'),
+              ('"Finding Best Episode Source…"', '"Finding Episode…"'),
+              ('"Browse All Episodes & Sources" else "Choose Sources"', '"Browse Episodes & Watch Options" else "Watch Options"'),
+              ('AstraWave picks the first unfinished episode, searches owned media and authorized providers, selects the strongest source automatically, and keeps manual Sources available as an override.', 'AstraWave can continue with your first unfinished episode automatically. Open Watch Options whenever you want to choose another available stream.'),
+              ('Play Best searches owned media and eligible providers in parallel, ranks healthy sources by quality and latency, and keeps backups ready for automatic failover.', 'Press Play and AstraWave chooses an available playback option automatically, with backups ready when available.'),
+              ('Choose an episode, then AstraWave resolves that episode and ranks healthy eligible sources. Completed episodes are skipped when a later unwatched episode is available.', 'Choose an episode to play or resume. Watched episodes stay marked, and AstraWave continues from the first unfinished episode.'),
+              ('AstraWave checks reviewed public sources and explicitly authorized providers, removes duplicates, verifies stream health, and ranks the best playable source first.', 'Choose from the available playback options below. AstraWave puts its recommended option first.'),
+              ('Loading seasons and episodes…', 'Loading episodes…'),
+              ('"No episode metadata found", "This series did not return a compatible native or Cinemeta episode list yet."', '"Episodes unavailable", "Episode information is not available for this series right now."'),
+              ('LoadingRow("Resolving playable sources…")', 'LoadingRow("Checking watch options…")'),
+              ('"No verified source found",', '"No watch option available",'),
+              ('"AstraWave checked reviewed and customer-authorized sources but did not find a healthy eligible direct stream for this ${if (selectedEpisode != null) "episode" else "title"}.",', '"No playable option is available from your connected sources for this ${if (selectedEpisode != null) "episode" else "title"} right now.",'),
+              ('Text("Available Sources", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)', 'Text("Watch Options", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)'),
+              ('"${allUrls.size} verified option${if (allUrls.size == 1) "" else "s"} • automatic backup failover enabled"', '"${allUrls.size} option${if (allUrls.size == 1) "" else "s"} available • backups used automatically"'),
+              ('if (seriesMode) "Browse the title first, then let AstraWave pick the next episode and strongest eligible source, or open Sources for manual control."\n            else "Use Play Best for automatic source selection, or open Sources to choose a verified option manually."', 'if (seriesMode) "Browse episodes, resume where you left off, or let AstraWave continue with the next unfinished episode."\n            else "Press Play for one-tap viewing, or open Watch Options when you want to choose manually."'),
+              ('Text("S${episode.season} E${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)', 'Text("Episode ${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)'),
+              ('Text("Health verified • backups ready", color = DetailsSuccess, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)', 'Text("Ready to watch • backups available", color = DetailsSuccess, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)'),
+              ('if (index == 0) Text("BEST", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(DetailsAccent, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))', 'if (index == 0) Text("RECOMMENDED", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(DetailsAccent, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))'),
+              ('val details = listOfNotNull(source.link.quality, source.contentType, source.latencyMs?.let { "${it}ms" }, source.link.licenseLabel, "score ${source.score}").joinToString(" • ")', 'val details = listOfNotNull(source.link.quality, source.contentType, source.link.licenseLabel).joinToString(" • ")'),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'target not found: {old[:100]}')
+              text = text.replace(old, new, 1)
+
+          season_anchor = '''    val seasons = episodes.map { it.season }.filter { it > 0 }.distinct().sorted()\n    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {'''
+          season_new = '''    val seasons = episodes.map { it.season }.filter { it > 0 }.distinct().sorted()\n    val currentSeasonEpisodes = episodes.filter { it.season == selectedSeason }\n    val currentSeasonWatched = currentSeasonEpisodes.count { progress[it.id]?.completed == true }\n    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {\n        Text("Season $selectedSeason", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)\n        if (currentSeasonEpisodes.isNotEmpty()) {\n            Text("$currentSeasonWatched of ${currentSeasonEpisodes.size} episodes watched", color = DetailsMuted, fontSize = 12.sp)\n        }\n    }\n    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {'''
+          if season_anchor not in text:
+              raise SystemExit('season anchor not found')
+          text = text.replace(season_anchor, season_new, 1)
+
+          progress_anchor = '''                Text(\n                    when {\n                        saved?.completed == true -> "Watched • Play again"\n                        percent != null && percent > 0 -> "Resume • $percent% watched"\n                        else -> "Play episode"\n                    },\n                    color = if (percent != null && percent > 0) DetailsSuccess else DetailsAccent,\n                    fontSize = 12.sp,\n                    fontWeight = FontWeight.SemiBold,\n                )'''
+          progress_new = progress_anchor + '''\n                if (percent != null && percent in 1..99) {\n                    LinearProgressIndicator(\n                        progress = { percent / 100f },\n                        modifier = Modifier.fillMaxWidth().height(4.dp),\n                        color = DetailsSuccess,\n                        trackColor = Color(0xFF2A3140),\n                    )\n                }'''
+          if progress_anchor not in text:
+              raise SystemExit('episode progress anchor not found')
+          text = text.replace(progress_anchor, progress_new, 1)
+          p.write_text(text)
+
+      - name: Commit title details polish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/TitleDetailsActivity.kt
+          git commit -m "Polish episode browser and watch options for customers"
+          git push origin HEAD:feature/nuvio-core-rebuild
