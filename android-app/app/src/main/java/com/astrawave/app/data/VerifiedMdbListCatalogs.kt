@@ -47,6 +47,7 @@ object VerifiedMdbListCatalogs {
         "movie:international-cinema",
         "movie:japanese-movies",
         "movie:french-cinema",
+        "show:british-tv",
         "show:k-dramas",
         "show:indian-series",
     )
