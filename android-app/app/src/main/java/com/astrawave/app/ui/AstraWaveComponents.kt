@@ -46,13 +46,17 @@ fun AstraWavePageHeader(
 ) {
     val device = LocalAstraWaveDeviceClass.current
     Column(modifier.fillMaxWidth()) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+        Text(
+            title,
+            color = AstraWaveColors.PrimaryText,
+            style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge,
+        )
         if (!subtitle.isNullOrBlank()) {
             Spacer(Modifier.height(if (device == AstraWaveDeviceClass.TV) 7.dp else 5.dp))
             Text(
                 subtitle,
                 color = AstraWaveColors.SecondaryText,
-                style = MaterialTheme.typography.bodyLarge,
+                style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.fillMaxWidth(if (device == AstraWaveDeviceClass.TV) 0.68f else 1f),
             )
         }
@@ -66,12 +70,21 @@ fun AstraWaveSectionHeader(
     trailing: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    val device = LocalAstraWaveDeviceClass.current
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            Text(
+                title,
+                color = AstraWaveColors.PrimaryText,
+                style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+            )
             if (!subtitle.isNullOrBlank()) {
                 Spacer(Modifier.height(3.dp))
-                Text(subtitle, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    subtitle,
+                    color = AstraWaveColors.TertiaryText,
+                    style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                )
             }
         }
         trailing?.let {
@@ -99,6 +112,7 @@ fun AstraWaveStatePanel(
     modifier: Modifier = Modifier,
     tone: AstraWaveStateTone = AstraWaveStateTone.ACCENT,
 ) {
+    val device = LocalAstraWaveDeviceClass.current
     val accent = if (loading) AstraWaveColors.AccentStrong else stateToneColor(tone)
     Row(
         modifier
@@ -106,14 +120,18 @@ fun AstraWaveStatePanel(
             .clip(MaterialTheme.shapes.large)
             .background(AstraWaveColors.SurfaceRaised)
             .border(1.dp, accent.copy(alpha = 0.18f), MaterialTheme.shapes.large)
-            .padding(horizontal = 18.dp, vertical = 16.dp),
+            .padding(
+                horizontal = if (device == AstraWaveDeviceClass.PHONE) 14.dp else 18.dp,
+                vertical = if (device == AstraWaveDeviceClass.PHONE) 12.dp else 16.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.width(4.dp).height(42.dp).clip(MaterialTheme.shapes.small)
+            Modifier.width(4.dp).height(if (device == AstraWaveDeviceClass.PHONE) 36.dp else 42.dp)
+                .clip(MaterialTheme.shapes.small)
                 .background(accent),
         )
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(if (device == AstraWaveDeviceClass.PHONE) 11.dp else 14.dp))
         if (loading) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), color = accent, strokeWidth = 2.dp)
             Spacer(Modifier.width(12.dp))
@@ -121,7 +139,11 @@ fun AstraWaveStatePanel(
         Column(Modifier.weight(1f)) {
             Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
-            Text(message, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                message,
+                color = AstraWaveColors.SecondaryText,
+                style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }
@@ -133,17 +155,20 @@ fun AstraWaveFocusableCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val device = LocalAstraWaveDeviceClass.current
-    val sizing = LocalAstraWaveSizing.current
     val elevationTokens = LocalAstraWaveElevation.current
     val motion = LocalAstraWaveMotion.current
-    val focusedScale = if (device == AstraWaveDeviceClass.TV) 1.012f else sizing.focusScale
+    val focusedScale = when (device) {
+        AstraWaveDeviceClass.TV -> 1.012f
+        AstraWaveDeviceClass.TABLET -> 1.008f
+        AstraWaveDeviceClass.PHONE -> 1f
+    }
     val scale by animateFloatAsState(
         targetValue = if (focused) focusedScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-focus-scale",
     )
     val elevation by animateDpAsState(
-        targetValue = if (focused) elevationTokens.focused else elevationTokens.resting,
+        targetValue = if (focused && device != AstraWaveDeviceClass.PHONE) elevationTokens.focused else elevationTokens.resting,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-focus-elevation",
     )
@@ -153,7 +178,7 @@ fun AstraWaveFocusableCard(
         label = "astrawave-focus-border",
     )
     val surfaceColor by animateColorAsState(
-        targetValue = if (focused) AstraWaveColors.SurfaceFocus else AstraWaveColors.SurfaceRaised,
+        targetValue = if (focused && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.SurfaceFocus else AstraWaveColors.SurfaceRaised,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-focus-surface",
     )
@@ -165,11 +190,11 @@ fun AstraWaveFocusableCard(
                 elevation = elevation,
                 shape = MaterialTheme.shapes.large,
                 clip = false,
-                ambientColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.54f) else Color.Black,
-                spotColor = if (focused) AstraWaveColors.Accent.copy(alpha = 0.66f) else Color.Black,
+                ambientColor = if (focused && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.Accent.copy(alpha = 0.54f) else Color.Black,
+                spotColor = if (focused && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.Accent.copy(alpha = 0.66f) else Color.Black,
             )
             .border(
-                width = if (focused) 2.dp else 1.dp,
+                width = if (focused && device != AstraWaveDeviceClass.PHONE) 2.dp else 1.dp,
                 color = borderColor,
                 shape = MaterialTheme.shapes.large,
             )
@@ -177,7 +202,13 @@ fun AstraWaveFocusableCard(
             .background(surfaceColor)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .padding(if (device == AstraWaveDeviceClass.TV) 12.dp else 16.dp),
+            .padding(
+                when (device) {
+                    AstraWaveDeviceClass.TV -> 12.dp
+                    AstraWaveDeviceClass.TABLET -> 14.dp
+                    AstraWaveDeviceClass.PHONE -> 12.dp
+                },
+            ),
     ) { content() }
 }
 
@@ -188,13 +219,17 @@ fun AstraWaveActionRow(
     modifier: Modifier = Modifier,
     trailing: @Composable () -> Unit,
 ) {
+    val device = LocalAstraWaveDeviceClass.current
     Row(
         modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(AstraWaveColors.SurfaceRaised)
             .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.45f), MaterialTheme.shapes.large)
-            .padding(horizontal = 18.dp, vertical = 15.dp),
+            .padding(
+                horizontal = if (device == AstraWaveDeviceClass.PHONE) 14.dp else 18.dp,
+                vertical = if (device == AstraWaveDeviceClass.PHONE) 12.dp else 15.dp,
+            ),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -202,7 +237,11 @@ fun AstraWaveActionRow(
             Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
             if (!subtitle.isNullOrBlank()) {
                 Spacer(Modifier.height(3.dp))
-                Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    subtitle,
+                    color = AstraWaveColors.SecondaryText,
+                    style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                )
             }
         }
         Spacer(Modifier.width(LocalAstraWaveSpacing.current.md))
@@ -219,9 +258,12 @@ fun AstraWavePrimaryButton(
 ) {
     var focused by remember { mutableStateOf(false) }
     val device = LocalAstraWaveDeviceClass.current
-    val sizing = LocalAstraWaveSizing.current
     val motion = LocalAstraWaveMotion.current
-    val focusedScale = if (device == AstraWaveDeviceClass.TV) 1.012f else sizing.focusScale
+    val focusedScale = when (device) {
+        AstraWaveDeviceClass.TV -> 1.012f
+        AstraWaveDeviceClass.TABLET -> 1.008f
+        AstraWaveDeviceClass.PHONE -> 1f
+    }
     val scale by animateFloatAsState(
         targetValue = if (focused && enabled) focusedScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
@@ -234,28 +276,36 @@ fun AstraWavePrimaryButton(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(
-                elevation = if (focused && enabled) 16.dp else 0.dp,
+                elevation = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) 16.dp else 0.dp,
                 shape = MaterialTheme.shapes.medium,
                 clip = false,
                 ambientColor = AstraWaveColors.Accent.copy(alpha = 0.45f),
                 spotColor = AstraWaveColors.Accent.copy(alpha = 0.62f),
             )
             .border(
-                width = if (focused && enabled) 2.dp else 0.dp,
+                width = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) 2.dp else 0.dp,
                 color = AstraWaveColors.FocusRing,
                 shape = MaterialTheme.shapes.medium,
             )
             .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (focused && enabled) AstraWaveColors.AccentStrong else AstraWaveColors.Accent,
+            containerColor = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.AccentStrong else AstraWaveColors.Accent,
             contentColor = AstraWaveColors.PrimaryText,
             disabledContainerColor = AstraWaveColors.SurfaceRaised,
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),
         shape = MaterialTheme.shapes.medium,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = if (device == AstraWaveDeviceClass.TV) 18.dp else 22.dp,
-            vertical = if (device == AstraWaveDeviceClass.TV) 10.dp else 13.dp,
+            horizontal = when (device) {
+                AstraWaveDeviceClass.TV -> 18.dp
+                AstraWaveDeviceClass.TABLET -> 20.dp
+                AstraWaveDeviceClass.PHONE -> 16.dp
+            },
+            vertical = when (device) {
+                AstraWaveDeviceClass.TV -> 10.dp
+                AstraWaveDeviceClass.TABLET -> 11.dp
+                AstraWaveDeviceClass.PHONE -> 9.dp
+            },
         ),
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
@@ -275,9 +325,12 @@ fun AstraWaveSecondaryButton(
 ) {
     var focused by remember { mutableStateOf(false) }
     val device = LocalAstraWaveDeviceClass.current
-    val sizing = LocalAstraWaveSizing.current
     val motion = LocalAstraWaveMotion.current
-    val focusedScale = if (device == AstraWaveDeviceClass.TV) 1.012f else sizing.focusScale
+    val focusedScale = when (device) {
+        AstraWaveDeviceClass.TV -> 1.012f
+        AstraWaveDeviceClass.TABLET -> 1.008f
+        AstraWaveDeviceClass.PHONE -> 1f
+    }
     val scale by animateFloatAsState(
         targetValue = if (focused && enabled) focusedScale else 1f,
         animationSpec = tween(durationMillis = motion.focusMs),
@@ -290,15 +343,15 @@ fun AstraWaveSecondaryButton(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(
-                elevation = if (focused && enabled) 12.dp else 0.dp,
+                elevation = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) 12.dp else 0.dp,
                 shape = MaterialTheme.shapes.medium,
                 clip = false,
                 ambientColor = AstraWaveColors.Accent.copy(alpha = 0.34f),
                 spotColor = AstraWaveColors.Accent.copy(alpha = 0.44f),
             )
             .border(
-                width = if (focused && enabled) 2.dp else 1.dp,
-                color = if (focused && enabled) AstraWaveColors.FocusRing else AstraWaveColors.Divider,
+                width = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) 2.dp else 1.dp,
+                color = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.FocusRing else AstraWaveColors.Divider,
                 shape = MaterialTheme.shapes.medium,
             )
             .onFocusChanged { focused = it.isFocused },
@@ -308,8 +361,16 @@ fun AstraWaveSecondaryButton(
         ),
         shape = MaterialTheme.shapes.medium,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = if (device == AstraWaveDeviceClass.TV) 17.dp else 20.dp,
-            vertical = if (device == AstraWaveDeviceClass.TV) 9.dp else 12.dp,
+            horizontal = when (device) {
+                AstraWaveDeviceClass.TV -> 17.dp
+                AstraWaveDeviceClass.TABLET -> 19.dp
+                AstraWaveDeviceClass.PHONE -> 15.dp
+            },
+            vertical = when (device) {
+                AstraWaveDeviceClass.TV -> 9.dp
+                AstraWaveDeviceClass.TABLET -> 10.dp
+                AstraWaveDeviceClass.PHONE -> 8.dp
+            },
         ),
     ) { Text(label, style = MaterialTheme.typography.labelLarge) }
 }
