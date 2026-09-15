@@ -1,0 +1,100 @@
+name: Viewella UI Polish Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/viewella-ui-polish-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+
+      - name: Apply Viewella-inspired content-first polish
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          # Primary navigation language: entertainment first, account language secondary.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = p.read_text()
+          text = text.replace('Movies("movies", "VOD", Icons.Default.Movie)', 'Movies("movies", "Movies", Icons.Default.Movie)')
+          text = text.replace('Shows("tv", "TV Series", Icons.Default.Tv)', 'Shows("tv", "TV", Icons.Default.Tv)')
+          text = text.replace('My("my", "My AstraWave", Icons.Default.AccountCircle)', 'My("my", "My Stuff", Icons.Default.AccountCircle)')
+          text = text.replace('if (isTv && !tvRailExpanded) activeProfile.avatar else "ASTRAWAVE"', 'if (isTv && !tvRailExpanded) activeProfile.avatar else "AstraWave"')
+          p.write_text(text)
+
+          # Phone nav remains intentionally small and entertainment-first.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveNavigationContract.kt')
+          text = p.read_text()
+          text = text.replace('AstraWaveNavItem("search", "Search"),\n    )', 'AstraWaveNavItem("search", "Search"),\n    )', 1)
+          text = text.replace('AstraWaveNavItem("my", "My AstraWave")', 'AstraWaveNavItem("my", "My Stuff")')
+          p.write_text(text)
+
+          # Home: remove dashboard-like brand strip and make the first thing users see the hero/content.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/PremiumHomeScreen.kt')
+          text = p.read_text()
+          old = '''        item(key = "home-brand") {\n            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {\n                Text("ASTRAWAVE", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)\n                cloudRestoreMessage?.let { Text(it, color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium) }\n            }\n        }\n\n'''
+          text = text.replace(old, '')
+          text = text.replace('contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 10.dp)', 'contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 6.dp)')
+          text = text.replace('verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 18.dp else 24.dp)', 'verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 22.dp else 30.dp)')
+          text = text.replace('Box(Modifier.fillMaxWidth().height(430.dp))', 'Box(Modifier.fillMaxWidth().height(if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) 500.dp else 560.dp))')
+          text = text.replace('HomeBadge("FEATURED")\n                Text(item.name', 'Text(item.name')
+          text = text.replace('Text("▶ View details", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)', 'Text("View details  ›", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)')
+          text = text.replace('Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)', 'Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)')
+          p.write_text(text)
+
+          # Movies / TV: strip instructional copy and make rows feel like a streaming surface, not a catalog manager.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/BuiltInCatalogHubScreen.kt')
+          text = p.read_text()
+          text = text.replace('contentPadding = PaddingValues(bottom = 32.dp)', 'contentPadding = PaddingValues(bottom = 36.dp)')
+          text = text.replace('modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 2.dp)', 'modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 0.dp)')
+          old = '''                    if (!manageMode) {\n                        Text(\n                            if (mediaType == BuiltInCatalogMediaType.MOVIE) "Find something worth watching" else "Series, new episodes and favorites",\n                            color = AstraWaveColors.TertiaryText,\n                            style = MaterialTheme.typography.bodyMedium,\n                        )\n                    }\n'''
+          text = text.replace(old, '')
+          text = text.replace('if (manageMode) "Done" else "Customize"', 'if (manageMode) "Done" else "Edit"')
+          text = text.replace('style = MaterialTheme.typography.titleMedium,\n                        fontWeight = FontWeight.Bold,', 'style = MaterialTheme.typography.titleLarge,\n                        fontWeight = FontWeight.Bold,')
+          text = text.replace('"Customize your rows"', '"Edit rows"')
+          text = text.replace('"Choose what appears first and hide anything you do not use."', '"Reorder or hide rows for this profile."')
+          p.write_text(text)
+
+          # Detail page: preserve functionality, reduce competing CTAs and make labels feel like a polished streamer.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/PremiumVodDetailActivity.kt')
+          text = p.read_text()
+          text = text.replace('val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 430.dp else 540.dp', 'val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 500.dp else 590.dp')
+          text = text.replace('Text(if (seriesMode) "SERIES" else "MOVIE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)\n                ', '')
+          text = text.replace('seriesMode && progress != null -> "▶ Continue Series"', 'seriesMode && progress != null -> "▶ Continue"')
+          text = text.replace('seriesMode -> "▶ Browse Episodes"', 'seriesMode -> "▶ Episodes"')
+          text = text.replace('AstraWaveSecondaryButton(if (showSources) "Hide Options" else "Watch Options")', 'AstraWaveSecondaryButton(if (showSources) "Hide" else "Watch Options")')
+          text = text.replace('AstraWaveSecondaryButton(if (seriesMode) "Episodes & Info" else "More Info")', 'AstraWaveSecondaryButton(if (seriesMode) "Episodes" else "Details")')
+          text = text.replace('Text("Choose a stream, or use Play to let AstraWave pick for you.", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)', 'Text("Choose where to watch.", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)')
+          p.write_text(text)
+          PY
+
+      - name: Compile Viewella-inspired polish
+        working-directory: android-app
+        run: gradle --no-daemon :app:compileDebugKotlin
+
+      - name: Commit UI polish
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt \
+                  android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveNavigationContract.kt \
+                  android-app/app/src/main/java/com/astrawave/app/ui/PremiumHomeScreen.kt \
+                  android-app/app/src/main/java/com/astrawave/app/ui/BuiltInCatalogHubScreen.kt \
+                  android-app/app/src/main/java/com/astrawave/app/PremiumVodDetailActivity.kt
+          git commit -m "Make core UI more cinematic and content-first"
+          git push origin HEAD:feature/nuvio-core-rebuild
