@@ -1,0 +1,72 @@
+name: Mobile Title Detail Hierarchy Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/mobile-title-detail-hierarchy-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  title-detail-hierarchy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Make title details action-first
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/TitleDetailsActivity.kt')
+          text = p.read_text()
+
+          text = text.replace(
+              'Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),\n        verticalArrangement = Arrangement.spacedBy(14.dp),',
+              'Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),\n        verticalArrangement = Arrangement.spacedBy(12.dp),',
+              1,
+          )
+          text = text.replace('fontSize = 28.sp, fontWeight = FontWeight.Black', 'fontSize = 30.sp, fontWeight = FontWeight.Black', 1)
+          text = text.replace('sourcesMode && seriesMode -> "Episodes & Watch Options"', 'sourcesMode && seriesMode -> "Episodes"', 1)
+
+          anchor = '''        if (!sourcesMode) {\n            when {\n                detailsLoading -> LoadingRow("Loading premium title details…")\n'''
+          replacement = '''        if (!sourcesMode) {\n            if (!seriesMode) {\n                Button(\n                    onClick = { playBest() },\n                    enabled = !quickPlayLoading,\n                    modifier = Modifier.fillMaxWidth().height(54.dp),\n                    shape = RoundedCornerShape(14.dp),\n                ) {\n                    Text(if (quickPlayLoading) "Finding a Stream…" else "▶ Play", fontWeight = FontWeight.Bold)\n                }\n            }\n\n            if (hasEpisodeCatalog && firstUnwatched != null) {\n                Button(\n                    onClick = { playBest(firstUnwatched) },\n                    enabled = !quickPlayLoading,\n                    modifier = Modifier.fillMaxWidth().height(54.dp),\n                    shape = RoundedCornerShape(14.dp),\n                ) {\n                    val saved = progressByEpisode[firstUnwatched.id]\n                    val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"\n                    Text(\n                        if (quickPlayLoading) "Finding Episode…"\n                        else "$prefix • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}",\n                        fontWeight = FontWeight.Bold,\n                        maxLines = 1,\n                        overflow = TextOverflow.Ellipsis,\n                    )\n                }\n            }\n\n            OutlinedButton(\n                onClick = { sourcesMode = true },\n                modifier = Modifier.fillMaxWidth().height(48.dp),\n                shape = RoundedCornerShape(14.dp),\n            ) { Text(if (hasEpisodeCatalog) "Episodes & Watch Options" else "Watch Options", fontWeight = FontWeight.Bold) }\n            quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }\n\n            when {\n                detailsLoading -> LoadingRow("Loading title details…")\n'''
+          if anchor not in text:
+              raise SystemExit('title action insertion anchor not found')
+          text = text.replace(anchor, replacement, 1)
+
+          old_actions = '''            if (!seriesMode) {\n                Button(\n                    onClick = { playBest() },\n                    enabled = !quickPlayLoading,\n                    modifier = Modifier.fillMaxWidth().height(56.dp),\n                    shape = RoundedCornerShape(16.dp),\n                ) {\n                    Text(if (quickPlayLoading) "Finding a Stream…" else "▶ Play", fontWeight = FontWeight.Bold)\n                }\n            }\n\n            if (hasEpisodeCatalog && firstUnwatched != null) {\n                Button(\n                    onClick = { playBest(firstUnwatched) },\n                    enabled = !quickPlayLoading,\n                    modifier = Modifier.fillMaxWidth().height(56.dp),\n                    shape = RoundedCornerShape(16.dp),\n                ) {\n                    val saved = progressByEpisode[firstUnwatched.id]\n                    val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"\n                    Text(\n                        if (quickPlayLoading) "Finding Episode…"\n                        else "$prefix Series • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}",\n                        fontWeight = FontWeight.Bold,\n                    )\n                }\n            }\n\n            OutlinedButton(\n                onClick = { sourcesMode = true },\n                modifier = Modifier.fillMaxWidth().height(52.dp),\n                shape = RoundedCornerShape(16.dp),\n            ) { Text(if (hasEpisodeCatalog) "Browse Episodes & Watch Options" else "Watch Options", fontWeight = FontWeight.Bold) }\n            quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }\n            Text(\n                if (hasEpisodeCatalog) {\n                    "AstraWave can continue with your first unfinished episode automatically. Open Watch Options whenever you want to choose another available stream."\n                } else {\n                    "Press Play and AstraWave chooses an available playback option automatically, with backups ready when available."\n                },\n                color = DetailsMuted,\n                fontSize = 12.sp,\n            )\n'''
+          if old_actions not in text:
+              raise SystemExit('old title action block not found')
+          text = text.replace(old_actions, '', 1)
+          p.write_text(text)
+          PY
+
+      - name: Compile title detail hierarchy
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Commit title detail hierarchy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-app/app/src/main/java/com/astrawave/app/TitleDetailsActivity.kt
+          git commit -m 'Make title details action-first and mobile-friendly'
+          git push origin HEAD:feature/nuvio-core-rebuild
