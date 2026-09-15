@@ -20,9 +20,12 @@ clear_system_dialogs() {
 }
 
 astrawave_is_foreground() {
-  adb shell dumpsys window windows 2>/dev/null \
-    | grep -E 'mCurrentFocus|mFocusedApp' \
-    | grep -q 'com.astrawave.app'
+  adb shell dumpsys activity activities 2>/dev/null \
+    | grep -E 'mResumedActivity|topResumedActivity|ResumedActivity' \
+    | grep -q 'com.astrawave.app' \
+    || adb shell dumpsys window windows 2>/dev/null \
+      | grep -E 'mCurrentFocus|mFocusedApp' \
+      | grep -q 'com.astrawave.app'
 }
 
 capture() {

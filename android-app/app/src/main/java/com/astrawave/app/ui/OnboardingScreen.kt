@@ -140,6 +140,51 @@ fun AstraWaveOnboardingScreen(
         .sortedBy { recommendationPriority(it.id) }
         .take(3)
 
+    if (health.readyToWatch && !showAdvanced) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(AstraWaveColors.Background)
+                .padding(horizontal = 24.dp, vertical = 34.dp),
+        ) {
+            Spacer(Modifier.height(48.dp))
+            Text(
+                "AstraWave",
+                color = AstraWaveColors.AccentStrong,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "Ready when you are.",
+                color = AstraWaveColors.PrimaryText,
+                style = MaterialTheme.typography.displayLarge,
+                maxLines = 2,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Start watching now. Add Live TV, personal media, devices, or other services whenever you want.",
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 4,
+            )
+            Spacer(Modifier.height(34.dp))
+            AstraWavePrimaryButton("Enter AstraWave", onFinished, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(12.dp))
+            AstraWaveSecondaryButton(
+                label = "Customize setup",
+                onClick = { showAdvanced = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "Everything else is optional and can be changed later from My Stuff.",
+                color = AstraWaveColors.TertiaryText,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        return
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -147,8 +192,6 @@ fun AstraWaveOnboardingScreen(
             .background(AstraWaveColors.Background)
             .padding(20.dp),
     ) {
-        Text("ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
-        Spacer(Modifier.height(8.dp))
         AstraWavePageHeader(
             title = if (health.readyToWatch) "You’re ready." else "Let’s get you watching.",
             subtitle = if (health.readyToWatch) {
