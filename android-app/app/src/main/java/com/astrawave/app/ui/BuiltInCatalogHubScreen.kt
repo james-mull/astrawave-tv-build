@@ -44,6 +44,7 @@ fun BuiltInCatalogHubScreen(
     mediaType: BuiltInCatalogMediaType,
 ) {
     val context = LocalContext.current
+    val device = LocalAstraWaveDeviceClass.current
     val prefs = remember { BuiltInCatalogPreferences(context) }
     var revision by remember { mutableIntStateOf(0) }
     var manageMode by remember { mutableStateOf(false) }
@@ -79,11 +80,11 @@ fun BuiltInCatalogHubScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
         contentPadding = PaddingValues(bottom = 36.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 10.dp else 18.dp),
     ) {
         item("cinematic-header") {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 0.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (device == AstraWaveDeviceClass.PHONE) 6.dp else 14.dp, bottom = 0.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -91,7 +92,7 @@ fun BuiltInCatalogHubScreen(
                     Text(
                         if (mediaType == BuiltInCatalogMediaType.MOVIE) "Movies" else "TV Shows",
                         color = AstraWaveColors.PrimaryText,
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -109,14 +110,14 @@ fun BuiltInCatalogHubScreen(
                 item("section-$section") {
                     Text(
                         section,
-                        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 6.dp),
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
                         color = AstraWaveColors.PrimaryText,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
+                        style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
                 items(definitions, key = { "rail-${it.id}" }) { definition ->
-                    Column(Modifier.padding(start = 22.dp)) {
+                    Column(Modifier.padding(start = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp)) {
                         CatalogContentShelf(definition = definition, profileId = profileId)
                     }
                 }
@@ -130,8 +131,8 @@ fun BuiltInCatalogHubScreen(
                     Text(
                         "Edit rows",
                         color = AstraWaveColors.PrimaryText,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
+                        style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
                     )
                     Text(
                         "Reorder or hide rows for this profile.",

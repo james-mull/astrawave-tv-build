@@ -33,6 +33,7 @@ import com.astrawave.app.data.LocalLibraryStore
 @Composable
 fun TvListsScreen(profileId: String = "default") {
     val context = LocalContext.current
+    val device = LocalAstraWaveDeviceClass.current
     val household = remember { HouseholdProfileStore(context) }
     val isKids = household.profiles().firstOrNull { it.id == profileId }?.kidsMode == true
     if (isKids) {
@@ -67,19 +68,19 @@ fun TvListsScreen(profileId: String = "default") {
                     "Continue Watching",
                     color = AstraWaveColors.PrimaryText,
                     style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(horizontal = 22.dp),
+                    modifier = Modifier.padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp),
                 )
                 Spacer(Modifier.height(9.dp))
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = 22.dp),
+                    contentPadding = PaddingValues(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp),
                 ) {
                     items(continueTv, key = { it.item.id }) { progress ->
                         val ratio = if (progress.durationMs > 0L) {
                             (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
                         } else 0f
                         AstraWaveFocusableCard(
-                            Modifier.width(280.dp).clickable { open(progress) },
+                            Modifier.width(if (device == AstraWaveDeviceClass.PHONE) 238.dp else 280.dp).clickable { open(progress) },
                         ) {
                             Column {
                                 AstraWaveArtwork(

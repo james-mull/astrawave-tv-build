@@ -201,12 +201,12 @@ fun PremiumHomeScreen(profileId: String = "default") {
     val discoveryFeatured = (discovery as? HomeDiscoveryState.Ready)?.let { ready ->
         (ready.movies + ready.series).firstOrNull()
     }
-    val horizontalPadding = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 34.dp
+    val horizontalPadding = if (device == AstraWaveDeviceClass.PHONE) 0.dp else 34.dp
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
         contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 22.dp else 30.dp),
+        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 16.dp else 30.dp),
     ) {
         when {
             liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }
@@ -304,30 +304,40 @@ private fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> 
 
 @Composable
 private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (AstraWaveMetadataGateway.Item) -> Unit) {
-    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(item) }) {
-        Box(Modifier.fillMaxWidth().height(if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) 500.dp else 560.dp)) {
+    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+    val hero: @Composable () -> Unit = {
+        Box(Modifier.fillMaxWidth().height(if (phone) 440.dp else 560.dp).clickable { onOpen(item) }) {
             AstraWaveArtwork(item.name, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.05f), AstraWaveColors.Background.copy(alpha = 0.48f), AstraWaveColors.Background)),
+                    Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.00f), AstraWaveColors.Background.copy(alpha = 0.28f), AstraWaveColors.Background)),
                 ),
             )
-            Column(Modifier.align(Alignment.BottomStart).padding(30.dp).width(720.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
+            Column(
+                Modifier.align(Alignment.BottomStart).padding(horizontal = if (phone) 18.dp else 30.dp, vertical = if (phone) 20.dp else 30.dp)
+                    .width(if (phone) 340.dp else 720.dp),
+                verticalArrangement = Arrangement.spacedBy(if (phone) 6.dp else 9.dp),
+            ) {
+                Text(item.name, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge, maxLines = 2)
                 item.description?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge, maxLines = 3)
+                    Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = if (phone) 2 else 3)
                 }
-                Text("View details  ›", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
+                Text("Details", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleSmall)
             }
         }
     }
+    if (phone) hero() else AstraWaveFocusableCard(Modifier.fillMaxWidth()) { hero() }
 }
 
 @Composable
 private fun HomeSection(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().animateContentSize()) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(10.dp))
+    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+    Column(
+        Modifier.fillMaxWidth().animateContentSize()
+            .padding(horizontal = if (phone) 16.dp else 0.dp)
+    ) {
+        Text(title, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(if (phone) 7.dp else 10.dp))
         content()
     }
 }
@@ -335,22 +345,28 @@ private fun HomeSection(title: String, content: @Composable () -> Unit) {
 @Composable
 private fun HomeHero(progress: LocalLibraryStore.PlaybackProgress, onOpen: (LibraryItemRef) -> Unit) {
     val ratio = if (progress.durationMs > 0L) (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(progress.item) }) {
-        Box(Modifier.fillMaxWidth().height(420.dp)) {
+    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+    val hero: @Composable () -> Unit = {
+        Box(Modifier.fillMaxWidth().height(if (phone) 410.dp else 420.dp).clickable { onOpen(progress.item) }) {
             AstraWaveArtwork(progress.item.title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.06f), AstraWaveColors.Background.copy(alpha = 0.52f), AstraWaveColors.Background)),
+                    Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.00f), AstraWaveColors.Background.copy(alpha = 0.32f), AstraWaveColors.Background)),
                 ),
             )
-            Column(Modifier.align(Alignment.BottomStart).padding(30.dp).width(700.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Column(
+                Modifier.align(Alignment.BottomStart).padding(horizontal = if (phone) 18.dp else 30.dp, vertical = if (phone) 20.dp else 30.dp)
+                    .width(if (phone) 340.dp else 700.dp),
+                verticalArrangement = Arrangement.spacedBy(if (phone) 6.dp else 9.dp),
+            ) {
                 HomeBadge(if (progress.item.type == LibraryMediaType.EPISODE) "CONTINUE SERIES" else "CONTINUE WATCHING")
-                Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
+                Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge, maxLines = 2)
                 LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
-                Text("▶ Resume", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
+                Text("Resume", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleSmall)
             }
         }
     }
+    if (phone) hero() else AstraWaveFocusableCard(Modifier.fillMaxWidth()) { hero() }
 }
 
 @Composable
@@ -411,8 +427,8 @@ private fun HomeBadge(label: String) {
 private fun HomeSkeletonRow() {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(6) { index ->
-            Column(Modifier.width(196.dp)) {
-                Box(Modifier.fillMaxWidth().height(294.dp).background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)))
+            Column(Modifier.width(if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) 148.dp else 196.dp)) {
+                Box(Modifier.fillMaxWidth().height(if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) 222.dp else 294.dp).background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)))
                 Spacer(Modifier.height(8.dp))
                 Box(Modifier.width((130 + index * 7).dp).height(16.dp).background(AstraWaveColors.SurfaceFocus, RoundedCornerShape(6.dp)))
             }
@@ -425,14 +441,16 @@ private fun LibraryHomeRow(items: List<LibraryItemRef>, badge: String? = null, o
     val unique = items.distinctBy { it.id }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(unique, key = { it.id }) { item ->
-            AstraWaveFocusableCard(Modifier.width(196.dp).clickable { onOpen(item) }) {
-                Column {
+            val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+            val body: @Composable () -> Unit = {
+                Column(Modifier.width(if (phone) 148.dp else 196.dp).clickable { onOpen(item) }) {
                     badge?.let { HomeBadge(it); Spacer(Modifier.height(6.dp)) }
                     AstraWaveArtwork(item.title, Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(8.dp))
-                    Text(item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                    Spacer(Modifier.height(if (phone) 6.dp else 8.dp))
+                    Text(item.title, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium, maxLines = 2)
                 }
             }
+            if (phone) body() else AstraWaveFocusableCard(Modifier.width(196.dp)) { body() }
         }
     }
 }
@@ -446,18 +464,20 @@ private fun MetadataHomeRow(
     val unique = metadataItems.distinctBy { "${it.type}:${it.id}" }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 20.dp)) {
         items(unique, key = { "${it.type}:${it.id}" }) { item ->
-            AstraWaveFocusableCard(Modifier.width(196.dp).clickable { onOpen(item) }) {
-                Column(Modifier.animateContentSize()) {
+            val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+            val body: @Composable () -> Unit = {
+                Column(Modifier.width(if (phone) 148.dp else 196.dp).clickable { onOpen(item) }.animateContentSize()) {
                     badge?.let { HomeBadge(it); Spacer(Modifier.height(6.dp)) }
                     AstraWaveArtwork(item.name, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Poster)
-                    Spacer(Modifier.height(8.dp))
-                    Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                    Spacer(Modifier.height(if (phone) 6.dp else 8.dp))
+                    Text(item.name, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium, maxLines = 2)
                     item.releaseInfo?.let {
-                        Spacer(Modifier.height(3.dp))
-                        Text(it, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                        Spacer(Modifier.height(2.dp))
+                        Text(it, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                     }
                 }
             }
+            if (phone) body() else AstraWaveFocusableCard(Modifier.width(196.dp)) { body() }
         }
     }
 }
