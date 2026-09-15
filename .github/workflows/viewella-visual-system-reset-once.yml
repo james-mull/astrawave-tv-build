@@ -1,0 +1,153 @@
+name: Viewella Visual System Reset Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/viewella-visual-system-reset-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  visual-reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Apply global visual system and premium mobile Live Guide Sports reset
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          # 1) Global visual system: neutral cinematic palette, less purple, tighter phone geometry.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveTheme.kt')
+          text = p.read_text()
+          replacements = {
+              'val Background = Color(0xFF05070B)': 'val Background = Color(0xFF030405)',
+              'val BackgroundRaised = Color(0xFF0A0D14)': 'val BackgroundRaised = Color(0xFF080A0C)',
+              'val Surface = Color(0xFF0F141D)': 'val Surface = Color(0xFF0D1013)',
+              'val SurfaceRaised = Color(0xFF151B27)': 'val SurfaceRaised = Color(0xFF12161A)',
+              'val SurfaceFocus = Color(0xFF20283A)': 'val SurfaceFocus = Color(0xFF1A2026)',
+              'val PrimaryText = Color(0xFFF9FAFF)': 'val PrimaryText = Color(0xFFF5F7FA)',
+              'val SecondaryText = Color(0xFFB4BDCE)': 'val SecondaryText = Color(0xFFA6ADB7)',
+              'val TertiaryText = Color(0xFF7E899E)': 'val TertiaryText = Color(0xFF727B86)',
+              'val Accent = Color(0xFF8D7CFF)': 'val Accent = Color(0xFFE8ECF2)',
+              'val AccentStrong = Color(0xFFC0B7FF)': 'val AccentStrong = Color(0xFFFFFFFF)',
+              'val AccentSoft = Color(0xFF5E50C7)': 'val AccentSoft = Color(0xFF343B44)',
+              'val Divider = Color(0xFF263042)': 'val Divider = Color(0xFF20262C)',
+              'val FocusRing = Color(0xFFF4F0FF)': 'val FocusRing = Color(0xFFFFFFFF)',
+              'val Chip = Color(0xFF1A2130)': 'val Chip = Color(0xFF14191E)',
+              'val GuideNow = Color(0xFF9C8DFF)': 'val GuideNow = Color(0xFF2C3641)',
+              'val GuideFuture = Color(0xFF18202D)': 'val GuideFuture = Color(0xFF11161B)',
+              'val GuidePast = Color(0xFF10151D)': 'val GuidePast = Color(0xFF090C0F)',
+              'extraSmall = RoundedCornerShape(4.dp),\n    small = RoundedCornerShape(7.dp),\n    medium = RoundedCornerShape(10.dp),\n    large = RoundedCornerShape(12.dp),\n    extraLarge = RoundedCornerShape(16.dp),': 'extraSmall = RoundedCornerShape(3.dp),\n    small = RoundedCornerShape(5.dp),\n    medium = RoundedCornerShape(7.dp),\n    large = RoundedCornerShape(9.dp),\n    extraLarge = RoundedCornerShape(12.dp),',
+              'AstraWaveDeviceClass.PHONE -> spacing.copy(section = 30.dp)': 'AstraWaveDeviceClass.PHONE -> spacing.copy(section = 24.dp)',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'theme anchor not found: {old[:60]}')
+              text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          # 2) Flatten shared phone cards/action rows and make phone primary actions high-contrast.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveComponents.kt')
+          text = p.read_text()
+          anchor = '''    val device = LocalAstraWaveDeviceClass.current\n    val elevationTokens = LocalAstraWaveElevation.current\n'''
+          repl = '''    val device = LocalAstraWaveDeviceClass.current\n    if (device == AstraWaveDeviceClass.PHONE) {\n        Box(modifier.padding(vertical = 2.dp)) { content() }\n        return\n    }\n    val elevationTokens = LocalAstraWaveElevation.current\n'''
+          if anchor not in text: raise SystemExit('focusable phone anchor not found')
+          text = text.replace(anchor, repl, 1)
+
+          anchor = '''    val device = LocalAstraWaveDeviceClass.current\n    Row(\n        modifier\n            .fillMaxWidth()\n            .clip(MaterialTheme.shapes.large)\n            .background(AstraWaveColors.SurfaceRaised)\n            .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.45f), MaterialTheme.shapes.large)\n            .padding(\n                horizontal = if (device == AstraWaveDeviceClass.PHONE) 14.dp else 18.dp,\n                vertical = if (device == AstraWaveDeviceClass.PHONE) 12.dp else 15.dp,\n            ),\n'''
+          repl = '''    val device = LocalAstraWaveDeviceClass.current\n    Row(\n        if (device == AstraWaveDeviceClass.PHONE) {\n            modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 10.dp)\n        } else {\n            modifier\n                .fillMaxWidth()\n                .clip(MaterialTheme.shapes.large)\n                .background(AstraWaveColors.SurfaceRaised)\n                .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.45f), MaterialTheme.shapes.large)\n                .padding(horizontal = 18.dp, vertical = 15.dp)\n        },\n'''
+          if anchor not in text: raise SystemExit('action row anchor not found')
+          text = text.replace(anchor, repl, 1)
+
+          text = text.replace(
+              'containerColor = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.AccentStrong else AstraWaveColors.Accent,\n            contentColor = AstraWaveColors.PrimaryText,',
+              'containerColor = if (device == AstraWaveDeviceClass.PHONE) AstraWaveColors.PrimaryText else if (focused && enabled) AstraWaveColors.AccentStrong else AstraWaveColors.Accent,\n            contentColor = if (device == AstraWaveDeviceClass.PHONE) AstraWaveColors.Background else AstraWaveColors.PrimaryText,',
+              1,
+          )
+          p.write_text(text)
+
+          # 3) Remove the selected rounded tile from phone bottom navigation.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = p.read_text()
+          old = '''            Column(\n                Modifier.weight(1f).fillMaxHeight()\n                    .background(\n                        if (selected) AstraWaveColors.SurfaceRaised else AstraWaveColors.BackgroundRaised,\n                        RoundedCornerShape(14.dp),\n                    )\n                    .clickable { onSelect(item) }\n                    .padding(vertical = 5.dp),\n                horizontalAlignment = Alignment.CenterHorizontally,\n                verticalArrangement = Arrangement.Center,\n            ) {\n                Icon(\n'''
+          new = '''            Column(\n                Modifier.weight(1f).fillMaxHeight()\n                    .clickable { onSelect(item) }\n                    .padding(vertical = 4.dp),\n                horizontalAlignment = Alignment.CenterHorizontally,\n                verticalArrangement = Arrangement.Center,\n            ) {\n                Box(Modifier.width(22.dp).height(2.dp).background(if (selected) AstraWaveColors.PrimaryText else Color.Transparent))\n                Spacer(Modifier.height(4.dp))\n                Icon(\n'''
+          if old not in text: raise SystemExit('bottom nav tile anchor not found')
+          text = text.replace(old, new, 1)
+          text = text.replace('tint = if (selected) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,', 'tint = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,', 1)
+          p.write_text(text)
+
+          # 4) Mobile Live TV: remove duplicated top filter rail and make the channel list the experience.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/LiveTvHubScreen.kt')
+          text = p.read_text()
+          old = '''            Text("Live TV", color = AstraWaveColors.PrimaryText, style = if (isPhone) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineLarge)\n            Spacer(Modifier.height(if (isPhone) 7.dp else 12.dp))\n            Row(\n                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),\n                horizontalArrangement = Arrangement.spacedBy(8.dp),\n            ) {\n                LiveModeButton("Channels", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }\n                lastChannel?.let { channel -> LiveModeButton("▶ ${channel.name}", false, ::resumeLast) }\n                LiveModeButton("Favorites", filter == LiveTvFilter.FAVORITES) {\n                    mode = LiveTvMode.CHANNELS\n                    selectedGroup = null\n                    filter = LiveTvFilter.FAVORITES\n                }\n                LiveModeButton("Recent", filter == LiveTvFilter.RECENTS) {\n                    mode = LiveTvMode.CHANNELS\n                    selectedGroup = null\n                    filter = LiveTvFilter.RECENTS\n                }\n                if (multiviewCount > 0) LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)\n                LiveModeButton("Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }\n            }\n'''
+          new = '''            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {\n                Column {\n                    Text("Live TV", color = AstraWaveColors.PrimaryText, style = if (isPhone) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge)\n                    if (isPhone) Text("Now playing across your channels", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)\n                }\n                if (isPhone) {\n                    Text(\n                        if (mode == LiveTvMode.SOURCES) "Channels" else "Sources",\n                        color = AstraWaveColors.SecondaryText,\n                        style = MaterialTheme.typography.labelLarge,\n                        modifier = Modifier.clickable { mode = if (mode == LiveTvMode.SOURCES) LiveTvMode.CHANNELS else LiveTvMode.SOURCES }.padding(8.dp),\n                    )\n                }\n            }\n            if (!isPhone) {\n                Spacer(Modifier.height(12.dp))\n                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {\n                    LiveModeButton("Channels", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }\n                    lastChannel?.let { channel -> LiveModeButton("▶ ${channel.name}", false, ::resumeLast) }\n                    LiveModeButton("Favorites", filter == LiveTvFilter.FAVORITES) { mode = LiveTvMode.CHANNELS; selectedGroup = null; filter = LiveTvFilter.FAVORITES }\n                    LiveModeButton("Recent", filter == LiveTvFilter.RECENTS) { mode = LiveTvMode.CHANNELS; selectedGroup = null; filter = LiveTvFilter.RECENTS }\n                    if (multiviewCount > 0) LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)\n                    LiveModeButton("Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }\n                }\n            }\n'''
+          if old not in text: raise SystemExit('live top chrome anchor not found')
+          text = text.replace(old, new, 1)
+          text = text.replace('label = { Text("Search channels") },', 'placeholder = { Text("Search channels") },', 1)
+          text = text.replace('Spacer(Modifier.height(8.dp))\n        Text("${filtered.size} channels", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)\n        Spacer(Modifier.height(8.dp))', 'Spacer(Modifier.height(10.dp))', 1)
+          p.write_text(text)
+
+          # 5) Guide phone cards: premium now/next row with progress instead of generic text card.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/GuideScreen.kt')
+          text = p.read_text()
+          if 'import androidx.compose.material3.LinearProgressIndicator' not in text:
+              text = text.replace('import androidx.compose.material3.MaterialTheme\n', 'import androidx.compose.material3.MaterialTheme\nimport androidx.compose.material3.LinearProgressIndicator\n', 1)
+          old_start = '''@Composable\nprivate fun PhoneGuideCard(row: GuideChannelRow, onPlay: () -> Unit) {\n'''
+          start = text.index(old_start)
+          end = text.index('\n@Composable\nprivate fun TimelineHeader', start)
+          new_fun = '''@Composable\nprivate fun PhoneGuideCard(row: GuideChannelRow, onPlay: () -> Unit) {\n    val nowMs = System.currentTimeMillis()\n    val parsed = row.programmes.mapNotNull { programme ->\n        val start = LiveTvRepository.parseXmlTvEpochMs(programme.start)\n        val end = LiveTvRepository.parseXmlTvEpochMs(programme.stop)\n        if (start == null || end == null) null else Triple(programme, start, end)\n    }.sortedBy { it.second }\n    val current = parsed.firstOrNull { nowMs in it.second until it.third }\n    val next = parsed.firstOrNull { it.second > nowMs }\n    val progress = current?.let { (_, start, end) ->\n        ((nowMs - start).toFloat() / (end - start).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)\n    }\n\n    Column(\n        Modifier.fillMaxWidth()\n            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)\n            .clickable(onClick = onPlay)\n            .padding(horizontal = 14.dp, vertical = 13.dp),\n        verticalArrangement = Arrangement.spacedBy(7.dp),\n    ) {\n        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {\n            Column(Modifier.weight(1f)) {\n                Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 1)\n                Text(row.group ?: "Live TV", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)\n            }\n            if (row.playableUrls.isNotEmpty()) Text("WATCH", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.labelSmall)\n        }\n        current?.let { (programme, start, end) ->\n            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {\n                Text("LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelSmall)\n                Text("${formatGuideTime(start)} – ${formatGuideTime(end)}", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)\n            }\n            Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)\n            LinearProgressIndicator(\n                progress = { progress ?: 0f },\n                modifier = Modifier.fillMaxWidth().height(3.dp),\n                color = AstraWaveColors.PrimaryText,\n                trackColor = AstraWaveColors.Divider,\n            )\n        } ?: Text(row.now?.title ?: "No current guide data", color = AstraWaveColors.SecondaryText)\n        next?.let { (programme, start, _) ->\n            Text("Next  ${formatGuideTime(start)}  ${programme.title}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)\n        }\n    }\n}\n'''
+          text = text[:start] + new_fun + text[end:]
+          text = text.replace('label = { Text("Search channels or programs") },', 'placeholder = { Text("Search channels or programs") },', 1)
+          p.write_text(text)
+
+          # 6) Dedicated phone Sports composition instead of squeezing TV-first two-pane UI.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/TvFirstExperience.kt')
+          text = p.read_text()
+          anchor = '''fun PremiumSportsScreen(\n    sources: List<IptvSource>,\n    profileId: String = "default",\n) {\n    val context = LocalContext.current\n'''
+          repl = '''fun PremiumSportsScreen(\n    sources: List<IptvSource>,\n    profileId: String = "default",\n) {\n    if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) {\n        PremiumSportsPhoneScreen(sources = sources, profileId = profileId)\n        return\n    }\n    val context = LocalContext.current\n'''
+          if anchor not in text: raise SystemExit('sports phone route anchor not found')
+          text = text.replace(anchor, repl, 1)
+
+          insert_at = text.index('\n@Composable\nprivate fun TvFirstTopBar')
+          phone_sports = '''\n@Composable\nprivate fun PremiumSportsPhoneScreen(\n    sources: List<IptvSource>,\n    profileId: String,\n) {\n    val context = LocalContext.current\n    val scope = rememberCoroutineScope()\n    val repository = remember { SportsGuideRepository() }\n    val addonLive = remember { StremioLiveCatalogDiscovery(context) }\n    val planner = remember { SourceFusionPlaybackPlanner(context) }\n    var selectedDate by remember { mutableStateOf(LocalDate.now(ZoneOffset.UTC)) }\n    var selectedLeague by remember { mutableStateOf<String?>(null) }\n    var state by remember(sources, selectedDate, profileId) { mutableStateOf<TvFirstLoad<SportsGuideSnapshot>>(TvFirstLoad.Loading) }\n\n    LaunchedEffect(sources, selectedDate, profileId) {\n        state = try {\n            val snapshot = withContext(Dispatchers.IO) {\n                val names = runCatching { addonLive.sportsChannelNames(profileId) }.getOrDefault(emptyList())\n                repository.load(selectedDate, sources, addonSportsChannelNames = names)\n            }\n            TvFirstLoad.Ready(snapshot)\n        } catch (error: Exception) {\n            TvFirstLoad.Error(error.message ?: "Unable to load sports")\n        }\n    }\n\n    fun play(item: SportsGuideItem) {\n        val candidates = item.resolution?.candidates.orEmpty()\n        if (candidates.isEmpty()) {\n            Toast.makeText(context, "No matched channel is available for this event.", Toast.LENGTH_LONG).show()\n            return\n        }\n        scope.launch {\n            val inputs = candidates.mapIndexed { index, candidate ->\n                SourceFusionPlaybackPlanner.Input(\n                    sourceKey = "sports:${item.event.id}:$index",\n                    url = candidate.streamUrl,\n                    provider = candidate.source,\n                    priority = candidate.priority,\n                )\n            }\n            val plan = withContext(Dispatchers.IO) { planner.plan(inputs, probeUnknown = false) }\n            val urls = plan?.orderedUrls.orEmpty()\n            if (urls.isEmpty()) return@launch\n            context.startActivity(\n                Intent(context, PlayerActivity::class.java)\n                    .putExtra(PlayerActivity.EXTRA_URL, urls.first())\n                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(urls))\n                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),\n            )\n        }\n    }\n\n    Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {\n        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {\n            Text("Sports", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)\n            Text(selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d")), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)\n            Spacer(Modifier.height(12.dp))\n            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {\n                DatePill("Yesterday", selectedDate == LocalDate.now(ZoneOffset.UTC).minusDays(1)) { selectedDate = LocalDate.now(ZoneOffset.UTC).minusDays(1) }\n                DatePill("Today", selectedDate == LocalDate.now(ZoneOffset.UTC)) { selectedDate = LocalDate.now(ZoneOffset.UTC) }\n                DatePill("Tomorrow", selectedDate == LocalDate.now(ZoneOffset.UTC).plusDays(1)) { selectedDate = LocalDate.now(ZoneOffset.UTC).plusDays(1) }\n            }\n        }\n\n        when (val current = state) {\n            TvFirstLoad.Loading -> Box(Modifier.fillMaxSize().padding(16.dp)) { AstraWaveLoadingState("Loading sports", "Getting today’s events.") }\n            is TvFirstLoad.Error -> Box(Modifier.fillMaxSize().padding(16.dp)) { AstraWaveErrorState("Sports unavailable", current.message) }\n            is TvFirstLoad.Ready -> {\n                val ranked = current.value.events.sortedWith(\n                    compareByDescending<SportsGuideItem> { it.event.isLive && it.watchCandidate != null }\n                        .thenByDescending { it.event.isLive }\n                        .thenByDescending { it.watchCandidate != null }\n                        .thenBy { it.event.isFinal },\n                )\n                val leagues = ranked.mapNotNull { it.event.league?.takeIf(String::isNotBlank) }.distinct().sorted()\n                val events = selectedLeague?.let { league -> ranked.filter { it.event.league == league } } ?: ranked\n                Column(Modifier.fillMaxSize()) {\n                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {\n                        DatePill("All", selectedLeague == null) { selectedLeague = null }\n                        leagues.forEach { league -> DatePill(league, selectedLeague == league) { selectedLeague = league } }\n                    }\n                    Spacer(Modifier.height(10.dp))\n                    if (events.isEmpty()) {\n                        Box(Modifier.fillMaxSize().padding(16.dp)) { AstraWaveEmptyState("No events", "Try another day or league.") }\n                    } else {\n                        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {\n                            items(events, key = { it.event.id }) { item ->\n                                val live = item.event.isLive\n                                val watchReady = item.watchCandidate != null\n                                Column(\n                                    Modifier.fillMaxWidth()\n                                        .background(if (live) AstraWaveColors.Surface else AstraWaveColors.Background, MaterialTheme.shapes.medium)\n                                        .clickable(enabled = watchReady) { if (watchReady) play(item) }\n                                        .padding(horizontal = 14.dp, vertical = 13.dp),\n                                    verticalArrangement = Arrangement.spacedBy(6.dp),\n                                ) {\n                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {\n                                        Text(\n                                            when { live -> "● LIVE"; item.event.isFinal -> "FINAL"; else -> item.event.time?.take(5) ?: "UPCOMING" },\n                                            color = if (live) AstraWaveColors.Live else AstraWaveColors.TertiaryText,\n                                            style = MaterialTheme.typography.labelSmall,\n                                        )\n                                        Text(if (watchReady) "WATCH" else "SCHEDULE", color = if (watchReady) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)\n                                    }\n                                    Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)\n                                    Text(listOfNotNull(item.event.league, item.broadcasterNames.firstOrNull()).joinToString("  •  ").ifBlank { "Sports" }, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)\n                                    if (watchReady) Text("Tap to watch best available source", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)\n                                }\n                                Spacer(Modifier.height(8.dp))\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n}\n'''
+          text = text[:insert_at] + phone_sports + text[insert_at:]
+          p.write_text(text)
+          PY
+
+      - name: Compile visual reset
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Commit visual reset
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveTheme.kt \
+            android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveComponents.kt \
+            android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt \
+            android-app/app/src/main/java/com/astrawave/app/ui/LiveTvHubScreen.kt \
+            android-app/app/src/main/java/com/astrawave/app/ui/GuideScreen.kt \
+            android-app/app/src/main/java/com/astrawave/app/ui/TvFirstExperience.kt
+          git commit -m 'Replace mobile visual system and rebuild Live Guide Sports presentation'
+          git push origin HEAD:feature/nuvio-core-rebuild
