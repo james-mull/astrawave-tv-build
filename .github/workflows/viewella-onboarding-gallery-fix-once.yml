@@ -1,0 +1,72 @@
+name: Viewella Onboarding Gallery Fix Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/viewella-onboarding-gallery-fix-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  onboarding-gallery-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Apply onboarding and gallery fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/OnboardingScreen.kt')
+          text = p.read_text()
+
+          anchor = '''    val optionalSuggestions = health.items\n        .filter { it.optional && !it.ready }\n        .sortedBy { recommendationPriority(it.id) }\n        .take(3)\n\n    Column(\n'''
+          replacement = '''    val optionalSuggestions = health.items\n        .filter { it.optional && !it.ready }\n        .sortedBy { recommendationPriority(it.id) }\n        .take(3)\n\n    if (health.readyToWatch && !showAdvanced) {\n        Column(\n            Modifier\n                .fillMaxSize()\n                .background(AstraWaveColors.Background)\n                .padding(horizontal = 24.dp, vertical = 34.dp),\n        ) {\n            Spacer(Modifier.height(48.dp))\n            Text(\n                "AstraWave",\n                color = AstraWaveColors.AccentStrong,\n                style = MaterialTheme.typography.titleMedium,\n            )\n            Spacer(Modifier.height(18.dp))\n            Text(\n                "Ready when you are.",\n                color = AstraWaveColors.PrimaryText,\n                style = MaterialTheme.typography.displayLarge,\n                maxLines = 2,\n            )\n            Spacer(Modifier.height(12.dp))\n            Text(\n                "Start watching now. Add Live TV, personal media, devices, or other services whenever you want.",\n                color = AstraWaveColors.SecondaryText,\n                style = MaterialTheme.typography.bodyLarge,\n                maxLines = 4,\n            )\n            Spacer(Modifier.height(34.dp))\n            AstraWavePrimaryButton("Enter AstraWave", onFinished, Modifier.fillMaxWidth())\n            Spacer(Modifier.height(12.dp))\n            AstraWaveSecondaryButton(\n                label = "Customize setup",\n                onClick = { showAdvanced = true },\n                modifier = Modifier.fillMaxWidth(),\n            )\n            Spacer(Modifier.height(18.dp))\n            Text(\n                "Everything else is optional and can be changed later from My Stuff.",\n                color = AstraWaveColors.TertiaryText,\n                style = MaterialTheme.typography.bodyMedium,\n            )\n        }\n        return\n    }\n\n    Column(\n'''
+          if anchor not in text:
+              raise SystemExit('onboarding insertion anchor not found')
+          text = text.replace(anchor, replacement, 1)
+
+          # Remove duplicated brand strip from the detailed setup state too.
+          text = text.replace('''        Text("ASTRAWAVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)\n        Spacer(Modifier.height(8.dp))\n''', '', 1)
+          p.write_text(text)
+
+          p = Path('.github/scripts/capture-full-gallery.sh')
+          text = p.read_text()
+          old = '''astrawave_is_foreground() {\n  adb shell dumpsys window windows 2>/dev/null \\\n    | grep -E 'mCurrentFocus|mFocusedApp' \\\n    | grep -q 'com.astrawave.app'\n}\n'''
+          new = '''astrawave_is_foreground() {\n  adb shell dumpsys activity activities 2>/dev/null \\\n    | grep -E 'mResumedActivity|topResumedActivity|ResumedActivity' \\\n    | grep -q 'com.astrawave.app' \\\n    || adb shell dumpsys window windows 2>/dev/null \\\n      | grep -E 'mCurrentFocus|mFocusedApp' \\\n      | grep -q 'com.astrawave.app'\n}\n'''
+          if old not in text:
+              raise SystemExit('foreground check anchor not found')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+          PY
+
+      - name: Compile onboarding fix
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-app/app/src/main/java/com/astrawave/app/ui/OnboardingScreen.kt .github/scripts/capture-full-gallery.sh
+          git commit -m 'Simplify ready-state onboarding and harden gallery foreground detection'
+          git push origin HEAD:feature/nuvio-core-rebuild
