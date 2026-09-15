@@ -299,13 +299,6 @@ private fun RebuildRoot(initialRoute: String? = null) {
         }
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            if (isPhone && current != RebuildDestination.Profiles) {
-                MobileStreamingTopBar(
-                    current = current,
-                    avatar = activeProfile.avatar,
-                    onProfile = { current = RebuildDestination.My },
-                )
-            }
             if (!useRail && !isPhone) SectionStrip(current, primaryDestinations) { current = it }
             Box(Modifier.weight(1f).fillMaxWidth()) {
             when (current) {
@@ -396,6 +389,19 @@ private fun RebuildRoot(initialRoute: String? = null) {
                 )
             }
 
+                if (isPhone && current != RebuildDestination.Profiles && current != RebuildDestination.My) {
+                    Box(
+                        Modifier.align(Alignment.TopEnd)
+                            .padding(top = 10.dp, end = 12.dp)
+                            .width(40.dp)
+                            .height(40.dp)
+                            .background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(999.dp))
+                            .clickable { current = RebuildDestination.My },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(activeProfile.avatar, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
             }
             if (isPhone && current != RebuildDestination.Profiles) {
                 MobileStreamingBottomBar(
@@ -409,72 +415,43 @@ private fun RebuildRoot(initialRoute: String? = null) {
 }
 
 @Composable
-private fun MobileStreamingTopBar(
-    current: RebuildDestination,
-    avatar: String,
-    onProfile: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().background(AstraWaveColors.Background).padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            if (current == RebuildDestination.Home) "AstraWave" else current.label,
-            color = AstraWaveColors.PrimaryText,
-            style = MaterialTheme.typography.titleLarge,
-        )
-        Box(
-            Modifier.background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(999.dp))
-                .clickable(onClick = onProfile)
-                .padding(horizontal = 11.dp, vertical = 7.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(avatar, style = MaterialTheme.typography.titleMedium)
-        }
-    }
-}
-
-@Composable
 private fun MobileStreamingBottomBar(
     current: RebuildDestination,
     items: List<RebuildDestination>,
     onSelect: (RebuildDestination) -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised).padding(horizontal = 4.dp, vertical = 5.dp),
+        Modifier.fillMaxWidth().height(64.dp)
+            .background(AstraWaveColors.BackgroundRaised)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         items.forEach { item ->
             val selected = current == item
             Column(
-                Modifier.weight(1f).clickable { onSelect(item) }.padding(vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (selected) {
-                    Spacer(
-                        Modifier.width(26.dp).height(2.dp)
-                            .background(AstraWaveColors.AccentStrong, RoundedCornerShape(999.dp)),
+                Modifier.weight(1f).fillMaxHeight()
+                    .background(
+                        if (selected) AstraWaveColors.SurfaceRaised else AstraWaveColors.BackgroundRaised,
+                        RoundedCornerShape(14.dp),
                     )
-                } else {
-                    Spacer(Modifier.height(2.dp))
-                }
-                Spacer(Modifier.height(4.dp))
+                    .clickable { onSelect(item) }
+                    .padding(vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
                 Icon(
                     item.icon,
                     contentDescription = item.label,
-                    tint = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+                    tint = if (selected) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
                 )
-                if (selected) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        item.label,
-                        color = AstraWaveColors.PrimaryText,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                    )
-                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    item.label,
+                    color = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
             }
         }
     }
