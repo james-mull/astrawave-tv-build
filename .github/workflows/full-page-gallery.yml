@@ -15,6 +15,7 @@ permissions:
   contents: read
 
 # Captures the real customer-facing pages from the debug APK for visual review.
+# Triggered after major UI passes so the gallery always reflects the current customer experience.
 jobs:
   capture-gallery:
     runs-on: ubuntu-22.04
