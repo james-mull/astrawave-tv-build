@@ -6,4 +6,6 @@ Current validation scope includes the Viewella-inspired content-first UI across 
 
 Full Viewella-style mobile visual reset validation: edge-to-edge and flatter Home browsing, denser artwork-first rails, reduced card chrome, tighter phone typography and radii, simplified Movies/TV browsing, shorter title-detail hero with focused actions, content-first Live TV and Guide, search-first Search, library-first My Stuff with settings collapsed, simplified Sports mobile hierarchy, sparse mobile player controls, and stable five-tab bottom navigation (Home, Movies, TV, Live, Search) with no persistent top menu.
 
+First-run validation now also covers the simplified ready-state onboarding experience: a minimal welcome, one primary Enter AstraWave action, and setup customization kept secondary instead of presenting a setup dashboard before normal use.
+
 This pass validates the complete mobile visual reset while preserving TV remote/focus behavior and existing playback, billing, account, source, and authorization logic.
