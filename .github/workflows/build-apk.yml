@@ -37,11 +37,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android components
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      # GitHub's hosted Android runner already includes the SDK/toolchain used by our
+      # successful phone/tablet/TV smoke jobs. Avoid android-actions/setup-android here
+      # because that external setup step has been intermittently failing before Gradle runs.
+      - name: Verify Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          test -d "$ANDROID_HOME"
+          echo "Using preinstalled Android SDK at $ANDROID_HOME"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
