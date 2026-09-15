@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -37,8 +39,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Surface
@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -298,7 +299,15 @@ private fun RebuildRoot(initialRoute: String? = null) {
         }
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
+            if (isPhone && current != RebuildDestination.Profiles) {
+                MobileStreamingTopBar(
+                    current = current,
+                    avatar = activeProfile.avatar,
+                    onProfile = { current = RebuildDestination.My },
+                )
+            }
             if (!useRail && !isPhone) SectionStrip(current, primaryDestinations) { current = it }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
             when (current) {
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
@@ -387,16 +396,84 @@ private fun RebuildRoot(initialRoute: String? = null) {
                 )
             }
 
+            }
             if (isPhone && current != RebuildDestination.Profiles) {
-                NavigationBar(containerColor = AstraWaveColors.BackgroundRaised) {
-                    primaryDestinations.forEach { item ->
-                        NavigationBarItem(
-                            selected = current == item,
-                            onClick = { current = item },
-                            icon = { Icon(item.icon, item.label) },
-                            label = { if (current == item) Text(item.label, maxLines = 1) },
-                        )
-                    }
+                MobileStreamingBottomBar(
+                    current = current,
+                    items = primaryDestinations,
+                    onSelect = { current = it },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileStreamingTopBar(
+    current: RebuildDestination,
+    avatar: String,
+    onProfile: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().background(AstraWaveColors.Background).padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (current == RebuildDestination.Home) "AstraWave" else current.label,
+            color = AstraWaveColors.PrimaryText,
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Box(
+            Modifier.background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(999.dp))
+                .clickable(onClick = onProfile)
+                .padding(horizontal = 11.dp, vertical = 7.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(avatar, style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun MobileStreamingBottomBar(
+    current: RebuildDestination,
+    items: List<RebuildDestination>,
+    onSelect: (RebuildDestination) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised).padding(horizontal = 4.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        items.forEach { item ->
+            val selected = current == item
+            Column(
+                Modifier.weight(1f).clickable { onSelect(item) }.padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (selected) {
+                    Spacer(
+                        Modifier.width(26.dp).height(2.dp)
+                            .background(AstraWaveColors.AccentStrong, RoundedCornerShape(999.dp)),
+                    )
+                } else {
+                    Spacer(Modifier.height(2.dp))
+                }
+                Spacer(Modifier.height(4.dp))
+                Icon(
+                    item.icon,
+                    contentDescription = item.label,
+                    tint = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+                )
+                if (selected) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        item.label,
+                        color = AstraWaveColors.PrimaryText,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
                 }
             }
         }

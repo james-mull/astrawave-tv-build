@@ -17,7 +17,6 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("tv", "TV"),
         AstraWaveNavItem("live", "Live"),
         AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("my", "My Stuff"),
     )
 
     /** Profile, library and specialist surfaces stay out of the primary phone bar. */
@@ -62,7 +61,7 @@ object AstraWaveNavigationContract {
         check(mobileMore.map { it.route }.distinct().size == mobileMore.size)
         check(mobileTablet.map { it.route }.distinct().size == mobileTablet.size)
         check(tv.map { it.route }.distinct().size == tv.size)
-        check(mobilePrimary.map { it.route } == listOf("home", "movies", "tv", "live", "search", "my"))
+        check(mobilePrimary.map { it.route } == listOf("home", "movies", "tv", "live", "search"))
         check(mobileMore.any { it.route == "my" })
         check(mobileMore.any { it.route == "guide" })
         check(mobileMore.any { it.route == "sports" })
