@@ -314,8 +314,8 @@ private fun TitleDetailsScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
@@ -327,11 +327,11 @@ private fun TitleDetailsScreen(
                 } else onBack()
             }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
             Column(Modifier.weight(1f)) {
-                Text(title, color = DetailsPrimary, fontSize = 28.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(title, color = DetailsPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
                     when {
                         selectedEpisode != null -> "Season ${selectedEpisode!!.season} • Episode ${selectedEpisode!!.episode} • ${selectedEpisode!!.title}"
-                        sourcesMode && seriesMode -> "Episodes & Watch Options"
+                        sourcesMode && seriesMode -> "Episodes"
                         sourcesMode -> "Watch Options"
                         details?.releaseDate?.isNotBlank() == true -> details!!.releaseDate.orEmpty()
                         year != null -> year.toString()
@@ -347,8 +347,45 @@ private fun TitleDetailsScreen(
         }
 
         if (!sourcesMode) {
+            if (!seriesMode) {
+                Button(
+                    onClick = { playBest() },
+                    enabled = !quickPlayLoading,
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Text(if (quickPlayLoading) "Finding a Stream…" else "▶ Play", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (hasEpisodeCatalog && firstUnwatched != null) {
+                Button(
+                    onClick = { playBest(firstUnwatched) },
+                    enabled = !quickPlayLoading,
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    val saved = progressByEpisode[firstUnwatched.id]
+                    val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
+                    Text(
+                        if (quickPlayLoading) "Finding Episode…"
+                        else "$prefix • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}",
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            OutlinedButton(
+                onClick = { sourcesMode = true },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) { Text(if (hasEpisodeCatalog) "Episodes & Watch Options" else "Watch Options", fontWeight = FontWeight.Bold) }
+            quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }
+
             when {
-                detailsLoading -> LoadingRow("Loading premium title details…")
+                detailsLoading -> LoadingRow("Loading title details…")
                 details != null -> PremiumInfoPanel(details = details!!, seriesMode = seriesMode)
                 else -> InfoPanel(title = title, year = year, seriesMode = seriesMode)
             }
@@ -384,49 +421,6 @@ private fun TitleDetailsScreen(
                     ) { Text("▶ Watch Trailer") }
                 }
 
-            if (!seriesMode) {
-                Button(
-                    onClick = { playBest() },
-                    enabled = !quickPlayLoading,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text(if (quickPlayLoading) "Finding a Stream…" else "▶ Play", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            if (hasEpisodeCatalog && firstUnwatched != null) {
-                Button(
-                    onClick = { playBest(firstUnwatched) },
-                    enabled = !quickPlayLoading,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    val saved = progressByEpisode[firstUnwatched.id]
-                    val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
-                    Text(
-                        if (quickPlayLoading) "Finding Episode…"
-                        else "$prefix Series • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}",
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-
-            OutlinedButton(
-                onClick = { sourcesMode = true },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) { Text(if (hasEpisodeCatalog) "Browse Episodes & Watch Options" else "Watch Options", fontWeight = FontWeight.Bold) }
-            quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }
-            Text(
-                if (hasEpisodeCatalog) {
-                    "AstraWave can continue with your first unfinished episode automatically. Open Watch Options whenever you want to choose another available stream."
-                } else {
-                    "Press Play and AstraWave chooses an available playback option automatically, with backups ready when available."
-                },
-                color = DetailsMuted,
-                fontSize = 12.sp,
-            )
             return@Column
         }
 
