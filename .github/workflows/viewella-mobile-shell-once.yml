@@ -1,0 +1,85 @@
+name: Viewella Mobile Shell Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/viewella-mobile-shell-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-mobile-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Rebuild mobile navigation shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          # 5-tab Viewella-style touch navigation; profile/settings leave the bottom bar.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveNavigationContract.kt')
+          text = p.read_text()
+          old = '''    val mobilePrimary = listOf(\n        AstraWaveNavItem("home", "Home"),\n        AstraWaveNavItem("movies", "Movies"),\n        AstraWaveNavItem("tv", "TV"),\n        AstraWaveNavItem("live", "Live"),\n        AstraWaveNavItem("search", "Search"),\n        AstraWaveNavItem("my", "My Stuff"),\n    )'''
+          new = '''    val mobilePrimary = listOf(\n        AstraWaveNavItem("home", "Home"),\n        AstraWaveNavItem("movies", "Movies"),\n        AstraWaveNavItem("tv", "TV"),\n        AstraWaveNavItem("live", "Live"),\n        AstraWaveNavItem("search", "Search"),\n    )'''
+          text = text.replace(old, new)
+          text = text.replace('check(mobilePrimary.map { it.route } == listOf("home", "movies", "tv", "live", "search", "my"))', 'check(mobilePrimary.map { it.route } == listOf("home", "movies", "tv", "live", "search"))')
+          p.write_text(text)
+
+          p = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = p.read_text()
+          if 'import androidx.compose.foundation.layout.Box\n' not in text:
+              text = text.replace('import androidx.compose.foundation.layout.Arrangement\n', 'import androidx.compose.foundation.layout.Arrangement\nimport androidx.compose.foundation.layout.Box\n')
+          if 'import androidx.compose.foundation.shape.RoundedCornerShape\n' not in text:
+              text = text.replace('import androidx.compose.foundation.verticalScroll\n', 'import androidx.compose.foundation.verticalScroll\nimport androidx.compose.foundation.shape.RoundedCornerShape\n')
+          if 'import androidx.compose.ui.Alignment\n' not in text:
+              text = text.replace('import androidx.compose.ui.Modifier\n', 'import androidx.compose.ui.Alignment\nimport androidx.compose.ui.Modifier\n')
+
+          old_block = '''        Column(Modifier.weight(1f).fillMaxHeight()) {\n            if (!useRail && !isPhone) SectionStrip(current, primaryDestinations) { current = it }\n            when (current) {'''
+          new_block = '''        Column(Modifier.weight(1f).fillMaxHeight()) {\n            if (isPhone && current != RebuildDestination.Profiles) {\n                MobileStreamingTopBar(\n                    current = current,\n                    avatar = activeProfile.avatar,\n                    onProfile = { current = RebuildDestination.My },\n                )\n            }\n            if (!useRail && !isPhone) SectionStrip(current, primaryDestinations) { current = it }\n            Box(Modifier.weight(1f).fillMaxWidth()) {\n            when (current) {'''
+          if old_block not in text:
+              raise SystemExit('main content anchor not found')
+          text = text.replace(old_block, new_block, 1)
+
+          old_bottom = '''            if (isPhone && current != RebuildDestination.Profiles) {\n                NavigationBar(containerColor = AstraWaveColors.BackgroundRaised) {\n                    primaryDestinations.forEach { item ->\n                        NavigationBarItem(\n                            selected = current == item,\n                            onClick = { current = item },\n                            icon = { Icon(item.icon, item.label) },\n                            label = { if (current == item) Text(item.label, maxLines = 1) },\n                        )\n                    }\n                }\n            }\n        }\n    }\n}\n'''
+          new_bottom = '''            }\n            if (isPhone && current != RebuildDestination.Profiles) {\n                MobileStreamingBottomBar(\n                    current = current,\n                    items = primaryDestinations,\n                    onSelect = { current = it },\n                )\n            }\n        }\n    }\n}\n\n@Composable\nprivate fun MobileStreamingTopBar(\n    current: RebuildDestination,\n    avatar: String,\n    onProfile: () -> Unit,\n) {\n    Row(\n        Modifier.fillMaxWidth().background(AstraWaveColors.Background).padding(horizontal = 16.dp, vertical = 8.dp),\n        horizontalArrangement = Arrangement.SpaceBetween,\n        verticalAlignment = Alignment.CenterVertically,\n    ) {\n        Text(\n            if (current == RebuildDestination.Home) "AstraWave" else current.label,\n            color = AstraWaveColors.PrimaryText,\n            style = MaterialTheme.typography.titleLarge,\n        )\n        Box(\n            Modifier.background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(999.dp))\n                .clickable(onClick = onProfile)\n                .padding(horizontal = 11.dp, vertical = 7.dp),\n            contentAlignment = Alignment.Center,\n        ) {\n            Text(avatar, style = MaterialTheme.typography.titleMedium)\n        }\n    }\n}\n\n@Composable\nprivate fun MobileStreamingBottomBar(\n    current: RebuildDestination,\n    items: List<RebuildDestination>,\n    onSelect: (RebuildDestination) -> Unit,\n) {\n    Row(\n        Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised).padding(horizontal = 4.dp, vertical = 5.dp),\n        horizontalArrangement = Arrangement.SpaceEvenly,\n        verticalAlignment = Alignment.CenterVertically,\n    ) {\n        items.forEach { item ->\n            val selected = current == item\n            Column(\n                Modifier.weight(1f).clickable { onSelect(item) }.padding(vertical = 4.dp),\n                horizontalAlignment = Alignment.CenterHorizontally,\n            ) {\n                if (selected) {\n                    Spacer(\n                        Modifier.width(26.dp).height(2.dp)\n                            .background(AstraWaveColors.AccentStrong, RoundedCornerShape(999.dp)),\n                    )\n                } else {\n                    Spacer(Modifier.height(2.dp))\n                }\n                Spacer(Modifier.height(4.dp))\n                Icon(\n                    item.icon,\n                    contentDescription = item.label,\n                    tint = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,\n                )\n                if (selected) {\n                    Spacer(Modifier.height(2.dp))\n                    Text(\n                        item.label,\n                        color = AstraWaveColors.PrimaryText,\n                        style = MaterialTheme.typography.labelSmall,\n                        maxLines = 1,\n                    )\n                }\n            }\n        }\n    }\n}\n'''
+          if old_bottom not in text:
+              raise SystemExit('bottom nav anchor not found')
+          text = text.replace(old_bottom, new_bottom, 1)
+
+          # Remove unused Material navigation imports from the old shell.
+          text = text.replace('import androidx.compose.material3.NavigationBar\n', '')
+          text = text.replace('import androidx.compose.material3.NavigationBarItem\n', '')
+          p.write_text(text)
+          PY
+
+      - name: Compile rebuilt mobile shell
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Commit rebuilt mobile shell
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt \
+                  android-app/app/src/main/java/com/astrawave/app/ui/AstraWaveNavigationContract.kt
+          git commit -m "Rebuild mobile navigation as streaming shell"
+          git push origin HEAD:feature/nuvio-core-rebuild
