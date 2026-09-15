@@ -177,18 +177,17 @@ fun AstraWaveSportsScreen(
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = if (device == AstraWaveDeviceClass.PHONE) 9.dp else 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("SPORTS", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
-                Text("Game Day", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-                Text(
-                    if (device == AstraWaveDeviceClass.PHONE) "Live games, scores and what to watch next." else "Live now, starting soon and watch-ready games from your authorized sources.",
-                    color = AstraWaveColors.SecondaryText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                )
+                if (device == AstraWaveDeviceClass.PHONE) {
+                    Text("Sports", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+                } else {
+                    Text("SPORTS", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
+                    Text("Game Day", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
+                    Text("Live now, starting soon and watch-ready games from your authorized sources.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                }
             }
             if (multiviewCount > 0 && device != AstraWaveDeviceClass.PHONE) {
                 AstraWavePrimaryButton("Mosaic $multiviewCount/6", onOpenMultiview)
@@ -317,7 +316,7 @@ private fun PhoneSportsContent(
     onFavorite: (String?, String?) -> Unit,
     onMosaic: (SportsGuideItem) -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
         featured?.let {
             SportsFeaturedHero(it, onPlay)
             Spacer(Modifier.height(14.dp))
@@ -326,7 +325,7 @@ private fun PhoneSportsContent(
         Spacer(Modifier.height(14.dp))
         AstraWaveSectionHeader(
             title = sectionLabel(selectedSection),
-            subtitle = "${visible.size} games • ${visible.count { it.watchCandidate != null }} watch ready",
+            subtitle = "${visible.size} games",
         )
         Spacer(Modifier.height(8.dp))
 
@@ -464,7 +463,7 @@ private fun SportsFeaturedHero(item: SportsGuideItem, onPlay: (SportsGuideItem) 
                 style = MaterialTheme.typography.labelLarge,
             )
             Spacer(Modifier.height(7.dp))
-            Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge, maxLines = 2)
+            Text(item.event.name, color = AstraWaveColors.PrimaryText, style = if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge, maxLines = 2)
             Spacer(Modifier.height(5.dp))
             Text(
                 listOfNotNull(item.event.league, eventTime(item), item.broadcasterNames.firstOrNull()).joinToString(" • "),
@@ -476,7 +475,7 @@ private fun SportsFeaturedHero(item: SportsGuideItem, onPlay: (SportsGuideItem) 
             SourceLine(item)
             if (item.watchCandidate != null) {
                 Spacer(Modifier.height(8.dp))
-                Text("▶ Watch best available source", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
+                Text("Watch", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
@@ -512,7 +511,7 @@ private fun SportsFilterRails(
 private fun SportsEventCard(item: SportsGuideItem, selected: Boolean, onClick: () -> Unit) {
     AstraWaveFocusableCard(
         Modifier.fillMaxWidth()
-            .background(if (selected) AstraWaveColors.SurfaceFocus else AstraWaveColors.Surface, MaterialTheme.shapes.large)
+            .background(if (selected) AstraWaveColors.SurfaceRaised else AstraWaveColors.Surface, MaterialTheme.shapes.medium)
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.fillMaxWidth()) {

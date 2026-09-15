@@ -373,18 +373,19 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun showMobilePlayerOptions() {
-        val labels = arrayOf("Playback Options", "Speed", "Audio", "Subtitles", "Playback Info")
+        val active = player
+        val position = active?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        if (recapEndMs > position) actions += "Skip Recap" to { player?.seekTo(recapEndMs) }
+        if (introEndMs > position) actions += "Skip Intro" to { player?.seekTo(introEndMs) }
+        actions += "Playback Options" to { showSourcePicker() }
+        actions += "Speed" to { showSpeedPicker() }
+        actions += "Audio" to { showTrackPicker(C.TRACK_TYPE_AUDIO) }
+        actions += "Subtitles" to { showTrackPicker(C.TRACK_TYPE_TEXT) }
+        actions += "Playback Info" to { showDiagnostics() }
         AlertDialog.Builder(this)
             .setTitle("Playback")
-            .setItems(labels) { _, which ->
-                when (which) {
-                    0 -> showSourcePicker()
-                    1 -> showSpeedPicker()
-                    2 -> showTrackPicker(C.TRACK_TYPE_AUDIO)
-                    3 -> showTrackPicker(C.TRACK_TYPE_TEXT)
-                    4 -> showDiagnostics()
-                }
-            }
+            .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second.invoke() }
             .setNegativeButton("Close", null)
             .show()
     }
