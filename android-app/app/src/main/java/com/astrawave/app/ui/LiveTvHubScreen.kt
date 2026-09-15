@@ -193,8 +193,8 @@ fun LiveTvHubScreen(
                 vertical = if (isPhone) 8.dp else 12.dp,
             ),
         ) {
-            Text("Live TV", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-            Spacer(Modifier.height(12.dp))
+            Text("Live TV", color = AstraWaveColors.PrimaryText, style = if (isPhone) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineLarge)
+            Spacer(Modifier.height(if (isPhone) 7.dp else 12.dp))
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -393,10 +393,12 @@ private fun PhoneLiveChannels(
                 val selected = p.channelId == selectedChannelId
                 val candidate = p.group.bestCandidate
                 val favorite = p.channelId in favoriteIds
-                AstraWaveFocusableCard(
-                    Modifier.fillMaxWidth().clickable { onSelect(p.channelId) },
+                Column(
+                    Modifier.fillMaxWidth()
+                        .background(if (selected) AstraWaveColors.SurfaceRaised else AstraWaveColors.Background)
+                        .clickable { onSelect(p.channelId) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                 ) {
-                    Column(Modifier.fillMaxWidth()) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(Modifier.weight(1f)) {
                                 Text(
@@ -449,8 +451,7 @@ private fun PhoneLiveChannels(
                             }
                         }
                     }
-                }
-                Spacer(Modifier.height(7.dp))
+                Spacer(Modifier.height(2.dp))
             }
         }
         Spacer(Modifier.height(18.dp))
@@ -616,6 +617,6 @@ private fun LiveModeButton(label: String, selected: Boolean, onClick: () -> Unit
             containerColor = if (selected) AstraWaveColors.Accent else AstraWaveColors.SurfaceRaised,
             contentColor = AstraWaveColors.PrimaryText,
         ),
-        shape = MaterialTheme.shapes.large,
+        shape = if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) MaterialTheme.shapes.small else MaterialTheme.shapes.large,
     ) { Text(label, maxLines = 1) }
 }

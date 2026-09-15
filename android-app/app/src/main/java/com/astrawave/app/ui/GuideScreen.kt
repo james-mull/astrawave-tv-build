@@ -163,19 +163,23 @@ fun AstraWaveGuideScreen(
             .background(AstraWaveColors.Background)
             .padding(if (isPhone) 16.dp else 24.dp),
     ) {
-        AstraWavePageHeader(
-            title = "Guide",
-            subtitle = if (isPhone) "Now and next" else "Now and next across your channels",
-        )
-        Spacer(Modifier.height(if (isPhone) 8.dp else 12.dp))
+        if (isPhone) {
+            Text("Guide", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(7.dp))
+        } else {
+            AstraWavePageHeader(title = "Guide", subtitle = "Now and next across your channels")
+            Spacer(Modifier.height(12.dp))
+        }
 
         when (val current = state) {
             GuideLoadState.Loading -> AstraWaveLoadingState("Building your guide", "Loading channels and schedules.")
             is GuideLoadState.Error -> AstraWaveErrorState("Guide unavailable", current.message, retryLabel = "Refresh", onRetry = { refreshKey += 1 })
             is GuideLoadState.Ready -> {
                 val snapshot = current.snapshot
-                GuideSummaryRail(snapshot, current.customized, current.epgOverrides)
-                Spacer(Modifier.height(12.dp))
+                if (!isPhone) {
+                    GuideSummaryRail(snapshot, current.customized, current.epgOverrides)
+                    Spacer(Modifier.height(12.dp))
+                }
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -263,8 +267,11 @@ private fun PhoneGuideCard(row: GuideChannelRow, onPlay: () -> Unit) {
     val current = parsed.firstOrNull { nowMs in it.second until it.third }
     val next = parsed.firstOrNull { it.second > nowMs }
 
-    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable(onClick = onPlay)) {
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Column(
+        Modifier.fillMaxWidth().background(AstraWaveColors.Background).clickable(onClick = onPlay)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
                     Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 1)
@@ -281,7 +288,6 @@ private fun PhoneGuideCard(row: GuideChannelRow, onPlay: () -> Unit) {
                 Text("NEXT • ${formatGuideTime(start)} • ${programme.title}", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
         }
-    }
 }
 
 @Composable

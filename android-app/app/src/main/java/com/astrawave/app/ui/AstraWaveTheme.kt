@@ -169,11 +169,11 @@ private val AstraWaveTvTypography = Typography(
 )
 
 private val AstraWavePhoneShapes = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(14.dp),
-    large = RoundedCornerShape(18.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(7.dp),
+    medium = RoundedCornerShape(10.dp),
+    large = RoundedCornerShape(12.dp),
+    extraLarge = RoundedCornerShape(16.dp),
 )
 
 private val AstraWaveTabletShapes = Shapes(
@@ -212,7 +212,7 @@ fun AstraWaveTheme(
     }
 
     val effectiveSpacing = when (deviceClass) {
-        AstraWaveDeviceClass.PHONE -> spacing
+        AstraWaveDeviceClass.PHONE -> spacing.copy(section = 30.dp)
         AstraWaveDeviceClass.TABLET -> spacing.copy(screenHorizontal = 28.dp, section = 54.dp)
         AstraWaveDeviceClass.TV -> spacing.copy(screenHorizontal = spacing.tvScreenHorizontal, section = 62.dp)
     }

@@ -144,14 +144,16 @@ fun UniversalSearchScreen(profileId: String = "default") {
 
     LazyColumn(
         Modifier.fillMaxSize().background(AstraWaveColors.Background),
-        contentPadding = PaddingValues(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = if (device == AstraWaveDeviceClass.PHONE) 8.dp else 20.dp),
+        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 10.dp else 14.dp),
     ) {
-        item {
-            AstraWavePageHeader(
-                title = if (isKids) "Kids Search" else "Search",
-                subtitle = if (isKids) "Find movies and shows allowed for this profile." else "Find movies, shows, live TV, sports, music and your own media.",
-            )
+        if (device != AstraWaveDeviceClass.PHONE) {
+            item {
+                AstraWavePageHeader(
+                    title = if (isKids) "Kids Search" else "Search",
+                    subtitle = if (isKids) "Find movies and shows allowed for this profile." else "Find movies, shows, live TV, sports, music and your own media.",
+                )
+            }
         }
 
         if (isKids && !searchAllowed) {
@@ -170,7 +172,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
                 onValueChange = { query = it; searchNonce = 0 },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text(if (isKids) "Search movies and shows" else "Search titles, teams, channels, artists…") },
+                placeholder = { Text(if (isKids) "Search movies and shows" else if (device == AstraWaveDeviceClass.PHONE) "Search" else "Search titles, teams, channels, artists…") },
                 trailingIcon = {
                     if (query.isNotBlank()) TextButton(onClick = { query = ""; state = SearchState.Idle }) { Text("Clear") }
                 },
@@ -212,7 +214,7 @@ fun UniversalSearchScreen(profileId: String = "default") {
             SearchState.Idle -> item { SearchMessage("Discover something to watch", if (isKids) "Start typing to search this profile's approved catalog." else "Type at least two characters to begin.") }
             SearchState.Loading -> item {
                 Row(
-                    Modifier.fillMaxWidth().background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(18.dp)).padding(18.dp),
+                    Modifier.fillMaxWidth().background(AstraWaveColors.SurfaceRaised, MaterialTheme.shapes.medium).padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     CircularProgressIndicator(color = AstraWaveColors.Accent, strokeWidth = 2.dp)
