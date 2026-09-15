@@ -1,0 +1,65 @@
+name: Mobile Live Guide Route Fix Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/mobile-live-guide-route-fix-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  mobile-live-guide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Route phone Live and Guide to mobile layouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/TvFirstExperience.kt')
+          text = p.read_text()
+
+          live_anchor = '''fun PremiumLiveTvScreen(\n    sources: List<IptvSource>,\n    onSourcesChanged: (List<IptvSource>) -> Unit,\n    profileId: String = "default",\n) {\n    val context = LocalContext.current\n'''
+          live_repl = '''fun PremiumLiveTvScreen(\n    sources: List<IptvSource>,\n    onSourcesChanged: (List<IptvSource>) -> Unit,\n    profileId: String = "default",\n) {\n    if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) {\n        LiveTvHubScreen(\n            sources = sources,\n            onSourcesChanged = onSourcesChanged,\n            profileId = profileId,\n        )\n        return\n    }\n    val context = LocalContext.current\n'''
+          if live_anchor not in text:
+              raise SystemExit('PremiumLiveTvScreen anchor not found')
+          text = text.replace(live_anchor, live_repl, 1)
+
+          guide_anchor = '''fun PremiumGuideScreen(\n    sources: List<IptvSource>,\n    profileId: String = "default",\n) {\n    val context = LocalContext.current\n'''
+          guide_repl = '''fun PremiumGuideScreen(\n    sources: List<IptvSource>,\n    profileId: String = "default",\n) {\n    if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) {\n        AstraWaveGuideScreen(sources = sources, profileId = profileId)\n        return\n    }\n    val context = LocalContext.current\n'''
+          if guide_anchor not in text:
+              raise SystemExit('PremiumGuideScreen anchor not found')
+          text = text.replace(guide_anchor, guide_repl, 1)
+          p.write_text(text)
+          PY
+
+      - name: Compile mobile Live Guide fix
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Commit route fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-app/app/src/main/java/com/astrawave/app/ui/TvFirstExperience.kt
+          git commit -m 'Use dedicated mobile Live and Guide layouts on phones'
+          git push origin HEAD:feature/nuvio-core-rebuild
