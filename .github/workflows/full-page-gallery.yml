@@ -16,6 +16,7 @@ permissions:
 
 # Captures the real customer-facing pages from the debug APK for visual review.
 # Triggered after major UI passes so the gallery always reflects the current customer experience.
+# Refresh after Viewella-inspired pass 2.
 jobs:
   capture-gallery:
     runs-on: ubuntu-22.04
