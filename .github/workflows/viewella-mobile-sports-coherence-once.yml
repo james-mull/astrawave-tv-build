@@ -1,0 +1,94 @@
+name: Viewella Mobile Sports Coherence Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/viewella-mobile-sports-coherence-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sports-coherence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Apply mobile Sports coherence and compact player skip actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          # Sports mobile: remove oversized branding and flatten event cards.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/SportsScreen.kt')
+          text = p.read_text()
+          old_header = '''        Row(\n            Modifier.fillMaxWidth().padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = 14.dp),\n            horizontalArrangement = Arrangement.SpaceBetween,\n        ) {\n            Column(Modifier.weight(1f)) {\n                Text("SPORTS", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)\n                Text("Game Day", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)\n                Text(\n                    if (device == AstraWaveDeviceClass.PHONE) "Live games, scores and what to watch next." else "Live now, starting soon and watch-ready games from your authorized sources.",\n                    color = AstraWaveColors.SecondaryText,\n                    style = MaterialTheme.typography.bodyMedium,\n                    maxLines = 2,\n                )\n            }\n            if (multiviewCount > 0 && device != AstraWaveDeviceClass.PHONE) {\n                AstraWavePrimaryButton("Mosaic $multiviewCount/6", onOpenMultiview)\n            }\n        }'''
+          new_header = '''        Row(\n            Modifier.fillMaxWidth().padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = if (device == AstraWaveDeviceClass.PHONE) 9.dp else 14.dp),\n            horizontalArrangement = Arrangement.SpaceBetween,\n        ) {\n            Column(Modifier.weight(1f)) {\n                if (device == AstraWaveDeviceClass.PHONE) {\n                    Text("Sports", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)\n                } else {\n                    Text("SPORTS", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)\n                    Text("Game Day", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)\n                    Text("Live now, starting soon and watch-ready games from your authorized sources.", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)\n                }\n            }\n            if (multiviewCount > 0 && device != AstraWaveDeviceClass.PHONE) {\n                AstraWavePrimaryButton("Mosaic $multiviewCount/6", onOpenMultiview)\n            }\n        }'''
+          if old_header not in text:
+              raise SystemExit('sports header anchor not found')
+          text = text.replace(old_header, new_header, 1)
+          text = text.replace('Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {', 'Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {', 1)
+          text = text.replace('Spacer(Modifier.height(14.dp))\n        SportsFilterRails', 'Spacer(Modifier.height(10.dp))\n        SportsFilterRails', 1)
+          text = text.replace('subtitle = "${visible.size} games • ${visible.count { it.watchCandidate != null }} watch ready",', 'subtitle = "${visible.size} games",', 1)
+
+          old_feature = '''@Composable\nprivate fun SportsFeaturedHero(item: SportsGuideItem, onPlay: (SportsGuideItem) -> Unit) {\n    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable(enabled = item.watchCandidate != null) { onPlay(item) }) {\n        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {'''
+          new_feature = '''@Composable\nprivate fun SportsFeaturedHero(item: SportsGuideItem, onPlay: (SportsGuideItem) -> Unit) {\n    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE\n    val body: @Composable () -> Unit = {\n        Column(\n            Modifier.fillMaxWidth().clickable(enabled = item.watchCandidate != null) { onPlay(item) }\n                .padding(horizontal = if (phone) 4.dp else 10.dp, vertical = if (phone) 6.dp else 8.dp),\n        ) {'''
+          if old_feature not in text:
+              raise SystemExit('sports featured start not found')
+          text = text.replace(old_feature, new_feature, 1)
+          old_feature_close = '''            }\n        }\n    }\n}\n\n@Composable\nprivate fun SportsFilterRails'''
+          new_feature_close = '''            }\n        }\n    if (phone) body() else AstraWaveFocusableCard(Modifier.fillMaxWidth()) { body() }\n}\n\n@Composable\nprivate fun SportsFilterRails'''
+          if old_feature_close not in text:
+              raise SystemExit('sports featured close not found')
+          text = text.replace(old_feature_close, new_feature_close, 1)
+          text = text.replace('Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge, maxLines = 2)', 'Text(item.event.name, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge, maxLines = 2)', 1)
+          text = text.replace('Text("▶ Watch best available source", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)', 'Text("Watch", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)', 1)
+
+          old_card = '''@Composable\nprivate fun SportsEventCard(item: SportsGuideItem, selected: Boolean, onClick: () -> Unit) {\n    AstraWaveFocusableCard(\n        Modifier.fillMaxWidth()\n            .background(if (selected) AstraWaveColors.SurfaceFocus else AstraWaveColors.Surface, MaterialTheme.shapes.large)\n            .clickable(onClick = onClick),\n    ) {\n        Column(Modifier.fillMaxWidth()) {'''
+          new_card = '''@Composable\nprivate fun SportsEventCard(item: SportsGuideItem, selected: Boolean, onClick: () -> Unit) {\n    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE\n    val body: @Composable () -> Unit = {\n        Column(\n            Modifier.fillMaxWidth()\n                .background(if (selected) AstraWaveColors.SurfaceRaised else if (phone) AstraWaveColors.Background else AstraWaveColors.Surface, MaterialTheme.shapes.medium)\n                .clickable(onClick = onClick)\n                .padding(if (phone) 10.dp else 12.dp),\n        ) {'''
+          if old_card not in text:
+              raise SystemExit('sports card start not found')
+          text = text.replace(old_card, new_card, 1)
+          old_card_close = '''            SourceLine(item)\n        }\n    }\n}\n\n@Composable\nprivate fun SportsActions'''
+          new_card_close = '''            SourceLine(item)\n        }\n    }\n    if (phone) body() else AstraWaveFocusableCard(Modifier.fillMaxWidth()) { body() }\n}\n\n@Composable\nprivate fun SportsActions'''
+          if old_card_close not in text:
+              raise SystemExit('sports card close not found')
+          text = text.replace(old_card_close, new_card_close, 1)
+          p.write_text(text)
+
+          # Compact player: keep skip intro/recap accessible through Options after toolbar simplification.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/PlayerActivity.kt')
+          text = p.read_text()
+          old = '''    private fun showMobilePlayerOptions() {\n        val labels = arrayOf("Playback Options", "Speed", "Audio", "Subtitles", "Playback Info")\n        AlertDialog.Builder(this)\n            .setTitle("Playback")\n            .setItems(labels) { _, which ->\n                when (which) {\n                    0 -> showSourcePicker()\n                    1 -> showSpeedPicker()\n                    2 -> showTrackPicker(C.TRACK_TYPE_AUDIO)\n                    3 -> showTrackPicker(C.TRACK_TYPE_TEXT)\n                    4 -> showDiagnostics()\n                }\n            }\n            .setNegativeButton("Close", null)\n            .show()\n    }'''
+          new = '''    private fun showMobilePlayerOptions() {\n        val active = player\n        val position = active?.currentPosition?.coerceAtLeast(0L) ?: 0L\n        val actions = mutableListOf<Pair<String, () -> Unit>>()\n        if (recapEndMs > position) actions += "Skip Recap" to { player?.seekTo(recapEndMs) }\n        if (introEndMs > position) actions += "Skip Intro" to { player?.seekTo(introEndMs) }\n        actions += "Playback Options" to { showSourcePicker() }\n        actions += "Speed" to { showSpeedPicker() }\n        actions += "Audio" to { showTrackPicker(C.TRACK_TYPE_AUDIO) }\n        actions += "Subtitles" to { showTrackPicker(C.TRACK_TYPE_TEXT) }\n        actions += "Playback Info" to { showDiagnostics() }\n        AlertDialog.Builder(this)\n            .setTitle("Playback")\n            .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second.invoke() }\n            .setNegativeButton("Close", null)\n            .show()\n    }'''
+          if old not in text:
+              raise SystemExit('mobile player options anchor not found')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+          PY
+      - name: Compile Sports coherence
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+      - name: Commit Sports coherence
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/ui/SportsScreen.kt \
+                  android-app/app/src/main/java/com/astrawave/app/PlayerActivity.kt
+          git commit -m "Finish mobile Sports and player coherence"
+          git push origin HEAD:feature/nuvio-core-rebuild
