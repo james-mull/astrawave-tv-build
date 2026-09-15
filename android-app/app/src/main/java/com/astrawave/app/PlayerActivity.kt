@@ -311,13 +311,19 @@ class PlayerActivity : ComponentActivity() {
             setPadding(if (compact) 6 else 10, if (compact) 6 else 10, if (compact) 6 else 10, if (compact) 6 else 10)
             setBackgroundColor(0xB3000000.toInt())
         }
-        sourceButton = quickButton(sourceLabel()) { showSourcePicker() }.also { quickControls?.addView(it) }
-        quickControls?.addView(quickButton(if (compact) "Speed" else "Playback Speed") { showSpeedPicker() })
-        quickControls?.addView(quickButton("Audio") { showTrackPicker(C.TRACK_TYPE_AUDIO) })
-        quickControls?.addView(quickButton(if (compact) "Subs" else "Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })
-        skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
-        skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
-        quickControls?.addView(quickButton(if (compact) "Info" else "Playback Info") { showDiagnostics() })
+        if (compact) {
+            quickControls?.addView(quickButton("Options") { showMobilePlayerOptions() })
+            skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE }
+            skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE }
+        } else {
+            sourceButton = quickButton(sourceLabel()) { showSourcePicker() }.also { quickControls?.addView(it) }
+            quickControls?.addView(quickButton("Playback Speed") { showSpeedPicker() })
+            quickControls?.addView(quickButton("Audio") { showTrackPicker(C.TRACK_TYPE_AUDIO) })
+            quickControls?.addView(quickButton("Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })
+            skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
+            skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }
+            quickControls?.addView(quickButton("Playback Info") { showDiagnostics() })
+        }
 
         quickControlsScroller = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -364,6 +370,23 @@ class PlayerActivity : ComponentActivity() {
         minimumWidth = 0
         minWidth = 0
         minHeight = 0
+    }
+
+    private fun showMobilePlayerOptions() {
+        val labels = arrayOf("Playback Options", "Speed", "Audio", "Subtitles", "Playback Info")
+        AlertDialog.Builder(this)
+            .setTitle("Playback")
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> showSourcePicker()
+                    1 -> showSpeedPicker()
+                    2 -> showTrackPicker(C.TRACK_TYPE_AUDIO)
+                    3 -> showTrackPicker(C.TRACK_TYPE_TEXT)
+                    4 -> showDiagnostics()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun prepareNextEpisode() {

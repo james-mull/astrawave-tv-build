@@ -68,6 +68,8 @@ fun MyAstraWaveHub(
     onOpenAudio: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val device = LocalAstraWaveDeviceClass.current
+    val isPhone = device == AstraWaveDeviceClass.PHONE
     val store = remember { LocalLibraryStore(context) }
     val cloudSync = remember { LibraryCloudSync(context) }
     val profileId = account.activeProfileId
@@ -83,6 +85,7 @@ fun MyAstraWaveHub(
     var showDiagnostics by remember { mutableStateOf(false) }
     var showTmdbSetup by remember { mutableStateOf(false) }
     var utilitySection by remember { mutableStateOf<AccountSection?>(null) }
+    var settingsExpanded by remember { mutableStateOf(false) }
 
     fun refresh() { snapshot = store.snapshot(profileId) }
 
@@ -196,12 +199,25 @@ fun MyAstraWaveHub(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .background(AstraWaveColors.Background).padding(bottom = 36.dp),
     ) {
-        AccountHeader(account)
+        if (isPhone) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("My Stuff", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)
+                    Text(account.planName, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
+                }
+                if (account.cloudSyncEnabled) Icon(Icons.Default.CloudDone, "Cloud sync enabled", tint = AstraWaveColors.Success)
+            }
+        } else {
+            AccountHeader(account)
+        }
 
         Text("MY STUFF", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+            modifier = Modifier.padding(horizontal = if (isPhone) 16.dp else 22.dp, vertical = if (isPhone) 5.dp else 10.dp))
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = if (isPhone) 16.dp else 22.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             LibraryShortcut("Watchlist", "${snapshot.watchlist.size} items", Icons.Default.VideoLibrary) { activeView = PersonalLibraryView.Watchlist }
@@ -234,7 +250,20 @@ fun MyAstraWaveHub(
             }
         }
 
-        Spacer(Modifier.height(26.dp))
+        Spacer(Modifier.height(if (isPhone) 20.dp else 26.dp))
+        if (isPhone) {
+            Row(
+                Modifier.fillMaxWidth().clickable { settingsExpanded = !settingsExpanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.Settings, null, tint = AstraWaveColors.SecondaryText, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text("Settings & Connections", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(if (settingsExpanded) "Hide" else "Open", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        if (!isPhone || settingsExpanded) {
         Text("SETTINGS", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         SetupRow { showSetup = true }
@@ -289,6 +318,7 @@ fun MyAstraWaveHub(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
         )
         AccountRow(AccountSection.DIAGNOSTICS) { openSection(AccountSection.DIAGNOSTICS) }
+        }
     }
 
     if (createList) {
@@ -444,14 +474,19 @@ private fun AccountHeader(account: AccountOverview) {
 
 @Composable
 private fun LibraryShortcut(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
-    AstraWaveFocusableCard(Modifier.width(150.dp).clickable(onClick = onClick)) {
-        Column {
-            Icon(icon, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(25.dp))
-            Spacer(Modifier.height(18.dp))
-            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+    val body: @Composable () -> Unit = {
+        Column(
+            Modifier.width(if (phone) 132.dp else 150.dp).clickable(onClick = onClick)
+                .then(if (phone) Modifier.padding(vertical = 8.dp) else Modifier),
+        ) {
+            Icon(icon, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(if (phone) 22.dp else 25.dp))
+            Spacer(Modifier.height(if (phone) 10.dp else 18.dp))
+            Text(title, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleMedium)
+            Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)
         }
     }
+    if (phone) body() else AstraWaveFocusableCard(Modifier.width(150.dp)) { body() }
 }
 
 @Composable
