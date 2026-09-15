@@ -106,9 +106,9 @@ private fun PremiumVodDetailScreen(
     val tmdbRepository = remember(tmdbToken) { TmdbCatalogRepository(tmdbToken) }
     val tmdbId = remember(sourceId) { sourceId?.takeIf { it.startsWith("tmdb:") }?.substringAfterLast(':')?.toLongOrNull() }
     val seriesMode = mediaType.equals("SERIES", true) || mediaType.equals("TV", true)
-    val pagePadding = if (device == AstraWaveDeviceClass.PHONE) 18.dp else 34.dp
-    val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 500.dp else 590.dp
-    val heroTextWidth = if (device == AstraWaveDeviceClass.PHONE) 520.dp else 760.dp
+    val pagePadding = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 34.dp
+    val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 430.dp else 590.dp
+    val heroTextWidth = if (device == AstraWaveDeviceClass.PHONE) 340.dp else 760.dp
 
     var details by remember { mutableStateOf<TmdbTitleDetails?>(null) }
     var loadingDetails by remember { mutableStateOf(tmdbId != null && tmdbRepository.isConfigured()) }
@@ -239,7 +239,7 @@ private fun PremiumVodDetailScreen(
                 Text(
                     title,
                     color = AstraWaveColors.PrimaryText,
-                    style = MaterialTheme.typography.displayLarge,
+                    style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.Black,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -250,50 +250,55 @@ private fun PremiumVodDetailScreen(
                     details?.runtimeMinutes?.let { "${it} min" },
                     details?.genres?.take(3)?.joinToString(" • ")?.takeIf { it.isNotBlank() },
                 ).joinToString("  •  ")
-                if (meta.isNotBlank()) Text(meta, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge)
+                if (meta.isNotBlank()) Text(meta, color = AstraWaveColors.SecondaryText, style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyLarge)
 
                 details?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                     Text(
                         overview,
                         color = AstraWaveColors.SecondaryText,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = if (device == AstraWaveDeviceClass.PHONE) 3 else 4,
+                        style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+                        maxLines = if (device == AstraWaveDeviceClass.PHONE) 2 else 4,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.width(heroTextWidth),
                     )
                 }
 
                 Spacer(Modifier.height(4.dp))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     AstraWavePrimaryButton(
                         label = when {
-                            playLoading -> "Finding a Stream…"
-                            seriesMode && progress != null -> "▶ Continue"
-                            seriesMode -> "▶ Episodes"
-                            progress != null -> "▶ Resume"
-                            else -> "▶ Play"
+                            playLoading -> "Finding…"
+                            seriesMode && progress != null -> "Continue"
+                            seriesMode -> "Episodes"
+                            progress != null -> "Resume"
+                            else -> "Play"
                         },
                         onClick = { if (seriesMode) openDeepDetails() else playBest() },
                         enabled = !playLoading,
                     )
-                    details?.videos?.firstOrNull { it.site.equals("YouTube", true) && (it.type.equals("Trailer", true) || it.official) }?.let { trailer ->
-                        AstraWaveSecondaryButton("Trailer") {
-                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}"))) }
-                        }
-                    }
-                    AstraWaveSecondaryButton(if (inMyList) "✓ My List" else "+ My List") {
+                    AstraWaveSecondaryButton(if (inMyList) "In My List" else "My List") {
                         val enabled = !inMyList
-                        library.setWatchlist(
-                            WatchlistEntry(profileId = profileId, item = libraryItem),
-                            enabled = enabled,
-                        )
+                        library.setWatchlist(WatchlistEntry(profileId = profileId, item = libraryItem), enabled = enabled)
                         inMyList = enabled
                     }
-                    AstraWaveSecondaryButton(if (showSources) "Hide" else "Watch Options") {
-                        if (showSources) showSources = false else loadSources()
-                    }
-                    AstraWaveSecondaryButton(if (seriesMode) "Episodes" else "Details") { openDeepDetails() }
                 }
+            }
+        }
+
+        if (device == AstraWaveDeviceClass.PHONE) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = 10.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                details?.videos?.firstOrNull { it.site.equals("YouTube", true) && (it.type.equals("Trailer", true) || it.official) }?.let { trailer ->
+                    AstraWaveSecondaryButton("Trailer") {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${trailer.key}"))) }
+                    }
+                }
+                AstraWaveSecondaryButton(if (showSources) "Hide options" else "Watch options") {
+                    if (showSources) showSources = false else loadSources()
+                }
+                AstraWaveSecondaryButton(if (seriesMode) "Episodes" else "More details") { openDeepDetails() }
             }
         }
 
