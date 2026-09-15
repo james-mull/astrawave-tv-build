@@ -8,4 +8,6 @@ Full Viewella-style mobile visual reset validation: edge-to-edge and flatter Hom
 
 First-run validation now also covers the simplified ready-state onboarding experience: a minimal welcome, one primary Enter AstraWave action, and setup customization kept secondary instead of presenting a setup dashboard before normal use.
 
+Final gallery-driven corrections: phones now route Live TV and Guide to their dedicated mobile layouts instead of TV-first multi-column/timeline layouts, while tablet/TV retain the richer large-screen experiences. Title details are action-first on mobile, with Play/Continue and Episodes/Watch Options immediately beneath the title before metadata, lists, and recommendations.
+
 This pass validates the complete mobile visual reset while preserving TV remote/focus behavior and existing playback, billing, account, source, and authorization logic.
