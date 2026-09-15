@@ -115,8 +115,8 @@ class RebuildMainActivity : ComponentActivity() {
 
 private enum class RebuildDestination(val route: String, val label: String, val icon: ImageVector) {
     Home("home", "Home", Icons.Default.Home),
-    Movies("movies", "VOD", Icons.Default.Movie),
-    Shows("tv", "TV Series", Icons.Default.Tv),
+    Movies("movies", "Movies", Icons.Default.Movie),
+    Shows("tv", "TV", Icons.Default.Tv),
     Live("live", "Live TV", Icons.Default.LiveTv),
     Guide("guide", "Guide", Icons.Default.CalendarMonth),
     Sports("sports", "Sports", Icons.Default.SportsFootball),
@@ -126,7 +126,7 @@ private enum class RebuildDestination(val route: String, val label: String, val 
     Addons("addons", "Content Sources", Icons.Default.Explore),
     Discover("discover", "Discover", Icons.Default.Explore),
     Search("search", "Search", Icons.Default.Search),
-    My("my", "My AstraWave", Icons.Default.AccountCircle),
+    My("my", "My Stuff", Icons.Default.AccountCircle),
     Profiles("profiles", "Profiles", Icons.Default.AccountCircle),
 }
 
@@ -277,7 +277,7 @@ private fun RebuildRoot(initialRoute: String? = null) {
             NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(railWidth)) {
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    if (isTv && !tvRailExpanded) activeProfile.avatar else "ASTRAWAVE",
+                    if (isTv && !tvRailExpanded) activeProfile.avatar else "AstraWave",
                     color = AstraWaveColors.Accent,
                     style = MaterialTheme.typography.headlineMedium,
                     maxLines = 1,

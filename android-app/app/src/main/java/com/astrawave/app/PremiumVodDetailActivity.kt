@@ -107,7 +107,7 @@ private fun PremiumVodDetailScreen(
     val tmdbId = remember(sourceId) { sourceId?.takeIf { it.startsWith("tmdb:") }?.substringAfterLast(':')?.toLongOrNull() }
     val seriesMode = mediaType.equals("SERIES", true) || mediaType.equals("TV", true)
     val pagePadding = if (device == AstraWaveDeviceClass.PHONE) 18.dp else 34.dp
-    val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 430.dp else 540.dp
+    val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 500.dp else 590.dp
     val heroTextWidth = if (device == AstraWaveDeviceClass.PHONE) 520.dp else 760.dp
 
     var details by remember { mutableStateOf<TmdbTitleDetails?>(null) }
@@ -236,7 +236,6 @@ private fun PremiumVodDetailScreen(
                 Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = pagePadding, vertical = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(if (seriesMode) "SERIES" else "MOVIE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
                 Text(
                     title,
                     color = AstraWaveColors.PrimaryText,
@@ -269,8 +268,8 @@ private fun PremiumVodDetailScreen(
                     AstraWavePrimaryButton(
                         label = when {
                             playLoading -> "Finding a Stream…"
-                            seriesMode && progress != null -> "▶ Continue Series"
-                            seriesMode -> "▶ Browse Episodes"
+                            seriesMode && progress != null -> "▶ Continue"
+                            seriesMode -> "▶ Episodes"
                             progress != null -> "▶ Resume"
                             else -> "▶ Play"
                         },
@@ -290,10 +289,10 @@ private fun PremiumVodDetailScreen(
                         )
                         inMyList = enabled
                     }
-                    AstraWaveSecondaryButton(if (showSources) "Hide Options" else "Watch Options") {
+                    AstraWaveSecondaryButton(if (showSources) "Hide" else "Watch Options") {
                         if (showSources) showSources = false else loadSources()
                     }
-                    AstraWaveSecondaryButton(if (seriesMode) "Episodes & Info" else "More Info") { openDeepDetails() }
+                    AstraWaveSecondaryButton(if (seriesMode) "Episodes" else "Details") { openDeepDetails() }
                 }
             }
         }
@@ -306,7 +305,7 @@ private fun PremiumVodDetailScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
                         Text("Watch Options", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("Choose a stream, or use Play to let AstraWave pick for you.", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)
+                        Text("Choose where to watch.", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (!sourcesLoading && sources.isNotEmpty()) {
                         Text("${sources.size} available", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelLarge)

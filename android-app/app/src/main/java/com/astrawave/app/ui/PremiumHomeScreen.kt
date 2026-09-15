@@ -205,16 +205,9 @@ fun PremiumHomeScreen(profileId: String = "default") {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
-        contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 18.dp else 24.dp),
+        contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 22.dp else 30.dp),
     ) {
-        item(key = "home-brand") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("ASTRAWAVE", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
-                cloudRestoreMessage?.let { Text(it, color = AstraWaveColors.Success, style = MaterialTheme.typography.labelMedium) }
-            }
-        }
-
         when {
             liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }
             heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }
@@ -312,7 +305,7 @@ private fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> 
 @Composable
 private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (AstraWaveMetadataGateway.Item) -> Unit) {
     AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onOpen(item) }) {
-        Box(Modifier.fillMaxWidth().height(430.dp)) {
+        Box(Modifier.fillMaxWidth().height(if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) 500.dp else 560.dp)) {
             AstraWaveArtwork(item.name, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
             Box(
                 Modifier.fillMaxSize().background(
@@ -320,12 +313,11 @@ private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (Astr
                 ),
             )
             Column(Modifier.align(Alignment.BottomStart).padding(30.dp).width(720.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                HomeBadge("FEATURED")
                 Text(item.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
                 item.description?.takeIf { it.isNotBlank() }?.let {
                     Text(it, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge, maxLines = 3)
                 }
-                Text("▶ View details", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
+                Text("View details  ›", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
@@ -334,7 +326,7 @@ private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (Astr
 @Composable
 private fun HomeSection(title: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().animateContentSize()) {
-        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineSmall)
+        Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(10.dp))
         content()
     }

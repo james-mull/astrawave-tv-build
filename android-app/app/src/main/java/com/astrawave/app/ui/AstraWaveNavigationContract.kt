@@ -21,7 +21,7 @@ object AstraWaveNavigationContract {
 
     /** Profile, library and specialist surfaces stay out of the primary phone bar. */
     val mobileMore = listOf(
-        AstraWaveNavItem("my", "My AstraWave"),
+        AstraWaveNavItem("my", "My Stuff"),
         AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Sports"),
         AstraWaveNavItem("multiview", "Multiview"),
@@ -40,7 +40,7 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Sports"),
         AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("my", "My AstraWave"),
+        AstraWaveNavItem("my", "My Stuff"),
     )
 
     /** TV rail follows content priority before utilities. */

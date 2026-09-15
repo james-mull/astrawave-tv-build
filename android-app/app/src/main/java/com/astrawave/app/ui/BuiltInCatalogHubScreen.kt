@@ -78,12 +78,12 @@ fun BuiltInCatalogHubScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
-        contentPadding = PaddingValues(bottom = 32.dp),
+        contentPadding = PaddingValues(bottom = 36.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item("cinematic-header") {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 2.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 0.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -94,16 +94,9 @@ fun BuiltInCatalogHubScreen(
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                     )
-                    if (!manageMode) {
-                        Text(
-                            if (mediaType == BuiltInCatalogMediaType.MOVIE) "Find something worth watching" else "Series, new episodes and favorites",
-                            color = AstraWaveColors.TertiaryText,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
                 }
                 Text(
-                    if (manageMode) "Done" else "Customize",
+                    if (manageMode) "Done" else "Edit",
                     color = if (manageMode) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.clickable { manageMode = !manageMode }.padding(8.dp),
@@ -118,7 +111,7 @@ fun BuiltInCatalogHubScreen(
                         section,
                         modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 6.dp),
                         color = AstraWaveColors.PrimaryText,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -135,13 +128,13 @@ fun BuiltInCatalogHubScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
-                        "Customize your rows",
+                        "Edit rows",
                         color = AstraWaveColors.PrimaryText,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Choose what appears first and hide anything you do not use.",
+                        "Reorder or hide rows for this profile.",
                         color = AstraWaveColors.SecondaryText,
                         style = MaterialTheme.typography.bodyMedium,
                     )
