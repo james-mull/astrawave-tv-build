@@ -1,0 +1,48 @@
+name: Build Viewella Tester APK Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/build-viewella-tester-apk-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tester-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ASTRAWAVE_TMDB_BEARER_TOKEN: ${{ secrets.ASTRAWAVE_TMDB_BEARER_TOKEN }}
+      ASTRAWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRAWAVE_FIREBASE_API_KEY }}
+      ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
+      ASTRAWAVE_FIREBASE_PROJECT_ID: ${{ secrets.ASTRAWAVE_FIREBASE_PROJECT_ID }}
+      ASTRAWAVE_FIREBASE_SENDER_ID: ${{ secrets.ASTRAWAVE_FIREBASE_SENDER_ID }}
+      ASTRAWAVE_API_BASE_URL: ${{ secrets.ASTRAWAVE_API_BASE_URL }}
+      ASTRAWAVE_PREMIUM_PRODUCT_ID: ${{ secrets.ASTRAWAVE_PREMIUM_PRODUCT_ID }}
+      ASTRAWAVE_GIT_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify Android SDK
+        run: |
+          test -n "${ANDROID_HOME:-}"
+          test -d "$ANDROID_HOME"
+      - name: Build tester APK
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Upload tester APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AstraWave-Viewella-Tester-APK-${{ github.sha }}
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
