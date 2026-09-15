@@ -72,6 +72,14 @@ fun PremiumLiveTvScreen(
     onSourcesChanged: (List<IptvSource>) -> Unit,
     profileId: String = "default",
 ) {
+    if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) {
+        LiveTvHubScreen(
+            sources = sources,
+            onSourcesChanged = onSourcesChanged,
+            profileId = profileId,
+        )
+        return
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { CombinedLiveTvRepository() }
@@ -240,6 +248,10 @@ fun PremiumGuideScreen(
     sources: List<IptvSource>,
     profileId: String = "default",
 ) {
+    if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) {
+        AstraWaveGuideScreen(sources = sources, profileId = profileId)
+        return
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { GuideRepository() }
