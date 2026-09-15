@@ -190,16 +190,10 @@ fun LiveTvHubScreen(
         Column(
             Modifier.fillMaxWidth().padding(
                 horizontal = if (isPhone) 16.dp else 22.dp,
-                vertical = if (isPhone) 12.dp else 16.dp,
+                vertical = if (isPhone) 8.dp else 12.dp,
             ),
         ) {
-            Text("LIVE", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
             Text("Live TV", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-            Text(
-                if (isPhone) "Watch what’s on now." else "Your channels, favorites and what’s on now.",
-                color = AstraWaveColors.SecondaryText,
-                style = MaterialTheme.typography.bodyMedium,
-            )
             Spacer(Modifier.height(12.dp))
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -218,7 +212,7 @@ fun LiveTvHubScreen(
                     filter = LiveTvFilter.RECENTS
                 }
                 if (multiviewCount > 0) LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)
-                LiveModeButton("TV Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+                LiveModeButton("Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
             }
         }
 
@@ -393,7 +387,7 @@ private fun PhoneLiveChannels(
         Text("${filtered.size} channels", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(8.dp))
         if (filtered.isEmpty()) {
-            AstraWaveEmptyState("No channels found", "Try another search, group, or check TV Sources.")
+            AstraWaveEmptyState("No channels found", "Try another search or group, or check Sources.")
         } else {
             filtered.take(400).forEach { p ->
                 val selected = p.channelId == selectedChannelId

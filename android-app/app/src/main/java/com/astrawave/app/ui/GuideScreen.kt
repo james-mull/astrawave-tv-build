@@ -163,13 +163,11 @@ fun AstraWaveGuideScreen(
             .background(AstraWaveColors.Background)
             .padding(if (isPhone) 16.dp else 24.dp),
     ) {
-        Text("ASTRAWAVE LIVE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
-        Spacer(Modifier.height(4.dp))
         AstraWavePageHeader(
             title = "Guide",
-            subtitle = if (isPhone) "What is on now and next." else "Live TV on a true synchronized timeline.",
+            subtitle = if (isPhone) "Now and next" else "Now and next across your channels",
         )
-        Spacer(Modifier.height(if (isPhone) 14.dp else 18.dp))
+        Spacer(Modifier.height(if (isPhone) 8.dp else 12.dp))
 
         when (val current = state) {
             GuideLoadState.Loading -> AstraWaveLoadingState("Building your guide", "Loading channels and schedules.")

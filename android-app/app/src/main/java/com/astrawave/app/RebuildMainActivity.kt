@@ -394,7 +394,7 @@ private fun RebuildRoot(initialRoute: String? = null) {
                             selected = current == item,
                             onClick = { current = item },
                             icon = { Icon(item.icon, item.label) },
-                            label = { Text(item.label, maxLines = 1) },
+                            label = { if (current == item) Text(item.label, maxLines = 1) },
                         )
                     }
                 }

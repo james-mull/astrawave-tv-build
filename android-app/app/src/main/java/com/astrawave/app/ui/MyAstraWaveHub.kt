@@ -198,7 +198,7 @@ fun MyAstraWaveHub(
     ) {
         AccountHeader(account)
 
-        Text("MY LIBRARY", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
+        Text("MY STUFF", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp),
@@ -235,7 +235,7 @@ fun MyAstraWaveHub(
         }
 
         Spacer(Modifier.height(26.dp))
-        Text("ACCOUNT & SETTINGS", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
+        Text("SETTINGS", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         SetupRow { showSetup = true }
         ExperienceSettingsRow { showExperienceSettings = true }
@@ -269,7 +269,7 @@ fun MyAstraWaveHub(
 
         Spacer(Modifier.height(22.dp))
         Text(
-            "CONNECTED SERVICES",
+            "CONNECTIONS",
             color = AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
@@ -423,7 +423,7 @@ private fun ExperienceToggle(title: String, subtitle: String, checked: Boolean, 
 @Composable
 private fun AccountHeader(account: AccountOverview) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 24.dp)
+        Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)
             .background(AstraWaveColors.Surface, RoundedCornerShape(22.dp)).padding(18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -505,8 +505,8 @@ private fun ExperienceSettingsRow(onClick: () -> Unit) {
             Icon(Icons.Default.Tune, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Experience & Web Parity", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyLarge)
-                Text("Theme, density, playback, subtitles and Guide preferences", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
+                Text("Experience", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyLarge)
+                Text("Theme, playback, subtitles and Guide preferences", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)
             }
             Icon(Icons.Default.ChevronRight, null, tint = AstraWaveColors.TertiaryText)
         }
