@@ -1,0 +1,85 @@
+name: Viewella Mobile My Stuff Player Reset Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/viewella-mobile-mystuff-player-reset-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  mystuff-player-reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Apply My Stuff and player mobile reset
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          # My Stuff: library-first on phone; collapse admin/settings behind one row.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/MyAstraWaveHub.kt')
+          text = p.read_text()
+          text = text.replace('''    val context = LocalContext.current\n    val store = remember { LocalLibraryStore(context) }''', '''    val context = LocalContext.current\n    val device = LocalAstraWaveDeviceClass.current\n    val isPhone = device == AstraWaveDeviceClass.PHONE\n    val store = remember { LocalLibraryStore(context) }''', 1)
+          text = text.replace('''    var utilitySection by remember { mutableStateOf<AccountSection?>(null) }''', '''    var utilitySection by remember { mutableStateOf<AccountSection?>(null) }\n    var settingsExpanded by remember { mutableStateOf(false) }''', 1)
+          text = text.replace('''        AccountHeader(account)''', '''        if (isPhone) {\n            Row(\n                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),\n                verticalAlignment = Alignment.CenterVertically,\n            ) {\n                Column(Modifier.weight(1f)) {\n                    Text("My Stuff", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)\n                    Text(account.planName, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)\n                }\n                if (account.cloudSyncEnabled) Icon(Icons.Default.CloudDone, "Cloud sync enabled", tint = AstraWaveColors.Success)\n            }\n        } else {\n            AccountHeader(account)\n        }''', 1)
+          text = text.replace('modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))', 'modifier = Modifier.padding(horizontal = if (isPhone) 16.dp else 22.dp, vertical = if (isPhone) 5.dp else 10.dp))', 1)
+          text = text.replace('Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp)', 'Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = if (isPhone) 16.dp else 22.dp)', 1)
+          start_marker = '        Spacer(Modifier.height(26.dp))\n        Text("SETTINGS"'
+          start = text.index(start_marker)
+          end = text.index('\n    }\n\n    if (createList)', start)
+          settings_block = text[start:end]
+          collapsed = '''        Spacer(Modifier.height(if (isPhone) 20.dp else 26.dp))\n        if (isPhone) {\n            Row(\n                Modifier.fillMaxWidth().clickable { settingsExpanded = !settingsExpanded }\n                    .padding(horizontal = 16.dp, vertical = 14.dp),\n                verticalAlignment = Alignment.CenterVertically,\n            ) {\n                Icon(Icons.Default.Settings, null, tint = AstraWaveColors.SecondaryText, modifier = Modifier.size(20.dp))\n                Spacer(Modifier.width(12.dp))\n                Text("Settings & Connections", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))\n                Text(if (settingsExpanded) "Hide" else "Open", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)\n            }\n        }\n        if (!isPhone || settingsExpanded) {\n''' + settings_block.replace('        Spacer(Modifier.height(26.dp))\n', '', 1) + '''\n        }'''
+          text = text[:start] + collapsed + text[end:]
+
+          # Flatten phone library shortcuts while preserving TV focus cards.
+          old = '''@Composable\nprivate fun LibraryShortcut(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {\n    AstraWaveFocusableCard(Modifier.width(150.dp).clickable(onClick = onClick)) {\n        Column {\n            Icon(icon, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(25.dp))\n            Spacer(Modifier.height(18.dp))\n            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)\n            Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium)\n        }\n    }\n}'''
+          new = '''@Composable\nprivate fun LibraryShortcut(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {\n    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE\n    val body: @Composable () -> Unit = {\n        Column(\n            Modifier.width(if (phone) 132.dp else 150.dp).clickable(onClick = onClick)\n                .then(if (phone) Modifier.padding(vertical = 8.dp) else Modifier),\n        ) {\n            Icon(icon, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(if (phone) 22.dp else 25.dp))\n            Spacer(Modifier.height(if (phone) 10.dp else 18.dp))\n            Text(title, color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleMedium)\n            Text(subtitle, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium, maxLines = 1)\n        }\n    }\n    if (phone) body() else AstraWaveFocusableCard(Modifier.width(150.dp)) { body() }\n}'''
+          if old not in text:
+              raise SystemExit('LibraryShortcut anchor not found')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          # Player: replace permanent mobile technical control strip with a single Options button.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/PlayerActivity.kt')
+          text = p.read_text()
+          old = '''        sourceButton = quickButton(sourceLabel()) { showSourcePicker() }.also { quickControls?.addView(it) }\n        quickControls?.addView(quickButton(if (compact) "Speed" else "Playback Speed") { showSpeedPicker() })\n        quickControls?.addView(quickButton("Audio") { showTrackPicker(C.TRACK_TYPE_AUDIO) })\n        quickControls?.addView(quickButton(if (compact) "Subs" else "Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })\n        skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }\n        skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }\n        quickControls?.addView(quickButton(if (compact) "Info" else "Playback Info") { showDiagnostics() })'''
+          new = '''        if (compact) {\n            quickControls?.addView(quickButton("Options") { showMobilePlayerOptions() })\n            skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE }\n            skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE }\n        } else {\n            sourceButton = quickButton(sourceLabel()) { showSourcePicker() }.also { quickControls?.addView(it) }\n            quickControls?.addView(quickButton("Playback Speed") { showSpeedPicker() })\n            quickControls?.addView(quickButton("Audio") { showTrackPicker(C.TRACK_TYPE_AUDIO) })\n            quickControls?.addView(quickButton("Subtitles") { showTrackPicker(C.TRACK_TYPE_TEXT) })\n            skipRecapButton = quickButton("Skip Recap") { player?.seekTo(recapEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }\n            skipIntroButton = quickButton("Skip Intro") { player?.seekTo(introEndMs) }.also { it.visibility = View.GONE; quickControls?.addView(it) }\n            quickControls?.addView(quickButton("Playback Info") { showDiagnostics() })\n        }'''
+          if old not in text:
+              raise SystemExit('player quick control anchor not found')
+          text = text.replace(old, new, 1)
+          insert = '''\n    private fun showMobilePlayerOptions() {\n        val labels = arrayOf("Playback Options", "Speed", "Audio", "Subtitles", "Playback Info")\n        AlertDialog.Builder(this)\n            .setTitle("Playback")\n            .setItems(labels) { _, which ->\n                when (which) {\n                    0 -> showSourcePicker()\n                    1 -> showSpeedPicker()\n                    2 -> showTrackPicker(C.TRACK_TYPE_AUDIO)\n                    3 -> showTrackPicker(C.TRACK_TYPE_TEXT)\n                    4 -> showDiagnostics()\n                }\n            }\n            .setNegativeButton("Close", null)\n            .show()\n    }\n'''
+          marker = '\n    private fun prepareNextEpisode() {'
+          if marker not in text:
+              raise SystemExit('player insert marker not found')
+          text = text.replace(marker, insert + marker, 1)
+          p.write_text(text)
+          PY
+      - name: Compile My Stuff and player reset
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+      - name: Commit My Stuff and player reset
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/ui/MyAstraWaveHub.kt \
+                  android-app/app/src/main/java/com/astrawave/app/PlayerActivity.kt
+          git commit -m "Reset mobile My Stuff and player visuals"
+          git push origin HEAD:feature/nuvio-core-rebuild
