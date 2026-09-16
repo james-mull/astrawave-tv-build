@@ -10,4 +10,6 @@ First-run validation now also covers the simplified ready-state onboarding exper
 
 Final gallery-driven corrections: phones now route Live TV and Guide to their dedicated mobile layouts instead of TV-first multi-column/timeline layouts, while tablet/TV retain the richer large-screen experiences. Title details are action-first on mobile, with Play/Continue and Episodes/Watch Options immediately beneath the title before metadata, lists, and recommendations.
 
+Premium visual-system replacement validation: neutral cinematic palette, flatter shared phone primitives, no rounded selected tile in the bottom navigation, simplified mobile Live TV chrome, now/next Guide cards with progress, and a dedicated mobile Sports composition instead of the wide TV-first sports layout.
+
 This pass validates the complete mobile visual reset while preserving TV remote/focus behavior and existing playback, billing, account, source, and authorization logic.
