@@ -109,9 +109,10 @@ class RebuildMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val qaStartRoute = intent.getStringExtra("qa_start_route")
+        val qaPreviewData = intent.getBooleanExtra("qa_preview_data", false)
         setContent {
             AstraWaveTheme {
-                Surface(color = AstraWaveColors.Background) { RebuildRoot(qaStartRoute) }
+                Surface(color = AstraWaveColors.Background) { RebuildRoot(qaStartRoute, qaPreviewData) }
             }
         }
     }
@@ -146,7 +147,7 @@ private sealed interface AddonCatalogLoadState {
 }
 
 @Composable
-private fun RebuildRoot(initialRoute: String? = null) {
+private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = false) {
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
     val profileStore = remember { HouseholdProfileStore(context) }
@@ -314,16 +315,19 @@ private fun RebuildRoot(initialRoute: String? = null) {
                     onSourcesChanged = { iptvSources = it },
                     preview = livePreview,
                     profileId = activeProfileId,
+                    previewData = qaPreviewData,
                 )
                 RebuildDestination.Guide -> TivraGuideScreen(
                     sources = iptvSources,
                     preview = livePreview,
                     profileId = activeProfileId,
+                    previewData = qaPreviewData,
                 )
                 RebuildDestination.Sports -> TivraSportsScreen(
                     sources = iptvSources,
                     preview = livePreview,
                     profileId = activeProfileId,
+                    previewData = qaPreviewData,
                 )
                 RebuildDestination.Multiview -> {
                     if (multiviewPanes.isEmpty()) {

@@ -46,11 +46,17 @@ import com.astrawave.app.data.GuideChannelRow
 import com.astrawave.app.data.GuideRepository
 import com.astrawave.app.data.GuideSnapshot
 import com.astrawave.app.data.LiveChannelGroup
+import com.astrawave.app.data.LiveChannel
 import com.astrawave.app.data.LiveTvRepository
+import com.astrawave.app.data.SportsEvent
 import com.astrawave.app.data.SportsGuideItem
 import com.astrawave.app.data.SportsGuideRepository
 import com.astrawave.app.data.SportsGuideSnapshot
+import com.astrawave.app.data.SportsGuideEvent
+import com.astrawave.app.data.SportsResolution
+import com.astrawave.app.data.SportsWatchCandidate
 import com.astrawave.app.data.StremioLiveCatalogDiscovery
+import com.astrawave.app.data.XmlTvProgramme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -74,6 +80,7 @@ fun TivraLiveTvScreen(
     onSourcesChanged: (List<IptvSource>) -> Unit,
     preview: LivePreviewController,
     profileId: String,
+    previewData: Boolean = false,
 ) {
     val context = LocalContext.current
     val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
@@ -84,6 +91,10 @@ fun TivraLiveTvScreen(
     var showSources by remember { mutableStateOf(false) }
 
     LaunchedEffect(sources, profileId) {
+        if (previewData) {
+            state = TivraLoad.Ready(reviewLiveGroups())
+            return@LaunchedEffect
+        }
         state = try {
             val snapshot = withContext(Dispatchers.IO) {
                 repository.load(sources, includeEpg = true, includeBundledFreeTv = false)
@@ -116,7 +127,7 @@ fun TivraLiveTvScreen(
             TivraLoad.Loading -> AstraWaveLoadingState("Loading channels", "Preparing your providers and guide.")
             is TivraLoad.Error -> AstraWaveErrorState("Live TV unavailable", current.message)
             is TivraLoad.Ready -> {
-                if (sources.none { it.enabled }) {
+                if (!previewData && sources.none { it.enabled }) {
                     ProviderSetupState { showSources = true }
                     return@Column
                 }
@@ -157,6 +168,7 @@ fun TivraGuideScreen(
     sources: List<IptvSource>,
     preview: LivePreviewController,
     profileId: String,
+    previewData: Boolean = false,
 ) {
     val context = LocalContext.current
     val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
@@ -167,6 +179,10 @@ fun TivraGuideScreen(
     val timeline = rememberScrollState()
 
     LaunchedEffect(sources, profileId) {
+        if (previewData) {
+            state = TivraLoad.Ready(reviewGuideSnapshot())
+            return@LaunchedEffect
+        }
         state = try {
             TivraLoad.Ready(withContext(Dispatchers.IO) { repository.load(sources) })
         } catch (error: Exception) {
@@ -194,7 +210,7 @@ fun TivraGuideScreen(
             TivraLoad.Loading -> AstraWaveLoadingState("Loading guide", "Matching channels with XMLTV schedules.")
             is TivraLoad.Error -> AstraWaveErrorState("Guide unavailable", current.message)
             is TivraLoad.Ready -> {
-                if (sources.none { it.enabled }) {
+                if (!previewData && sources.none { it.enabled }) {
                     ProviderSetupState()
                     return@Column
                 }
@@ -232,6 +248,7 @@ fun TivraSportsScreen(
     sources: List<IptvSource>,
     preview: LivePreviewController,
     profileId: String,
+    previewData: Boolean = false,
 ) {
     val context = LocalContext.current
     val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
@@ -243,6 +260,10 @@ fun TivraSportsScreen(
     var selectedId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(sources, date, profileId) {
+        if (previewData) {
+            state = TivraLoad.Ready(reviewSportsSnapshot(date))
+            return@LaunchedEffect
+        }
         state = try {
             val snapshot = withContext(Dispatchers.IO) {
                 val names = runCatching { addonLive.sportsChannelNames(profileId) }.getOrDefault(emptyList())
@@ -623,3 +644,76 @@ private fun guideWindowStart(dayOffset: Int): Long {
 }
 
 private fun formatTime(epochMs: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(epochMs))
+
+private fun reviewLiveGroups(): List<LiveChannelGroup> {
+    val now = System.currentTimeMillis()
+    val slot = 30L * 60L * 1000L
+    val starts = now - now % slot
+    val channels = listOf(
+        Triple("Metro News", "News", listOf("Morning Briefing", "Market Watch")),
+        Triple("Arena Sports", "Sports", listOf("Matchday Live", "Postgame Report")),
+        Triple("Cinema One", "Entertainment", listOf("The Last Signal", "Behind the Scenes")),
+        Triple("Local 8", "Regional", listOf("Colorado Today", "Local Headlines")),
+        Triple("World Docs", "Documentary", listOf("Wild Frontiers", "Deep Ocean")),
+    )
+    return channels.mapIndexed { index, (name, group, titles) ->
+        val id = name.lowercase().replace(' ', '-')
+        val current = reviewProgramme(id, titles[0], starts, starts + slot)
+        val next = reviewProgramme(id, titles[1], starts + slot, starts + slot * 2)
+        LiveChannelGroup(
+            canonicalName = id,
+            displayName = name,
+            candidates = listOf(LiveChannel(id, name, id, "", group, null, id, "Demo Provider", index)),
+            currentProgram = current,
+            nextProgram = next,
+            schedule = listOf(current, next),
+        )
+    }
+}
+
+private fun reviewGuideSnapshot(): GuideSnapshot {
+    val groups = reviewLiveGroups()
+    val rows = groups.map { group ->
+        GuideChannelRow(
+            id = group.canonicalName,
+            name = group.displayName,
+            logo = null,
+            group = group.bestCandidate?.group,
+            now = group.currentProgram,
+            next = group.nextProgram,
+            programmes = group.schedule,
+            playableCandidateCount = 1,
+            preferredSource = "Demo Provider",
+            playableUrl = null,
+        )
+    }
+    return GuideSnapshot(rows, 1, 0, 0, rows.size, rows.size, rows.sumOf { it.programmes.size })
+}
+
+private fun reviewProgramme(channelId: String, title: String, start: Long, stop: Long): XmlTvProgramme {
+    val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+    return XmlTvProgramme(channelId, title, format.format(Date(start)), format.format(Date(stop)))
+}
+
+private fun reviewSportsSnapshot(date: LocalDate): SportsGuideSnapshot {
+    val games = listOf(
+        listOf("nba-1", "Lakers at Nuggets", "NBA", "Basketball", "Lakers", "Nuggets", "ESPN", "Q3 04:18", "82", "88"),
+        listOf("nba-2", "Celtics at Knicks", "NBA", "Basketball", "Celtics", "Knicks", "TNT", "8:30 PM", "", ""),
+        listOf("nhl-1", "Avalanche at Wild", "NHL", "Hockey", "Avalanche", "Wild", "SportsNet", "7:00 PM", "", ""),
+        listOf("mls-1", "Seattle at Colorado", "MLS", "Soccer", "Seattle", "Colorado", "Apple TV", "9:00 PM", "", ""),
+    ).mapIndexed { index, item ->
+        val event = SportsEvent(
+            id = item[0], name = item[1], league = item[2], sport = item[3], date = date.toString(),
+            time = item[7], homeTeam = item[5], awayTeam = item[4],
+            homeScore = item[9].toIntOrNull(), awayScore = item[8].toIntOrNull(),
+            status = if (item[9].isNotBlank()) item[7] else "Scheduled", network = item[6],
+        )
+        val candidate = if (index != 3) SportsWatchCandidate(event.id, item[6], "Demo Provider", "", 100, index) else null
+        val resolution = SportsResolution(
+            SportsGuideEvent(event.id, item[2], item[5], item[4], 0L, listOf(item[6])),
+            listOfNotNull(candidate),
+        )
+        SportsGuideItem(event, listOf(item[6]), resolution, watchCandidate = candidate)
+    }
+    return SportsGuideSnapshot(date.toString(), games, 5)
+}

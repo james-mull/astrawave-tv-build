@@ -73,7 +73,7 @@ capture() {
 # Main approval destinations rendered by the real application shell on every device class.
 for route in home movies tv live guide sports; do
   safe="${route//\//-}"
-  capture "$safe" -n com.astrawave.app/.RebuildMainActivity --es qa_start_route "$route"
+  capture "$safe" -n com.astrawave.app/.RebuildMainActivity --es qa_start_route "$route" --ez qa_preview_data true
 done
 
 if [[ "$MODE" == "phone" ]]; then
