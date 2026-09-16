@@ -367,6 +367,10 @@ fun PremiumSportsScreen(
     sources: List<IptvSource>,
     profileId: String = "default",
 ) {
+    if (LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE) {
+        PremiumSportsPhoneScreen(sources = sources, profileId = profileId)
+        return
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { SportsGuideRepository() }
@@ -526,6 +530,125 @@ fun PremiumSportsScreen(
                                         Text("Schedule only • no authorized matched source yet", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodyMedium)
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PremiumSportsPhoneScreen(
+    sources: List<IptvSource>,
+    profileId: String,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repository = remember { SportsGuideRepository() }
+    val addonLive = remember { StremioLiveCatalogDiscovery(context) }
+    val planner = remember { SourceFusionPlaybackPlanner(context) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now(ZoneOffset.UTC)) }
+    var selectedLeague by remember { mutableStateOf<String?>(null) }
+    var state by remember(sources, selectedDate, profileId) { mutableStateOf<TvFirstLoad<SportsGuideSnapshot>>(TvFirstLoad.Loading) }
+
+    LaunchedEffect(sources, selectedDate, profileId) {
+        state = try {
+            val snapshot = withContext(Dispatchers.IO) {
+                val names = runCatching { addonLive.sportsChannelNames(profileId) }.getOrDefault(emptyList())
+                repository.load(selectedDate, sources, addonSportsChannelNames = names)
+            }
+            TvFirstLoad.Ready(snapshot)
+        } catch (error: Exception) {
+            TvFirstLoad.Error(error.message ?: "Unable to load sports")
+        }
+    }
+
+    fun play(item: SportsGuideItem) {
+        val candidates = item.resolution?.candidates.orEmpty()
+        if (candidates.isEmpty()) {
+            Toast.makeText(context, "No matched channel is available for this event.", Toast.LENGTH_LONG).show()
+            return
+        }
+        scope.launch {
+            val inputs = candidates.mapIndexed { index, candidate ->
+                SourceFusionPlaybackPlanner.Input(
+                    sourceKey = "sports:${item.event.id}:$index",
+                    url = candidate.streamUrl,
+                    provider = candidate.source,
+                    priority = candidate.priority,
+                )
+            }
+            val plan = withContext(Dispatchers.IO) { planner.plan(inputs, probeUnknown = false) }
+            val urls = plan?.orderedUrls.orEmpty()
+            if (urls.isEmpty()) return@launch
+            context.startActivity(
+                Intent(context, PlayerActivity::class.java)
+                    .putExtra(PlayerActivity.EXTRA_URL, urls.first())
+                    .putStringArrayListExtra(PlayerActivity.EXTRA_URLS, ArrayList(urls))
+                    .putExtra(PlayerActivity.EXTRA_TRUSTED_DIRECT, true),
+            )
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Text("Sports", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)
+            Text(selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d")), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                DatePill("Yesterday", selectedDate == LocalDate.now(ZoneOffset.UTC).minusDays(1)) { selectedDate = LocalDate.now(ZoneOffset.UTC).minusDays(1) }
+                DatePill("Today", selectedDate == LocalDate.now(ZoneOffset.UTC)) { selectedDate = LocalDate.now(ZoneOffset.UTC) }
+                DatePill("Tomorrow", selectedDate == LocalDate.now(ZoneOffset.UTC).plusDays(1)) { selectedDate = LocalDate.now(ZoneOffset.UTC).plusDays(1) }
+            }
+        }
+
+        when (val current = state) {
+            TvFirstLoad.Loading -> Box(Modifier.fillMaxSize().padding(16.dp)) { AstraWaveLoadingState("Loading sports", "Getting today’s events.") }
+            is TvFirstLoad.Error -> Box(Modifier.fillMaxSize().padding(16.dp)) { AstraWaveErrorState("Sports unavailable", current.message) }
+            is TvFirstLoad.Ready -> {
+                val ranked = current.value.events.sortedWith(
+                    compareByDescending<SportsGuideItem> { it.event.isLive && it.watchCandidate != null }
+                        .thenByDescending { it.event.isLive }
+                        .thenByDescending { it.watchCandidate != null }
+                        .thenBy { it.event.isFinal },
+                )
+                val leagues = ranked.mapNotNull { it.event.league?.takeIf(String::isNotBlank) }.distinct().sorted()
+                val events = selectedLeague?.let { league -> ranked.filter { it.event.league == league } } ?: ranked
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        DatePill("All", selectedLeague == null) { selectedLeague = null }
+                        leagues.forEach { league -> DatePill(league, selectedLeague == league) { selectedLeague = league } }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (events.isEmpty()) {
+                        Box(Modifier.fillMaxSize().padding(16.dp)) { AstraWaveEmptyState("No events", "Try another day or league.") }
+                    } else {
+                        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
+                            items(events, key = { it.event.id }) { item ->
+                                val live = item.event.isLive
+                                val watchReady = item.watchCandidate != null
+                                Column(
+                                    Modifier.fillMaxWidth()
+                                        .background(if (live) AstraWaveColors.Surface else AstraWaveColors.Background, MaterialTheme.shapes.medium)
+                                        .clickable(enabled = watchReady) { if (watchReady) play(item) }
+                                        .padding(horizontal = 14.dp, vertical = 13.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(
+                                            when { live -> "● LIVE"; item.event.isFinal -> "FINAL"; else -> item.event.time?.take(5) ?: "UPCOMING" },
+                                            color = if (live) AstraWaveColors.Live else AstraWaveColors.TertiaryText,
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                        Text(if (watchReady) "WATCH" else "SCHEDULE", color = if (watchReady) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                                    Text(listOfNotNull(item.event.league, item.broadcasterNames.firstOrNull()).joinToString("  •  ").ifBlank { "Sports" }, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                    if (watchReady) Text("Tap to watch best available source", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+                                }
+                                Spacer(Modifier.height(8.dp))
                             }
                         }
                     }

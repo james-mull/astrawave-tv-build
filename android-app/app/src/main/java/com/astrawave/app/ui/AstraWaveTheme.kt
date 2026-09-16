@@ -20,31 +20,31 @@ import androidx.compose.ui.unit.sp
 
 /** AstraWave premium visual foundation shared by phone, tablet and TV. */
 object AstraWaveColors {
-    val Background = Color(0xFF05070B)
-    val BackgroundRaised = Color(0xFF0A0D14)
-    val Surface = Color(0xFF0F141D)
-    val SurfaceRaised = Color(0xFF151B27)
-    val SurfaceFocus = Color(0xFF20283A)
+    val Background = Color(0xFF030405)
+    val BackgroundRaised = Color(0xFF080A0C)
+    val Surface = Color(0xFF0D1013)
+    val SurfaceRaised = Color(0xFF12161A)
+    val SurfaceFocus = Color(0xFF1A2026)
     val Glass = Color(0xE0070A10)
     val GlassRaised = Color(0xF0111621)
-    val PrimaryText = Color(0xFFF9FAFF)
-    val SecondaryText = Color(0xFFB4BDCE)
-    val TertiaryText = Color(0xFF7E899E)
-    val Accent = Color(0xFF8D7CFF)
-    val AccentStrong = Color(0xFFC0B7FF)
-    val AccentSoft = Color(0xFF5E50C7)
+    val PrimaryText = Color(0xFFF5F7FA)
+    val SecondaryText = Color(0xFFA6ADB7)
+    val TertiaryText = Color(0xFF727B86)
+    val Accent = Color(0xFFE8ECF2)
+    val AccentStrong = Color(0xFFFFFFFF)
+    val AccentSoft = Color(0xFF343B44)
     val Success = Color(0xFF61D9A9)
     val Warning = Color(0xFFF1B963)
     val Error = Color(0xFFFF748A)
     val Live = Color(0xFFFF526F)
-    val Divider = Color(0xFF263042)
-    val FocusRing = Color(0xFFF4F0FF)
+    val Divider = Color(0xFF20262C)
+    val FocusRing = Color(0xFFFFFFFF)
     val PlayerBlack = Color(0xFF000000)
     val HeroScrim = Color(0xE804070C)
-    val Chip = Color(0xFF1A2130)
-    val GuideNow = Color(0xFF9C8DFF)
-    val GuideFuture = Color(0xFF18202D)
-    val GuidePast = Color(0xFF10151D)
+    val Chip = Color(0xFF14191E)
+    val GuideNow = Color(0xFF2C3641)
+    val GuideFuture = Color(0xFF11161B)
+    val GuidePast = Color(0xFF090C0F)
 }
 
 @Immutable
@@ -169,11 +169,11 @@ private val AstraWaveTvTypography = Typography(
 )
 
 private val AstraWavePhoneShapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(7.dp),
-    medium = RoundedCornerShape(10.dp),
-    large = RoundedCornerShape(12.dp),
-    extraLarge = RoundedCornerShape(16.dp),
+    extraSmall = RoundedCornerShape(3.dp),
+    small = RoundedCornerShape(5.dp),
+    medium = RoundedCornerShape(7.dp),
+    large = RoundedCornerShape(9.dp),
+    extraLarge = RoundedCornerShape(12.dp),
 )
 
 private val AstraWaveTabletShapes = Shapes(
@@ -212,7 +212,7 @@ fun AstraWaveTheme(
     }
 
     val effectiveSpacing = when (deviceClass) {
-        AstraWaveDeviceClass.PHONE -> spacing.copy(section = 30.dp)
+        AstraWaveDeviceClass.PHONE -> spacing.copy(section = 24.dp)
         AstraWaveDeviceClass.TABLET -> spacing.copy(screenHorizontal = 28.dp, section = 54.dp)
         AstraWaveDeviceClass.TV -> spacing.copy(screenHorizontal = spacing.tvScreenHorizontal, section = 62.dp)
     }

@@ -432,19 +432,17 @@ private fun MobileStreamingBottomBar(
             val selected = current == item
             Column(
                 Modifier.weight(1f).fillMaxHeight()
-                    .background(
-                        if (selected) AstraWaveColors.SurfaceRaised else AstraWaveColors.BackgroundRaised,
-                        RoundedCornerShape(14.dp),
-                    )
                     .clickable { onSelect(item) }
-                    .padding(vertical = 5.dp),
+                    .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
+                Box(Modifier.width(22.dp).height(2.dp).background(if (selected) AstraWaveColors.PrimaryText else Color.Transparent))
+                Spacer(Modifier.height(4.dp))
                 Icon(
                     item.icon,
                     contentDescription = item.label,
-                    tint = if (selected) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
+                    tint = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(

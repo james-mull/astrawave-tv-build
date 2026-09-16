@@ -155,6 +155,10 @@ fun AstraWaveFocusableCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val device = LocalAstraWaveDeviceClass.current
+    if (device == AstraWaveDeviceClass.PHONE) {
+        Box(modifier.padding(vertical = 2.dp)) { content() }
+        return
+    }
     val elevationTokens = LocalAstraWaveElevation.current
     val motion = LocalAstraWaveMotion.current
     val focusedScale = when (device) {
@@ -221,15 +225,16 @@ fun AstraWaveActionRow(
 ) {
     val device = LocalAstraWaveDeviceClass.current
     Row(
-        modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
-            .background(AstraWaveColors.SurfaceRaised)
-            .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.45f), MaterialTheme.shapes.large)
-            .padding(
-                horizontal = if (device == AstraWaveDeviceClass.PHONE) 14.dp else 18.dp,
-                vertical = if (device == AstraWaveDeviceClass.PHONE) 12.dp else 15.dp,
-            ),
+        if (device == AstraWaveDeviceClass.PHONE) {
+            modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 10.dp)
+        } else {
+            modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.large)
+                .background(AstraWaveColors.SurfaceRaised)
+                .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.45f), MaterialTheme.shapes.large)
+                .padding(horizontal = 18.dp, vertical = 15.dp)
+        },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -289,8 +294,8 @@ fun AstraWavePrimaryButton(
             )
             .onFocusChanged { focused = it.isFocused },
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (focused && enabled && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.AccentStrong else AstraWaveColors.Accent,
-            contentColor = AstraWaveColors.PrimaryText,
+            containerColor = if (device == AstraWaveDeviceClass.PHONE) AstraWaveColors.PrimaryText else if (focused && enabled) AstraWaveColors.AccentStrong else AstraWaveColors.Accent,
+            contentColor = if (device == AstraWaveDeviceClass.PHONE) AstraWaveColors.Background else AstraWaveColors.PrimaryText,
             disabledContainerColor = AstraWaveColors.SurfaceRaised,
             disabledContentColor = AstraWaveColors.TertiaryText,
         ),

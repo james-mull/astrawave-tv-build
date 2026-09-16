@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -185,7 +186,7 @@ fun AstraWaveGuideScreen(
                     onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Search channels or programs") },
+                    placeholder = { Text("Search channels or programs") },
                 )
                 Spacer(Modifier.height(8.dp))
 
@@ -266,28 +267,41 @@ private fun PhoneGuideCard(row: GuideChannelRow, onPlay: () -> Unit) {
     }.sortedBy { it.second }
     val current = parsed.firstOrNull { nowMs in it.second until it.third }
     val next = parsed.firstOrNull { it.second > nowMs }
+    val progress = current?.let { (_, start, end) ->
+        ((nowMs - start).toFloat() / (end - start).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
+    }
 
     Column(
-        Modifier.fillMaxWidth().background(AstraWaveColors.Background).clickable(onClick = onPlay)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        Modifier.fillMaxWidth()
+            .background(AstraWaveColors.Surface, MaterialTheme.shapes.medium)
+            .clickable(onClick = onPlay)
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                    Text(row.group ?: "Live TV", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
-                }
-                if (row.playableUrls.isNotEmpty()) Text("WATCH", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(row.group ?: "Live TV", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
             }
-            current?.let { (programme, start, end) ->
-                Text("● LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelSmall)
-                Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                Text("${formatGuideTime(start)} – ${formatGuideTime(end)}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall)
-            } ?: Text(row.now?.title ?: "No current guide data", color = AstraWaveColors.SecondaryText)
-            next?.let { (programme, start, _) ->
-                Text("NEXT • ${formatGuideTime(start)} • ${programme.title}", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-            }
+            if (row.playableUrls.isNotEmpty()) Text("WATCH", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.labelSmall)
         }
+        current?.let { (programme, start, end) ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelSmall)
+                Text("${formatGuideTime(start)} – ${formatGuideTime(end)}", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
+            }
+            Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            LinearProgressIndicator(
+                progress = { progress ?: 0f },
+                modifier = Modifier.fillMaxWidth().height(3.dp),
+                color = AstraWaveColors.PrimaryText,
+                trackColor = AstraWaveColors.Divider,
+            )
+        } ?: Text(row.now?.title ?: "No current guide data", color = AstraWaveColors.SecondaryText)
+        next?.let { (programme, start, _) ->
+            Text("Next  ${formatGuideTime(start)}  ${programme.title}", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+        }
+    }
 }
 
 @Composable

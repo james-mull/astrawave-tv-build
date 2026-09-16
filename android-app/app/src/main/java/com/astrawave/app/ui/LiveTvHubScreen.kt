@@ -193,26 +193,30 @@ fun LiveTvHubScreen(
                 vertical = if (isPhone) 8.dp else 12.dp,
             ),
         ) {
-            Text("Live TV", color = AstraWaveColors.PrimaryText, style = if (isPhone) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineLarge)
-            Spacer(Modifier.height(if (isPhone) 7.dp else 12.dp))
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LiveModeButton("Channels", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
-                lastChannel?.let { channel -> LiveModeButton("▶ ${channel.name}", false, ::resumeLast) }
-                LiveModeButton("Favorites", filter == LiveTvFilter.FAVORITES) {
-                    mode = LiveTvMode.CHANNELS
-                    selectedGroup = null
-                    filter = LiveTvFilter.FAVORITES
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("Live TV", color = AstraWaveColors.PrimaryText, style = if (isPhone) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge)
+                    if (isPhone) Text("Now playing across your channels", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
                 }
-                LiveModeButton("Recent", filter == LiveTvFilter.RECENTS) {
-                    mode = LiveTvMode.CHANNELS
-                    selectedGroup = null
-                    filter = LiveTvFilter.RECENTS
+                if (isPhone) {
+                    Text(
+                        if (mode == LiveTvMode.SOURCES) "Channels" else "Sources",
+                        color = AstraWaveColors.SecondaryText,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.clickable { mode = if (mode == LiveTvMode.SOURCES) LiveTvMode.CHANNELS else LiveTvMode.SOURCES }.padding(8.dp),
+                    )
                 }
-                if (multiviewCount > 0) LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)
-                LiveModeButton("Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+            }
+            if (!isPhone) {
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LiveModeButton("Channels", mode == LiveTvMode.CHANNELS) { mode = LiveTvMode.CHANNELS }
+                    lastChannel?.let { channel -> LiveModeButton("▶ ${channel.name}", false, ::resumeLast) }
+                    LiveModeButton("Favorites", filter == LiveTvFilter.FAVORITES) { mode = LiveTvMode.CHANNELS; selectedGroup = null; filter = LiveTvFilter.FAVORITES }
+                    LiveModeButton("Recent", filter == LiveTvFilter.RECENTS) { mode = LiveTvMode.CHANNELS; selectedGroup = null; filter = LiveTvFilter.RECENTS }
+                    if (multiviewCount > 0) LiveModeButton("Multiview $multiviewCount/6", false, onOpenMultiview)
+                    LiveModeButton("Sources", mode == LiveTvMode.SOURCES) { mode = LiveTvMode.SOURCES }
+                }
             }
         }
 
@@ -372,7 +376,7 @@ private fun PhoneLiveChannels(
             onValueChange = onQuery,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Search channels") },
+            placeholder = { Text("Search channels") },
         )
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -383,9 +387,7 @@ private fun PhoneLiveChannels(
                 LiveModeButton(group, selectedGroup == group && filter == LiveTvFilter.ALL) { onGroup(group) }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Text("${filtered.size} channels", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         if (filtered.isEmpty()) {
             AstraWaveEmptyState("No channels found", "Try another search or group, or check Sources.")
         } else {
