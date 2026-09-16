@@ -215,6 +215,7 @@ fun TivraGuideScreen(
                     return@Column
                 }
                 val rows = current.value.rows.filter { !it.id.startsWith("handoff:") }
+                if (selectedId == null) rows.firstOrNull()?.let(::select)
                 if (phone) {
                     Column(Modifier.fillMaxSize()) {
                         PreviewPane(preview, Modifier.fillMaxWidth().aspectRatio(16f / 9f), ::openPreviewFullScreen)

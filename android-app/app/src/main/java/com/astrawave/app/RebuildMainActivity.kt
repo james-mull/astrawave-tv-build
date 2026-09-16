@@ -276,7 +276,7 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         if (useRail) {
             val railWidth = when {
-                isTv && tvRailExpanded -> 232.dp
+                isTv && tvRailExpanded -> 248.dp
                 isTv -> 68.dp
                 else -> 116.dp
             }
@@ -285,7 +285,7 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
                 Text(
                     if (isTv && !tvRailExpanded) activeProfile.avatar else "AstraWave",
                     color = AstraWaveColors.Accent,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                 )
                 Spacer(Modifier.height(10.dp))
