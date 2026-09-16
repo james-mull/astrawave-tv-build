@@ -103,31 +103,6 @@ if [[ "$MODE" == "phone" ]]; then
     --es title "Dune" --es media_type "MOVIE" --es profile_id "default"
 fi
 
-# Real player surface using a public test HLS stream; keep AstraWave foreground and expose controls.
-if [[ "$MODE" == "phone" ]]; then
-adb shell am force-stop com.astrawave.app
-adb shell am start -W -n com.astrawave.app/.PlayerActivity \
-  --es url "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" \
-  --es library_title "AstraWave Player Preview" >/dev/null
-sleep 8
-clear_system_dialogs
-
-if ! astrawave_is_foreground; then
-  echo "ERROR: PlayerActivity left the foreground before capture."
-  adb shell dumpsys window windows 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' || true
-  exit 1
-fi
-
-adb shell input tap 540 1200 || true
-sleep 2
-clear_system_dialogs
-if ! astrawave_is_foreground; then
-  echo "ERROR: PlayerActivity left the foreground after showing controls."
-  exit 1
-fi
-adb exec-out screencap -p > "$OUT/player.png"
-fi
-
 # Capture UI hierarchy for troubleshooting and an index of the generated pages.
 adb shell uiautomator dump /sdcard/astrawave-gallery.xml >/dev/null 2>&1 || true
 adb pull /sdcard/astrawave-gallery.xml "$OUT/final-window.xml" >/dev/null 2>&1 || true

@@ -430,6 +430,7 @@ private fun MobileStreamingBottomBar(
     ) {
         items.forEach { item ->
             val selected = current == item
+            val mobileLabel = if (item == RebuildDestination.My) "More" else item.label
             Column(
                 Modifier.weight(1f).fillMaxHeight()
                     .clickable { onSelect(item) }
@@ -441,12 +442,12 @@ private fun MobileStreamingBottomBar(
                 Spacer(Modifier.height(4.dp))
                 Icon(
                     item.icon,
-                    contentDescription = item.label,
+                    contentDescription = mobileLabel,
                     tint = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    item.label,
+                    mobileLabel,
                     color = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
