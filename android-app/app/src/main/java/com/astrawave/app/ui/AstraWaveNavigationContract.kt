@@ -27,7 +27,6 @@ object AstraWaveNavigationContract {
         AstraWaveNavItem("library", "Library"),
         AstraWaveNavItem("multiview", "Multiview"),
         AstraWaveNavItem("audio", "Music & Podcasts"),
-        AstraWaveNavItem("personal-media", "Personal Media"),
         AstraWaveNavItem("addons", "Content Sources"),
         AstraWaveNavItem("settings", "Settings"),
     )

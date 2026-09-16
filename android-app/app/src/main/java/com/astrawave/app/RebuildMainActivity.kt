@@ -392,6 +392,9 @@ private fun RebuildRoot(initialRoute: String? = null) {
                         }
                     },
                     onOpenAudio = { current = RebuildDestination.Audio },
+                    destinationLauncher = if (isPhone) ({ route ->
+                        RebuildDestination.entries.firstOrNull { it.route == route }?.let { current = it }
+                    }) else null,
                 )
             }
 

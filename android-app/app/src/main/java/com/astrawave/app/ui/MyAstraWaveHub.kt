@@ -66,6 +66,7 @@ fun MyAstraWaveHub(
     lists: List<AstraWaveList> = emptyList(),
     onOpenAccountSection: (AccountSection) -> Unit = {},
     onOpenAudio: () -> Unit = {},
+    destinationLauncher: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val device = LocalAstraWaveDeviceClass.current
@@ -212,6 +213,37 @@ fun MyAstraWaveHub(
             }
         } else {
             AccountHeader(account)
+        }
+
+        if (isPhone && destinationLauncher != null) {
+            Text(
+                "BROWSE",
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(
+                    "movies" to "Movies",
+                    "tv" to "Shows",
+                    "search" to "Search",
+                    "library" to "Library",
+                    "addons" to "Sources",
+                ).forEach { (route, label) ->
+                    Text(
+                        label,
+                        color = AstraWaveColors.PrimaryText,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.background(AstraWaveColors.Surface)
+                            .clickable { destinationLauncher(route) }
+                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
         }
 
         Text("MY STUFF", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
