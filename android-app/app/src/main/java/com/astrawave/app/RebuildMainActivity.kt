@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -303,7 +304,7 @@ private fun RebuildRoot(initialRoute: String? = null) {
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
             if (!useRail && !isPhone) SectionStrip(current, primaryDestinations) { current = it }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
             when (current) {
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
@@ -398,19 +399,6 @@ private fun RebuildRoot(initialRoute: String? = null) {
                 )
             }
 
-                if (isPhone && current != RebuildDestination.Profiles && current != RebuildDestination.My) {
-                    Box(
-                        Modifier.align(Alignment.TopEnd)
-                            .padding(top = 10.dp, end = 12.dp)
-                            .width(40.dp)
-                            .height(40.dp)
-                            .background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(999.dp))
-                            .clickable { current = RebuildDestination.My },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(activeProfile.avatar, style = MaterialTheme.typography.titleMedium)
-                    }
-                }
             }
             if (isPhone && current != RebuildDestination.Profiles) {
                 MobileStreamingBottomBar(

@@ -19,8 +19,22 @@ permissions:
 # Retry after onboarding simplification and API-35 resumed-activity foreground detection fix.
 jobs:
   capture-gallery:
+    name: ${{ matrix.name }} gallery
     runs-on: ubuntu-22.04
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Phone
+            profile: pixel_6
+            mode: phone
+          - name: Tablet
+            profile: pixel_c
+            mode: tablet
+          - name: Android-TV
+            profile: tv_1080p
+            mode: tv
     env:
       ASTRAWAVE_FIREBASE_API_KEY: ${{ secrets.ASTRAWAVE_FIREBASE_API_KEY }}
       ASTRAWAVE_FIREBASE_APP_ID: ${{ secrets.ASTRAWAVE_FIREBASE_APP_ID }}
@@ -58,7 +72,7 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
-          profile: pixel_6
+          profile: ${{ matrix.profile }}
           cores: 2
           ram-size: 4096
           heap-size: 512
@@ -66,13 +80,13 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           working-directory: android-app
-          script: bash ../.github/scripts/capture-full-gallery.sh
+          script: bash ../.github/scripts/capture-full-gallery.sh '${{ matrix.mode }}'
 
       - name: Upload full page gallery
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: astrawave-full-page-gallery-${{ github.sha }}
+          name: astrawave-full-page-gallery-${{ matrix.mode }}-${{ github.sha }}
           if-no-files-found: error
           retention-days: 14
-          path: full-page-gallery/
+          path: full-page-gallery/${{ matrix.mode }}/

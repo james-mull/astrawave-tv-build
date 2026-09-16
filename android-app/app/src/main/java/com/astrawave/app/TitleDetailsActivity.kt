@@ -50,7 +50,7 @@ private val DetailsBg = Color(0xFF080A0F)
 private val DetailsPanel = Color(0xFF141924)
 private val DetailsPrimary = Color(0xFFF7F8FB)
 private val DetailsMuted = Color(0xFFA7AEBB)
-private val DetailsAccent = Color(0xFF8B5CF6)
+private val DetailsAccent = Color(0xFFF7F8FB)
 private val DetailsSuccess = Color(0xFF39D98A)
 
 class TitleDetailsActivity : ComponentActivity() {
@@ -314,7 +314,7 @@ private fun TitleDetailsScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -352,7 +352,7 @@ private fun TitleDetailsScreen(
                     onClick = { playBest() },
                     enabled = !quickPlayLoading,
                     modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(6.dp),
                 ) {
                     Text(if (quickPlayLoading) "Finding a Stream…" else "▶ Play", fontWeight = FontWeight.Bold)
                 }
@@ -363,7 +363,7 @@ private fun TitleDetailsScreen(
                     onClick = { playBest(firstUnwatched) },
                     enabled = !quickPlayLoading,
                     modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(6.dp),
                 ) {
                     val saved = progressByEpisode[firstUnwatched.id]
                     val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
@@ -380,7 +380,7 @@ private fun TitleDetailsScreen(
             OutlinedButton(
                 onClick = { sourcesMode = true },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(6.dp),
             ) { Text(if (hasEpisodeCatalog) "Episodes & Watch Options" else "Watch Options", fontWeight = FontWeight.Bold) }
             quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }
 
