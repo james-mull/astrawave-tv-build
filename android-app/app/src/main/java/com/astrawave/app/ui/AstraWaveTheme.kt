@@ -133,19 +133,19 @@ private val AstraWaveColorScheme = darkColorScheme(
 )
 
 private val AstraWavePhoneTypography = Typography(
-    displayLarge = TextStyle(fontSize = 42.sp, lineHeight = 45.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.9).sp),
-    headlineLarge = TextStyle(fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
+    displayLarge = TextStyle(fontSize = 42.sp, lineHeight = 45.sp, fontWeight = FontWeight.Black),
+    headlineLarge = TextStyle(fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold),
     headlineMedium = TextStyle(fontSize = 22.sp, lineHeight = 27.sp, fontWeight = FontWeight.Bold),
     titleLarge = TextStyle(fontSize = 19.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold),
     titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold),
     bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal),
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Normal),
     labelLarge = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold),
-    labelMedium = TextStyle(fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.42.sp),
+    labelMedium = TextStyle(fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold),
 )
 
 private val AstraWaveTabletTypography = Typography(
-    displayLarge = TextStyle(fontSize = 52.sp, lineHeight = 56.sp, fontWeight = FontWeight.Black, letterSpacing = (-1.15).sp),
+    displayLarge = TextStyle(fontSize = 52.sp, lineHeight = 56.sp, fontWeight = FontWeight.Black),
     headlineLarge = TextStyle(fontSize = 33.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold),
     headlineMedium = TextStyle(fontSize = 27.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold),
     titleLarge = TextStyle(fontSize = 22.sp, lineHeight = 27.sp, fontWeight = FontWeight.Bold),
@@ -153,19 +153,19 @@ private val AstraWaveTabletTypography = Typography(
     bodyLarge = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal),
     bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal),
     labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold),
-    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.48.sp),
+    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.Bold),
 )
 
 private val AstraWaveTvTypography = Typography(
-    displayLarge = TextStyle(fontSize = 62.sp, lineHeight = 64.sp, fontWeight = FontWeight.Black, letterSpacing = (-1.5).sp),
-    headlineLarge = TextStyle(fontSize = 38.sp, lineHeight = 43.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
+    displayLarge = TextStyle(fontSize = 62.sp, lineHeight = 64.sp, fontWeight = FontWeight.Black),
+    headlineLarge = TextStyle(fontSize = 38.sp, lineHeight = 43.sp, fontWeight = FontWeight.Bold),
     headlineMedium = TextStyle(fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold),
     titleLarge = TextStyle(fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold),
     titleMedium = TextStyle(fontSize = 19.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold),
     bodyLarge = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal),
     bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal),
     labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold),
-    labelMedium = TextStyle(fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+    labelMedium = TextStyle(fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold),
 )
 
 private val AstraWavePhoneShapes = Shapes(
@@ -177,19 +177,19 @@ private val AstraWavePhoneShapes = Shapes(
 )
 
 private val AstraWaveTabletShapes = Shapes(
-    extraSmall = RoundedCornerShape(7.dp),
-    small = RoundedCornerShape(11.dp),
-    medium = RoundedCornerShape(15.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(27.dp),
+    extraSmall = RoundedCornerShape(3.dp),
+    small = RoundedCornerShape(4.dp),
+    medium = RoundedCornerShape(6.dp),
+    large = RoundedCornerShape(8.dp),
+    extraLarge = RoundedCornerShape(8.dp),
 )
 
 private val AstraWaveTvShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(30.dp),
+    extraSmall = RoundedCornerShape(3.dp),
+    small = RoundedCornerShape(4.dp),
+    medium = RoundedCornerShape(6.dp),
+    large = RoundedCornerShape(8.dp),
+    extraLarge = RoundedCornerShape(8.dp),
 )
 
 @Composable

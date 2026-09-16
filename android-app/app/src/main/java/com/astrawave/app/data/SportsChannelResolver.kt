@@ -45,11 +45,25 @@ class SportsChannelResolver {
             .distinct()
         if (broadcasters.isEmpty()) return SportsResolution(event, emptyList())
 
+        val eventNames = listOf(
+            "${event.awayTeam} at ${event.homeTeam}",
+            "${event.awayTeam} vs ${event.homeTeam}",
+            "${event.homeTeam} vs ${event.awayTeam}",
+        ).map(::coreName)
         val candidates = buildList {
             channelGroups.forEach { group ->
                 group.candidates.forEach { channel ->
                     val channelName = coreName(channel.name)
-                    val score = broadcasters.maxOfOrNull { broadcaster -> matchScore(broadcaster, channelName) } ?: 0
+                    val guideTitle = coreName(group.currentProgram?.title.orEmpty())
+                    val guideScore = eventNames.maxOfOrNull { eventName -> eventMatchScore(eventName, guideTitle) } ?: 0
+                    val eventChannelScore = eventNames.maxOfOrNull { eventName -> eventMatchScore(eventName, channelName) } ?: 0
+                    val broadcasterScore = broadcasters.maxOfOrNull { broadcaster -> matchScore(broadcaster, channelName) } ?: 0
+                    val score = when {
+                        guideScore > 0 -> 300 + guideScore
+                        eventChannelScore > 0 -> 200 + eventChannelScore
+                        broadcasterScore > 0 -> 100 + broadcasterScore
+                        else -> 0
+                    }
                     if (score >= MIN_ACCEPTED_SCORE) {
                         add(
                             SportsWatchCandidate(
@@ -97,6 +111,18 @@ class SportsChannelResolver {
         }
     }
 
+    private fun eventMatchScore(eventName: String, candidate: String): Int {
+        if (eventName.isBlank() || candidate.isBlank()) return 0
+        val eventTokens = eventName.split(' ').filter { it.length >= 3 && it !in EVENT_STOP_WORDS }.toSet()
+        val candidateTokens = candidate.split(' ').filter { it.length >= 3 && it !in EVENT_STOP_WORDS }.toSet()
+        val overlap = eventTokens.intersect(candidateTokens).size
+        return when {
+            overlap >= 2 -> 95
+            overlap == 1 && eventTokens.size == 1 -> 70
+            else -> 0
+        }
+    }
+
     private fun aliasesFor(value: String): List<String> {
         val normalized = normalize(value)
         return when (normalized) {
@@ -126,5 +152,6 @@ class SportsChannelResolver {
 
     companion object {
         private const val MIN_ACCEPTED_SCORE = 76
+        private val EVENT_STOP_WORDS = setOf("the", "versus", "live", "game")
     }
 }

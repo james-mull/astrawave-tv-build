@@ -172,11 +172,16 @@ class CombinedLiveTvRepository(
         includeEpg: Boolean = false,
         expandedPublicInventory: Boolean = false,
         providerOrder: Boolean = false,
+        includeBundledFreeTv: Boolean = false,
     ): CombinedLiveTvSnapshot {
-        val free = runCatching {
-            if (expandedPublicInventory) freeTv.loadExpandedChannels() else freeTv.loadChannels()
-        }.getOrDefault(emptyList())
-        val handoffs = runCatching { handoffRepository.load() }.getOrDefault(emptyList())
+        val free = if (includeBundledFreeTv) {
+            runCatching {
+                if (expandedPublicInventory) freeTv.loadExpandedChannels() else freeTv.loadChannels()
+            }.getOrDefault(emptyList())
+        } else emptyList()
+        val handoffs = if (includeBundledFreeTv) {
+            runCatching { handoffRepository.load() }.getOrDefault(emptyList())
+        } else emptyList()
         val enabled = userSourcesConfig.filter { it.enabled }
         val userChannels = enabled.flatMap { source ->
             runCatching { userSources.loadChannels(source) }.getOrDefault(emptyList())

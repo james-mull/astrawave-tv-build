@@ -88,10 +88,11 @@ import com.astrawave.app.ui.MovieListsScreen
 import com.astrawave.app.ui.MultiviewScreen
 import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.PersonalMediaScreen
-import com.astrawave.app.ui.PremiumGuideScreen
 import com.astrawave.app.ui.PremiumHomeScreen
-import com.astrawave.app.ui.PremiumLiveTvScreen
-import com.astrawave.app.ui.PremiumSportsScreen
+import com.astrawave.app.ui.LivePreviewController
+import com.astrawave.app.ui.TivraGuideScreen
+import com.astrawave.app.ui.TivraLiveTvScreen
+import com.astrawave.app.ui.TivraSportsScreen
 import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.TvListsScreen
 import com.astrawave.app.ui.UltraMaxDiscoveryScreen
@@ -124,11 +125,11 @@ private enum class RebuildDestination(val route: String, val label: String, val 
     Sports("sports", "Sports", Icons.Default.SportsFootball),
     Multiview("multiview", "Multiview", Icons.Default.Tv),
     Audio("audio", "Music & Podcasts", Icons.Default.MusicNote),
-    PersonalMedia("personal-media", "Personal Media", Icons.Default.Tv),
+    PersonalMedia("library", "Library", Icons.Default.Tv),
     Addons("addons", "Content Sources", Icons.Default.Explore),
     Discover("discover", "Discover", Icons.Default.Explore),
     Search("search", "Search", Icons.Default.Search),
-    My("my", "My Stuff", Icons.Default.AccountCircle),
+    My("settings", "Settings", Icons.Default.AccountCircle),
     Profiles("profiles", "Profiles", Icons.Default.AccountCircle),
 }
 
@@ -208,6 +209,7 @@ private fun RebuildRoot(initialRoute: String? = null) {
     var current by remember(initialRoute) { mutableStateOf(RebuildDestination.entries.firstOrNull { it.route == initialRoute } ?: RebuildDestination.Home) }
     var multiviewPanes by remember { mutableStateOf<List<MultiviewPane>>(emptyList()) }
     var multiviewAudioPaneId by remember { mutableStateOf<String?>(null) }
+    val livePreview = remember { LivePreviewController() }
 
     LaunchedEffect(activeProfileId) {
         cloudConfigSync.restore(activeProfileId) { result ->
@@ -306,17 +308,20 @@ private fun RebuildRoot(initialRoute: String? = null) {
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
                 RebuildDestination.Shows -> TvListsScreen(profileId = activeProfileId)
-                RebuildDestination.Live -> PremiumLiveTvScreen(
+                RebuildDestination.Live -> TivraLiveTvScreen(
                     sources = iptvSources,
                     onSourcesChanged = { iptvSources = it },
+                    preview = livePreview,
                     profileId = activeProfileId,
                 )
-                RebuildDestination.Guide -> PremiumGuideScreen(
+                RebuildDestination.Guide -> TivraGuideScreen(
                     sources = iptvSources,
+                    preview = livePreview,
                     profileId = activeProfileId,
                 )
-                RebuildDestination.Sports -> PremiumSportsScreen(
+                RebuildDestination.Sports -> TivraSportsScreen(
                     sources = iptvSources,
+                    preview = livePreview,
                     profileId = activeProfileId,
                 )
                 RebuildDestination.Multiview -> {

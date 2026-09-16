@@ -13,17 +13,18 @@ object AstraWaveNavigationContract {
     /** Phone keeps the five highest-frequency streaming destinations one tap away. */
     val mobilePrimary = listOf(
         AstraWaveNavItem("home", "Home"),
-        AstraWaveNavItem("movies", "Movies"),
-        AstraWaveNavItem("tv", "TV"),
         AstraWaveNavItem("live", "Live"),
-        AstraWaveNavItem("search", "Search"),
+        AstraWaveNavItem("guide", "Guide"),
+        AstraWaveNavItem("sports", "Sports"),
+        AstraWaveNavItem("settings", "More"),
     )
 
     /** Profile, library and specialist surfaces stay out of the primary phone bar. */
     val mobileMore = listOf(
-        AstraWaveNavItem("my", "My Stuff"),
-        AstraWaveNavItem("guide", "Guide"),
-        AstraWaveNavItem("sports", "Sports"),
+        AstraWaveNavItem("movies", "Movies"),
+        AstraWaveNavItem("tv", "Shows"),
+        AstraWaveNavItem("search", "Search"),
+        AstraWaveNavItem("library", "Library"),
         AstraWaveNavItem("multiview", "Multiview"),
         AstraWaveNavItem("audio", "Music & Podcasts"),
         AstraWaveNavItem("personal-media", "Personal Media"),
@@ -34,25 +35,26 @@ object AstraWaveNavigationContract {
     /** Tablet mirrors the content-first TV layout. */
     val mobileTablet = listOf(
         AstraWaveNavItem("home", "Home"),
-        AstraWaveNavItem("movies", "Movies"),
-        AstraWaveNavItem("tv", "TV Shows"),
         AstraWaveNavItem("live", "Live TV"),
         AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Sports"),
+        AstraWaveNavItem("movies", "Movies"),
+        AstraWaveNavItem("tv", "Shows"),
         AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("my", "My Stuff"),
+        AstraWaveNavItem("library", "Library"),
+        AstraWaveNavItem("settings", "Settings"),
     )
 
     /** TV rail follows content priority before utilities. */
     val tv = listOf(
         AstraWaveNavItem("home", "Home"),
-        AstraWaveNavItem("movies", "Movies"),
-        AstraWaveNavItem("tv", "TV Shows"),
         AstraWaveNavItem("live", "Live TV"),
         AstraWaveNavItem("guide", "Guide"),
         AstraWaveNavItem("sports", "Sports"),
+        AstraWaveNavItem("movies", "Movies"),
+        AstraWaveNavItem("tv", "Shows"),
         AstraWaveNavItem("search", "Search"),
-        AstraWaveNavItem("my", "My Stuff"),
+        AstraWaveNavItem("library", "Library"),
         AstraWaveNavItem("settings", "Settings"),
     )
 
@@ -61,11 +63,9 @@ object AstraWaveNavigationContract {
         check(mobileMore.map { it.route }.distinct().size == mobileMore.size)
         check(mobileTablet.map { it.route }.distinct().size == mobileTablet.size)
         check(tv.map { it.route }.distinct().size == tv.size)
-        check(mobilePrimary.map { it.route } == listOf("home", "movies", "tv", "live", "search"))
-        check(mobileMore.any { it.route == "my" })
-        check(mobileMore.any { it.route == "guide" })
-        check(mobileMore.any { it.route == "sports" })
-        check(tv.take(4).map { it.route } == listOf("home", "movies", "tv", "live"))
+        check(mobilePrimary.map { it.route } == listOf("home", "live", "guide", "sports", "settings"))
+        check(mobileMore.any { it.route == "library" })
+        check(tv.take(4).map { it.route } == listOf("home", "live", "guide", "sports"))
         check(tv.last().route == "settings")
     }
 }
