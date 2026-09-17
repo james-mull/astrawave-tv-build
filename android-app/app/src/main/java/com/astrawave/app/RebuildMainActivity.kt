@@ -277,25 +277,24 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         if (useRail) {
             val railWidth = when {
-                isTv && tvRailExpanded -> 248.dp
-                isTv -> 68.dp
-                else -> 116.dp
+                isTv -> 64.dp
+                else -> 104.dp
             }
             NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(railWidth)) {
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    if (isTv && !tvRailExpanded) activeProfile.avatar else "AstraWave",
-                    color = AstraWaveColors.Accent,
+                    if (isTv) "A" else "AstraWave",
+                    color = AstraWaveColors.PrimaryText,
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                 )
                 Spacer(Modifier.height(10.dp))
                 primaryDestinations.forEach { item ->
-                    val showRailLabel = !isTv || tvRailExpanded
+                    val showRailLabel = !isTv
                     NavigationRailItem(
                         selected = current == item,
                         onClick = { current = item },
-                        modifier = Modifier.onFocusChanged { state -> handleTvRailFocus(state.hasFocus) },
+                        modifier = Modifier,
                         icon = { Icon(item.icon, item.label) },
                         label = if (showRailLabel) ({ Text(item.label, maxLines = 1) }) else null,
                         alwaysShowLabel = showRailLabel,
@@ -324,7 +323,7 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
                     profileId = activeProfileId,
                     previewData = qaPreviewData,
                 )
-                RebuildDestination.Sports -> TivraSportsScreen(
+                RebuildDestination.Sports -> TivraSportsHubV2(
                     sources = iptvSources,
                     preview = livePreview,
                     profileId = activeProfileId,

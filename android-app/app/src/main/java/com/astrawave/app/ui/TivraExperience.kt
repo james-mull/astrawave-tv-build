@@ -696,7 +696,7 @@ private fun reviewProgramme(channelId: String, title: String, start: Long, stop:
     return XmlTvProgramme(channelId, title, format.format(Date(start)), format.format(Date(stop)))
 }
 
-private fun reviewSportsSnapshot(date: LocalDate): SportsGuideSnapshot {
+internal fun reviewSportsSnapshot(date: LocalDate): SportsGuideSnapshot {
     val games = listOf(
         listOf("nba-1", "Lakers at Nuggets", "NBA", "Basketball", "Lakers", "Nuggets", "ESPN", "Q3 04:18", "82", "88"),
         listOf("nba-2", "Celtics at Knicks", "NBA", "Basketball", "Celtics", "Knicks", "TNT", "8:30 PM", "", ""),
