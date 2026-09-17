@@ -1,0 +1,78 @@
+name: TIVRA Shell Home V3 Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/tivra-shell-home-v3-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Apply TV shell and Home V3
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = root.read_text()
+          old = '    val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION\n'
+          new = '''    val reportedTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION\n    // Some Google API TV images report a generic uiMode even with a 16:9 television profile.\n    // Keep a conservative large-screen 16:9 fallback so TV devices do not inherit the tablet rail.\n    val isTv = reportedTv || (configuration.screenWidthDp >= 900 && configuration.screenHeightDp <= 600)\n'''
+          if old not in text:
+              raise SystemExit('TV detection anchor not found')
+          root.write_text(text.replace(old, new, 1))
+
+          home = Path('android-app/app/src/main/java/com/astrawave/app/ui/PremiumHomeScreen.kt')
+          text = home.read_text()
+          old = '''        when {\n            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }\n            heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }\n            discoveryFeatured != null -> item(key = "discovery-hero-${discoveryFeatured.id}") { HomeDiscoveryHero(discoveryFeatured, ::openMetadata) }\n        }\n'''
+          new = '''        when {\n            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }\n            heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }\n            discoveryFeatured != null -> item(key = "discovery-hero-${discoveryFeatured.id}") { HomeDiscoveryHero(discoveryFeatured, ::openMetadata) }\n            else -> item(key = "cinematic-home-hero") { HomeFallbackHero() }\n        }\n'''
+          if old not in text:
+              raise SystemExit('Home hero anchor not found')
+          text = text.replace(old, new, 1)
+
+          marker = '@Composable\nprivate fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> Unit) {'
+          addition = '''@Composable\nprivate fun HomeFallbackHero() {\n    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE\n    Box(\n        Modifier.fillMaxWidth()\n            .height(if (phone) 450.dp else 500.dp)\n            .background(\n                Brush.horizontalGradient(\n                    listOf(\n                        AstraWaveColors.BackgroundRaised,\n                        AstraWaveColors.SurfaceFocus.copy(alpha = 0.78f),\n                        AstraWaveColors.Background,\n                    ),\n                ),\n            ),\n    ) {\n        Box(\n            Modifier.fillMaxSize().background(\n                Brush.verticalGradient(\n                    listOf(\n                        Color.Transparent,\n                        AstraWaveColors.Background.copy(alpha = 0.18f),\n                        AstraWaveColors.Background,\n                    ),\n                ),\n            ),\n        )\n        Column(\n            Modifier.align(Alignment.BottomStart)\n                .padding(horizontal = if (phone) 18.dp else 34.dp, vertical = if (phone) 24.dp else 36.dp)\n                .width(if (phone) 350.dp else 760.dp),\n            verticalArrangement = Arrangement.spacedBy(9.dp),\n        ) {\n            Text("ASTRAWAVE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)\n            Text(\n                "Your entertainment, without the dashboard feel.",\n                color = AstraWaveColors.PrimaryText,\n                style = if (phone) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,\n                maxLines = 2,\n            )\n            Text(\n                "Movies • TV • Live • Sports",\n                color = AstraWaveColors.SecondaryText,\n                style = MaterialTheme.typography.titleMedium,\n            )\n            Text(\n                "Pick up where you left off or drop straight into what is happening now.",\n                color = AstraWaveColors.TertiaryText,\n                style = MaterialTheme.typography.bodyMedium,\n                maxLines = 2,\n            )\n        }\n    }\n}\n\n'''
+          if marker not in text:
+              raise SystemExit('HomeSportsHero marker not found')
+          text = text.replace(marker, addition + marker, 1)
+          home.write_text(text)
+          PY
+
+      - name: Compile Android UI
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Commit validated overhaul
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt \
+                  android-app/app/src/main/java/com/astrawave/app/ui/PremiumHomeScreen.kt
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "TIVRA V3 compact TV shell and cinematic Home"
+          git push origin HEAD:feature/nuvio-core-rebuild
