@@ -1,0 +1,87 @@
+name: TIVRA Major Overhaul V2 Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/tivra-major-overhaul-v2-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  overhaul:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Wire Sports V2 and compact TV shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          # Root: route Sports to the new V2 experience.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = p.read_text()
+          old = '''                RebuildDestination.Sports -> TivraSportsScreen(\n                    sources = iptvSources,\n                    preview = livePreview,\n                    profileId = activeProfileId,\n                    previewData = qaPreviewData,\n                )\n'''
+          new = '''                RebuildDestination.Sports -> TivraSportsHubV2(\n                    sources = iptvSources,\n                    preview = livePreview,\n                    profileId = activeProfileId,\n                    previewData = qaPreviewData,\n                )\n'''
+          if old not in text:
+              raise SystemExit('Sports route anchor not found')
+          text = text.replace(old, new, 1)
+
+          # TV shell: fixed compact icon rail; no expanding 248dp menu.
+          text = text.replace(
+              '''            val railWidth = when {\n                isTv && tvRailExpanded -> 248.dp\n                isTv -> 68.dp\n                else -> 116.dp\n            }\n''',
+              '''            val railWidth = when {\n                isTv -> 64.dp\n                else -> 104.dp\n            }\n''',
+              1,
+          )
+          text = text.replace(
+              '''                Text(\n                    if (isTv && !tvRailExpanded) activeProfile.avatar else "AstraWave",\n                    color = AstraWaveColors.Accent,\n                    style = MaterialTheme.typography.titleLarge,\n                    maxLines = 1,\n                )\n''',
+              '''                Text(\n                    if (isTv) "A" else "AstraWave",\n                    color = AstraWaveColors.PrimaryText,\n                    style = MaterialTheme.typography.titleLarge,\n                    maxLines = 1,\n                )\n''',
+              1,
+          )
+          text = text.replace('val showRailLabel = !isTv || tvRailExpanded', 'val showRailLabel = !isTv', 1)
+          # Stop expansion/collapse effects from visually changing the rail.
+          text = text.replace(
+              'modifier = Modifier.onFocusChanged { state -> handleTvRailFocus(state.hasFocus) },',
+              'modifier = Modifier,',
+              1,
+          )
+          p.write_text(text)
+
+          # Expose review sports snapshot to the new V2 screen for screenshot QA.
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/TivraExperience.kt')
+          text = p.read_text()
+          text = text.replace('private fun reviewSportsSnapshot(date: LocalDate): SportsGuideSnapshot {', 'internal fun reviewSportsSnapshot(date: LocalDate): SportsGuideSnapshot {', 1)
+          p.write_text(text)
+          PY
+
+      - name: Compile major overhaul
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Commit overhaul
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt \
+                  android-app/app/src/main/java/com/astrawave/app/ui/TivraExperience.kt \
+                  android-app/app/src/main/java/com/astrawave/app/ui/TivraSportsHubV2.kt
+          git commit -m 'Major TIVRA sports hub and compact TV shell overhaul'
+          git push origin HEAD:feature/nuvio-core-rebuild
