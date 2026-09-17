@@ -18,6 +18,7 @@ permissions:
 # Triggered after major UI passes so the gallery always reflects the current customer experience.
 # Retry after onboarding simplification and API-35 resumed-activity foreground detection fix.
 # TIVRA Sports Hub V2 visual QA trigger.
+# TIVRA Live TV + Guide + Sports V2 combined visual QA trigger.
 jobs:
   capture-gallery:
     name: ${{ matrix.name }} gallery
