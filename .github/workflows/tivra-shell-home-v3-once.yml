@@ -46,6 +46,11 @@ jobs:
 
           home = Path('android-app/app/src/main/java/com/astrawave/app/ui/PremiumHomeScreen.kt')
           text = home.read_text()
+          if 'import androidx.compose.ui.graphics.Color\n' not in text:
+              anchor = 'import androidx.compose.ui.graphics.Brush\n'
+              if anchor not in text:
+                  raise SystemExit('Brush import anchor not found')
+              text = text.replace(anchor, anchor + 'import androidx.compose.ui.graphics.Color\n', 1)
           old = '''        when {\n            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }\n            heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }\n            discoveryFeatured != null -> item(key = "discovery-hero-${discoveryFeatured.id}") { HomeDiscoveryHero(discoveryFeatured, ::openMetadata) }\n        }\n'''
           new = '''        when {\n            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }\n            heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }\n            discoveryFeatured != null -> item(key = "discovery-hero-${discoveryFeatured.id}") { HomeDiscoveryHero(discoveryFeatured, ::openMetadata) }\n            else -> item(key = "cinematic-home-hero") { HomeFallbackHero() }\n        }\n'''
           if old not in text:
