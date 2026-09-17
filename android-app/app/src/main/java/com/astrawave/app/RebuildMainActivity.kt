@@ -184,7 +184,10 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
         return
     }
 
-    val isTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    val reportedTv = (configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    // Some Google API TV images report a generic uiMode even with a 16:9 television profile.
+    // Keep a conservative large-screen 16:9 fallback so TV devices do not inherit the tablet rail.
+    val isTv = reportedTv || (configuration.screenWidthDp >= 900 && configuration.screenHeightDp <= 600)
     val isPhone = !isTv && configuration.screenWidthDp < 600
     val useRail = isTv || configuration.screenWidthDp >= 840
     val primaryDestinations = remember(isTv, isPhone, activeProfile.kidsMode) {

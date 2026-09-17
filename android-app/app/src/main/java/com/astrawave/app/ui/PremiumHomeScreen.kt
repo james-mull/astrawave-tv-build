@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PlayerActivity
@@ -212,6 +213,7 @@ fun PremiumHomeScreen(profileId: String = "default") {
             liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }
             heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }
             discoveryFeatured != null -> item(key = "discovery-hero-${discoveryFeatured.id}") { HomeDiscoveryHero(discoveryFeatured, ::openMetadata) }
+            else -> item(key = "cinematic-home-hero") { HomeFallbackHero() }
         }
 
         if (continueItems.isNotEmpty()) {
@@ -273,6 +275,61 @@ fun PremiumHomeScreen(profileId: String = "default") {
                     intelligence.invalidate(profileId)
                     libraryRefresh += 1
                 }.padding(bottom = 20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeFallbackHero() {
+    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+    Box(
+        Modifier.fillMaxWidth()
+            .height(if (phone) 450.dp else 500.dp)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        AstraWaveColors.BackgroundRaised,
+                        AstraWaveColors.SurfaceFocus.copy(alpha = 0.78f),
+                        AstraWaveColors.Background,
+                    ),
+                ),
+            ),
+    ) {
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.Transparent,
+                        AstraWaveColors.Background.copy(alpha = 0.18f),
+                        AstraWaveColors.Background,
+                    ),
+                ),
+            ),
+        )
+        Column(
+            Modifier.align(Alignment.BottomStart)
+                .padding(horizontal = if (phone) 18.dp else 34.dp, vertical = if (phone) 24.dp else 36.dp)
+                .width(if (phone) 350.dp else 760.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Text("ASTRAWAVE", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+            Text(
+                "Your entertainment, without the dashboard feel.",
+                color = AstraWaveColors.PrimaryText,
+                style = if (phone) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
+                maxLines = 2,
+            )
+            Text(
+                "Movies • TV • Live • Sports",
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                "Pick up where you left off or drop straight into what is happening now.",
+                color = AstraWaveColors.TertiaryText,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
             )
         }
     }
