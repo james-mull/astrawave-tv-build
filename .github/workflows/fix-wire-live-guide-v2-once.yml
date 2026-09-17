@@ -1,0 +1,76 @@
+name: Fix Wire Live Guide V2 Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/fix-wire-live-guide-v2-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Repair demo guide and wire V2 routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('android-app/app/src/main/java/com/astrawave/app/ui/TivraLiveGuideV2.kt')
+          text = p.read_text()
+          old = 'GuideChannelRow(group.canonicalName, group.displayName, null, group.bestCandidate?.group, group.currentProgram, group.nextProgram, group.schedule, 1, "Demo TV", null)'
+          new = '''GuideChannelRow(
+                id = group.canonicalName,
+                name = group.displayName,
+                logo = null,
+                group = group.bestCandidate?.group,
+                now = group.currentProgram,
+                next = group.nextProgram,
+                programmes = group.schedule,
+                playableCandidateCount = 1,
+                preferredSource = "Demo TV",
+                recordingSource = null,
+                playableUrl = null,
+                playableUrls = emptyList(),
+            )'''
+          if old not in text:
+              raise SystemExit('Demo GuideChannelRow anchor not found')
+          p.write_text(text.replace(old, new, 1))
+
+          p = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = p.read_text()
+          text = text.replace('import com.astrawave.app.ui.TivraGuideScreen\n', 'import com.astrawave.app.ui.TivraGuideScreenV2\n')
+          text = text.replace('import com.astrawave.app.ui.TivraLiveTvScreen\n', 'import com.astrawave.app.ui.TivraLiveTvScreenV2\n')
+          text = text.replace('RebuildDestination.Live -> TivraLiveTvScreen(', 'RebuildDestination.Live -> TivraLiveTvScreenV2(', 1)
+          text = text.replace('RebuildDestination.Guide -> TivraGuideScreen(', 'RebuildDestination.Guide -> TivraGuideScreenV2(', 1)
+          p.write_text(text)
+          PY
+      - name: Compile repaired V2 experience
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:compileDebugKotlin
+      - name: Commit repaired V2 experience
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-app/app/src/main/java/com/astrawave/app/ui/TivraLiveGuideV2.kt android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Activate TIVRA Live TV and Guide V2'
+          git push origin feature/nuvio-core-rebuild
