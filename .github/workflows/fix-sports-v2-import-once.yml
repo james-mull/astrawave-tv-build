@@ -1,0 +1,40 @@
+name: Fix Sports V2 Import Once
+
+on:
+  push:
+    branches:
+      - feature/nuvio-core-rebuild
+    paths:
+      - '.github/workflows/fix-sports-v2-import-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/nuvio-core-rebuild
+          fetch-depth: 0
+      - name: Add Sports V2 import
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt')
+          text = p.read_text()
+          needle = 'import com.astrawave.app.ui.TivraSportsScreen\n'
+          addition = needle + 'import com.astrawave.app.ui.TivraSportsHubV2\n'
+          if 'import com.astrawave.app.ui.TivraSportsHubV2\n' not in text:
+              if needle not in text:
+                  raise SystemExit('TivraSportsScreen import anchor not found')
+              text = text.replace(needle, addition, 1)
+          p.write_text(text)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt
+          git commit -m 'Import TIVRA Sports Hub V2'
+          git push origin HEAD:feature/nuvio-core-rebuild
