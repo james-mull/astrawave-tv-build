@@ -94,6 +94,7 @@ import com.astrawave.app.ui.LivePreviewController
 import com.astrawave.app.ui.TivraGuideScreen
 import com.astrawave.app.ui.TivraLiveTvScreen
 import com.astrawave.app.ui.TivraSportsScreen
+import com.astrawave.app.ui.TivraSportsHubV2
 import com.astrawave.app.ui.StremioAddonScreen
 import com.astrawave.app.ui.TvListsScreen
 import com.astrawave.app.ui.UltraMaxDiscoveryScreen
