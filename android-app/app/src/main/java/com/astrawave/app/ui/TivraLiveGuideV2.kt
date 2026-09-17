@@ -444,7 +444,20 @@ private fun v2DemoLiveGroups(): List<LiveChannelGroup> {
 private fun v2DemoGuide(): GuideSnapshot {
     val groups = v2DemoLiveGroups()
     val rows = groups.map { group ->
-        GuideChannelRow(group.canonicalName, group.displayName, null, group.bestCandidate?.group, group.currentProgram, group.nextProgram, group.schedule, 1, "Demo TV", null)
+        GuideChannelRow(
+      id = group.canonicalName,
+      name = group.displayName,
+      logo = null,
+      group = group.bestCandidate?.group,
+      now = group.currentProgram,
+      next = group.nextProgram,
+      programmes = group.schedule,
+      playableCandidateCount = 1,
+      preferredSource = "Demo TV",
+      recordingSource = null,
+      playableUrl = null,
+      playableUrls = emptyList(),
+  )
     }
     return GuideSnapshot(rows, 1, 0, 0, rows.size, rows.size, rows.sumOf { it.programmes.size })
 }

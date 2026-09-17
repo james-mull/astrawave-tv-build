@@ -91,8 +91,8 @@ import com.astrawave.app.ui.MyAstraWaveHub
 import com.astrawave.app.ui.PersonalMediaScreen
 import com.astrawave.app.ui.PremiumHomeScreen
 import com.astrawave.app.ui.LivePreviewController
-import com.astrawave.app.ui.TivraGuideScreen
-import com.astrawave.app.ui.TivraLiveTvScreen
+import com.astrawave.app.ui.TivraGuideScreenV2
+import com.astrawave.app.ui.TivraLiveTvScreenV2
 import com.astrawave.app.ui.TivraSportsScreen
 import com.astrawave.app.ui.TivraSportsHubV2
 import com.astrawave.app.ui.StremioAddonScreen
@@ -310,14 +310,14 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
                 RebuildDestination.Home -> PremiumHomeScreen(profileId = activeProfileId)
                 RebuildDestination.Movies -> MovieListsScreen(profileId = activeProfileId)
                 RebuildDestination.Shows -> TvListsScreen(profileId = activeProfileId)
-                RebuildDestination.Live -> TivraLiveTvScreen(
+                RebuildDestination.Live -> TivraLiveTvScreenV2(
                     sources = iptvSources,
                     onSourcesChanged = { iptvSources = it },
                     preview = livePreview,
                     profileId = activeProfileId,
                     previewData = qaPreviewData,
                 )
-                RebuildDestination.Guide -> TivraGuideScreen(
+                RebuildDestination.Guide -> TivraGuideScreenV2(
                     sources = iptvSources,
                     preview = livePreview,
                     profileId = activeProfileId,
