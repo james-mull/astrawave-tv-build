@@ -265,8 +265,8 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
             Toast.makeText(context, "Already in Multiview.", Toast.LENGTH_SHORT).show()
             return
         }
-        if (multiviewPanes.size >= 6) {
-            Toast.makeText(context, "Sports Mosaic supports up to six streams.", Toast.LENGTH_SHORT).show()
+        if (multiviewPanes.size >= 8) {
+            Toast.makeText(context, "Multiview supports up to eight streams on capable devices.", Toast.LENGTH_SHORT).show()
             return
         }
         multiviewPanes = multiviewPanes + pane.copy(muted = multiviewPanes.isNotEmpty())
@@ -344,7 +344,8 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
                             1, 2 -> MultiviewLayout.TWO_UP
                             3 -> MultiviewLayout.THREE_UP
                             4 -> MultiviewLayout.FOUR_UP
-                            else -> if (allSports) MultiviewLayout.SPORTS_MOSAIC else MultiviewLayout.SIX_UP
+                            5, 6 -> if (allSports) MultiviewLayout.SPORTS_MOSAIC else MultiviewLayout.SIX_UP
+                            else -> MultiviewLayout.EIGHT_UP
                         }
                         MultiviewScreen(
                             session = MultiviewSession(
