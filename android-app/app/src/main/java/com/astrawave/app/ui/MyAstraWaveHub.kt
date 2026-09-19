@@ -283,19 +283,22 @@ fun MyAstraWaveHub(
         }
 
         Spacer(Modifier.height(if (isPhone) 20.dp else 26.dp))
-        if (isPhone) {
-            Row(
-                Modifier.fillMaxWidth().clickable { settingsExpanded = !settingsExpanded }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Default.Settings, null, tint = AstraWaveColors.SecondaryText, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(12.dp))
-                Text("Settings & Connections", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(if (settingsExpanded) "Hide" else "Open", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
+        Row(
+            Modifier.fillMaxWidth().clickable { settingsExpanded = !settingsExpanded }
+                .padding(horizontal = if (isPhone) 16.dp else 22.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.Settings, null, tint = AstraWaveColors.SecondaryText, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Settings & Connections", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                if (!settingsExpanded) {
+                    Text("Sources, playback, profiles, devices and advanced tools", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall)
+                }
             }
+            Text(if (settingsExpanded) "HIDE" else "OPEN", color = if (settingsExpanded) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelMedium)
         }
-        if (!isPhone || settingsExpanded) {
+        if (settingsExpanded) {
         Text("SETTINGS", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
         SetupRow { showSetup = true }
