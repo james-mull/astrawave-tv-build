@@ -301,7 +301,7 @@ private fun V2CategoryRail(categories: List<String>, selected: String?, onSelect
 @Composable
 private fun V2Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(label, color = if (selected) Color.Black else AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall,
-        modifier = Modifier.background(if (selected) Color.White else AstraWaveColors.Surface).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp))
+        modifier = Modifier.background(if (selected) AstraWaveColors.AccentStrong else AstraWaveColors.Surface).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp))
 }
 
 @Composable
@@ -319,7 +319,7 @@ private fun V2ChannelRow(channel: LiveChannelGroup, selected: Boolean, onClick: 
             }
             Text(channel.currentProgram?.title ?: "Live programming", color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
             Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp), color = if (selected) Color.White else AstraWaveColors.TertiaryText, trackColor = AstraWaveColors.SurfaceRaised)
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp), color = if (selected) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText, trackColor = AstraWaveColors.SurfaceRaised)
         }
     }
 }
