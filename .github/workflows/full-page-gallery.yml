@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: astrawave-full-gallery-${{ github.ref }}
+  cancel-in-progress: true
+
 # Captures the real customer-facing pages from the debug APK for visual review.
 # Triggered after major UI passes so the gallery always reflects the current customer experience.
 # Retry after onboarding simplification and API-35 resumed-activity foreground detection fix.
