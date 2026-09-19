@@ -76,6 +76,7 @@ fun TivraSportsHubV2(
     val addonLive = remember { StremioLiveCatalogDiscovery(context) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedTab by remember { mutableStateOf(TivraSportsV2Tab.SCORES) }
+    var selectedSport by remember { mutableStateOf<String?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var load by remember(sources, selectedDate, profileId) { mutableStateOf<TivraSportsV2Load>(TivraSportsV2Load.Loading) }
 
@@ -120,11 +121,15 @@ fun TivraSportsHubV2(
             }
             is TivraSportsV2Load.Ready -> {
                 val allEvents = current.snapshot.events
-                val visibleEvents = when (selectedTab) {
+                val tabEvents = when (selectedTab) {
                     TivraSportsV2Tab.SCORES -> allEvents
                     TivraSportsV2Tab.MY_TEAMS -> allEvents.filter { it.event.isLive || it.watchCandidate != null }
                     TivraSportsV2Tab.CHANNELS -> allEvents.filter { it.watchCandidate != null }
                 }
+                val sports = tabEvents.mapNotNull { it.event.sport?.takeIf(String::isNotBlank) }.distinct().sorted()
+                if (selectedSport != null && selectedSport !in sports) selectedSport = null
+                SportsV2SportStrip(sports, selectedSport) { selectedSport = it }
+                val visibleEvents = tabEvents.filter { selectedSport == null || it.event.sport == selectedSport }
                 if (selectedId == null || visibleEvents.none { it.event.id == selectedId }) {
                     selectedId = visibleEvents.firstOrNull { it.event.isLive && it.watchCandidate != null }?.event?.id
                         ?: visibleEvents.firstOrNull { it.watchCandidate != null }?.event?.id
@@ -194,6 +199,34 @@ private fun SportsV2Header(
                     Box(Modifier.width(if (selected) 36.dp else 0.dp).height(2.dp).background(AstraWaveColors.PrimaryText))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SportsV2SportStrip(sports: List<String>, selected: String?, onSelect: (String?) -> Unit) {
+    if (sports.isEmpty()) return
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val allActive = selected == null
+        Text(
+            "ALL SPORTS",
+            color = if (allActive) Color.Black else AstraWaveColors.SecondaryText,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.background(if (allActive) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
+                .clickable { onSelect(null) }.padding(horizontal = 13.dp, vertical = 8.dp),
+        )
+        sports.forEach { sport ->
+            val active = sport == selected
+            Text(
+                sport.uppercase(),
+                color = if (active) Color.Black else AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.background(if (active) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
+                    .clickable { onSelect(sport) }.padding(horizontal = 13.dp, vertical = 8.dp),
+            )
         }
     }
 }
@@ -303,6 +336,30 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsLeagueSections(
     onSelect: (SportsGuideItem) -> Unit,
     compact: Boolean,
 ) {
+    val liveNow = events.filter { it.event.isLive }
+    if (liveNow.isNotEmpty()) {
+        item("sports-v2-header:live-now") {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Text("LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                val watchable = liveNow.count { it.watchCandidate != null }
+                if (watchable > 0) Text("$watchable ON YOUR CHANNELS", color = AstraWaveColors.Success, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        item("sports-v2-row:live-now") {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 9.dp else 12.dp),
+            ) {
+                items(liveNow, key = { "live:" + it.event.id }) { game ->
+                    SportsScoreCardV2(game, game.event.id == selectedId, compact) { onSelect(game) }
+                }
+            }
+        }
+    }
     val leagues = events.groupBy { it.event.league?.takeIf(String::isNotBlank) ?: "TODAY'S GAMES" }
     leagues.forEach { (league, games) ->
         item("sports-v2-header:$league") {
