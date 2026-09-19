@@ -1,8 +1,10 @@
 package com.astrawave.app.ui
 
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.astrawave.app.PremiumVodDetailActivity
@@ -61,50 +65,53 @@ fun TvListsScreen(profileId: String = "default") {
         )
     }
 
-    Column(Modifier.fillMaxSize()) {
-        if (continueTv.isNotEmpty()) {
-            Column(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp)) {
-                Text(
-                    "Continue Watching",
-                    color = AstraWaveColors.PrimaryText,
-                    style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp),
+    Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
+        continueTv.firstOrNull()?.let { featured ->
+            val ratio = if (featured.durationMs > 0L) (featured.positionMs.toFloat() / featured.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+            Box(
+                Modifier.fillMaxWidth()
+                    .height(if (device == AstraWaveDeviceClass.PHONE) 320.dp else 380.dp)
+                    .clickable { open(featured) },
+            ) {
+                AstraWaveArtwork(featured.item.title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            listOf(
+                                AstraWaveColors.Background.copy(alpha = 0.05f),
+                                AstraWaveColors.Background.copy(alpha = 0.28f),
+                                AstraWaveColors.Background,
+                            ),
+                        ),
+                    ),
                 )
-                Spacer(Modifier.height(if (device == AstraWaveDeviceClass.PHONE) 7.dp else 9.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp),
+                Column(
+                    Modifier.align(Alignment.BottomStart)
+                        .padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 28.dp, vertical = 24.dp)
+                        .width(if (device == AstraWaveDeviceClass.PHONE) 330.dp else 620.dp),
                 ) {
-                    items(continueTv, key = { it.item.id }) { progress ->
-                        val ratio = if (progress.durationMs > 0L) {
-                            (progress.positionMs.toFloat() / progress.durationMs.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
-                        val phone = device == AstraWaveDeviceClass.PHONE
-                        val body: @Composable () -> Unit = {
-                            Column(Modifier.width(if (phone) 220.dp else 280.dp).clickable { open(progress) }) {
-                                AstraWaveArtwork(
-                                    progress.item.title,
-                                    Modifier.fillMaxWidth(),
-                                    AstraWaveArtworkKind.Backdrop,
-                                )
-                                Spacer(Modifier.height(if (phone) 6.dp else 8.dp))
-                                Text(
-                                    progress.item.title,
-                                    color = AstraWaveColors.PrimaryText,
-                                    style = if (phone) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                )
-                                Spacer(Modifier.height(5.dp))
-                                LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    if (ratio > 0f) "Resume ${(ratio * 100).toInt()}%" else "Continue",
-                                    color = AstraWaveColors.AccentStrong,
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
+                    Text("CONTINUE SERIES", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(featured.item.title, color = AstraWaveColors.PrimaryText, style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge, maxLines = 2)
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth().height(3.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("RESUME  ▶", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+
+        if (continueTv.size > 1) {
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)) {
+                Text("Continue Watching", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp))
+                Spacer(Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp)) {
+                    items(continueTv.drop(1), key = { it.item.id }) { progress ->
+                        Column(Modifier.width(if (device == AstraWaveDeviceClass.PHONE) 210.dp else 250.dp).clickable { open(progress) }) {
+                            AstraWaveArtwork(progress.item.title, Modifier.fillMaxWidth(), AstraWaveArtworkKind.Backdrop)
+                            Spacer(Modifier.height(6.dp))
+                            Text(progress.item.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                         }
-                        if (phone) body() else AstraWaveFocusableCard(Modifier.width(280.dp)) { body() }
                     }
                 }
             }
