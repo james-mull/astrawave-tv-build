@@ -42,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -280,10 +281,10 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
     Row(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
         if (useRail) {
             val railWidth = when {
-                isTv -> 64.dp
+                isTv -> 56.dp
                 else -> 104.dp
             }
-            NavigationRail(containerColor = AstraWaveColors.BackgroundRaised, modifier = Modifier.width(railWidth)) {
+            NavigationRail(containerColor = AstraWaveColors.Background, modifier = Modifier.width(railWidth)) {
                 Spacer(Modifier.height(14.dp))
                 Text(
                     if (isTv) "A" else "AstraWave",
@@ -298,9 +299,26 @@ private fun RebuildRoot(initialRoute: String? = null, qaPreviewData: Boolean = f
                         selected = current == item,
                         onClick = { current = item },
                         modifier = Modifier,
-                        icon = { Icon(item.icon, item.label) },
+                        icon = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(
+                                    Modifier.width(if (current == item) 24.dp else 0.dp)
+                                        .height(2.dp)
+                                        .background(if (current == item) AstraWaveColors.FocusRing else Color.Transparent),
+                                )
+                                Spacer(Modifier.height(5.dp))
+                                Icon(item.icon, item.label)
+                            }
+                        },
                         label = if (showRailLabel) ({ Text(item.label, maxLines = 1) }) else null,
                         alwaysShowLabel = showRailLabel,
+                        colors = NavigationRailItemDefaults.colors(
+                            selectedIconColor = AstraWaveColors.FocusRing,
+                            unselectedIconColor = AstraWaveColors.TertiaryText,
+                            selectedTextColor = AstraWaveColors.PrimaryText,
+                            unselectedTextColor = AstraWaveColors.TertiaryText,
+                            indicatorColor = Color.Transparent,
+                        ),
                     )
                 }
             }
