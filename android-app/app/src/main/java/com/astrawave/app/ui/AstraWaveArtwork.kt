@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -31,14 +32,16 @@ fun AstraWaveArtwork(
     modifier: Modifier = Modifier,
     kind: AstraWaveArtworkKind = AstraWaveArtworkKind.Poster,
     artworkAvailable: Boolean = false,
+    flat: Boolean = false,
     content: (@Composable () -> Unit)? = null,
 ) {
     val remoteArtwork = ArtworkRegistry.resolve(title)
+    val artworkShape = if (flat) RectangleShape else MaterialTheme.shapes.large
     Box(
         modifier = modifier
             .aspectRatio(kind.aspectRatio)
-            .clip(MaterialTheme.shapes.large)
-            .border(1.dp, AstraWaveColors.Divider.copy(alpha = 0.58f), MaterialTheme.shapes.large)
+            .clip(artworkShape)
+            .border(if (flat) 0.dp else 1.dp, if (flat) Color.Transparent else AstraWaveColors.Divider.copy(alpha = 0.58f), artworkShape)
             .background(
                 Brush.linearGradient(
                     listOf(AstraWaveColors.SurfaceFocus, AstraWaveColors.BackgroundRaised),
