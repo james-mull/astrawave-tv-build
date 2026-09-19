@@ -10,6 +10,8 @@ on:
       - '.github/scripts/capture-full-gallery.sh'
       - 'android-app/app/src/debug/**'
       - 'android-app/app/src/main/java/com/astrawave/app/RebuildMainActivity.kt'
+      - 'android-app/app/src/main/java/com/astrawave/app/ui/**'
+      - 'android-app/app/src/main/java/com/astrawave/app/core/**'
 
 permissions:
   contents: read
