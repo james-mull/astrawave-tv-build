@@ -147,34 +147,23 @@ fun TivraLiveTvScreenV2(
                         }
                     }
                 } else {
-                    Row(
-                        Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        Column(
-                            Modifier.width(170.dp).fillMaxHeight()
-                                .background(AstraWaveColors.BackgroundRaised)
-                                .padding(vertical = 8.dp),
+                    Column(Modifier.fillMaxSize()) {
+                        V2CategoryRail(categories, category) { category = it }
+                        Row(
+                            Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
-                            Text(
-                                "BROWSE",
-                                color = AstraWaveColors.TertiaryText,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            )
-                            V2SideItem("All channels", category == null) { category = null }
-                            categories.forEach { V2SideItem(it, category == it) { category = it } }
-                        }
-                        Column(Modifier.weight(1f).fillMaxHeight()) {
-                            V2PreviewPane(preview, Modifier.fillMaxWidth().weight(1f))
-                            selected?.let { V2NowNextPanel(it) }
-                        }
-                        LazyColumn(
-                            Modifier.width(350.dp).fillMaxHeight()
-                                .background(AstraWaveColors.BackgroundRaised),
-                        ) {
-                            items(filtered, key = { it.canonicalName }) { channel ->
-                                V2ChannelRow(channel, channel.canonicalName == selected?.canonicalName) { select(channel) }
+                            LazyColumn(
+                                Modifier.weight(0.42f).fillMaxHeight()
+                                    .background(AstraWaveColors.Background),
+                            ) {
+                                items(filtered, key = { it.canonicalName }) { channel ->
+                                    V2ChannelRow(channel, channel.canonicalName == selected?.canonicalName) { select(channel) }
+                                }
+                            }
+                            Column(Modifier.weight(0.58f).fillMaxHeight()) {
+                                V2PreviewPane(preview, Modifier.fillMaxWidth().weight(1f))
+                                selected?.let { V2NowNextPanel(it) }
                             }
                         }
                     }
@@ -309,8 +298,13 @@ private fun V2Chip(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun V2ChannelRow(channel: LiveChannelGroup, selected: Boolean, onClick: () -> Unit) {
     val progress = programmeProgress(channel.currentProgram)
-    Row(Modifier.fillMaxWidth().height(82.dp).background(if (selected) AstraWaveColors.SurfaceFocus else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(48.dp).height(48.dp).background(AstraWaveColors.SurfaceRaised), contentAlignment = Alignment.Center) {
+    Row(
+        Modifier.fillMaxWidth().height(72.dp)
+            .background(if (selected) AstraWaveColors.SurfaceFocus else Color.Transparent)
+            .border(if (selected) 1.dp else 0.dp, if (selected) AstraWaveColors.FocusRing else Color.Transparent)
+            .clickable(onClick = onClick).padding(horizontal = 10.dp),
+ verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(42.dp).height(42.dp).background(AstraWaveColors.BackgroundRaised), contentAlignment = Alignment.Center) {
             Text(channel.displayName.take(2).uppercase(), color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.labelMedium)
         }
         Spacer(Modifier.width(12.dp))
