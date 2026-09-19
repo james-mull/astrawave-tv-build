@@ -78,14 +78,22 @@ fun MultiviewScreen(
     }
     fun activate(paneId: String) { activeAudioPaneId = paneId; onActivateAudio(paneId) }
 
-    Column(Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(24.dp)) {
-        Text(if (effectiveLayout == MultiviewLayout.SPORTS_MOSAIC) "Sports Mosaic" else "Multiview", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            if (effectiveLayout == MultiviewLayout.SPORTS_MOSAIC) "Event-first mosaic viewing. Select any pane to move audio instantly; open a pane for full-screen playback."
-            else "Watch multiple live channels or sports events at once. AstraWave automatically reduces pane count on memory-constrained devices.",
-            color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge,
-        )
+    Column(Modifier.fillMaxSize().background(AstraWaveColors.Background).padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text(
+                    if (effectiveLayout == MultiviewLayout.SPORTS_MOSAIC) "SPORTS MOSAIC" else "MULTIVIEW",
+                    color = AstraWaveColors.PrimaryText,
+                    style = MaterialTheme.typography.headlineLarge,
+                )
+                Text(
+                    "${effectivePanes.size} STREAMS  •  SELECT A PANE FOR AUDIO",
+                    color = AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            Text("UP TO 8", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
+        }
         if (session.panes.size > paneLimit) {
             Spacer(Modifier.height(8.dp))
             Text(
@@ -94,7 +102,7 @@ fun MultiviewScreen(
                 style = MaterialTheme.typography.labelMedium,
             )
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(10.dp))
 
         when (effectiveSession.layout) {
             MultiviewLayout.TWO_UP -> Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -140,7 +148,7 @@ private fun safeMultiviewPaneLimit(context: Context): Int {
 @Composable
 private fun PaneOrEmpty(session: MultiviewSession,index:Int,modifier:Modifier,activeAudioPaneId:String?,onActivateAudio:(String)->Unit,onOpenPane:(MultiviewPane)->Unit,onReplacePane:(MultiviewPane)->Unit){
     val pane=session.panes.getOrNull(index)
-    if(pane==null){Box(modifier.background(AstraWaveColors.Surface,MaterialTheme.shapes.large).padding(18.dp),contentAlignment=Alignment.Center){Text("Add channel",color=AstraWaveColors.SecondaryText,style=MaterialTheme.typography.titleMedium)};return}
+    if(pane==null){Box(modifier.background(AstraWaveColors.BackgroundRaised).padding(12.dp),contentAlignment=Alignment.Center){Text("+ ADD STREAM",color=AstraWaveColors.TertiaryText,style=MaterialTheme.typography.labelLarge)};return}
     val activeAudio=activeAudioPaneId==pane.id
     AstraWaveFocusableCard(modifier.clickable{onActivateAudio(pane.id)}){Column{
         MultiviewPlayerSurface(pane,activeAudio,Modifier.weight(1f).fillMaxWidth());Spacer(Modifier.height(8.dp))
