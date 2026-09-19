@@ -1,11 +1,12 @@
 package com.astrawave.app.core
 
-/** Stable state contract for AstraWave 2-up through six-pane sports multiview. */
+/** Stable state contract for AstraWave 2-up through eight-pane multiview. */
 enum class MultiviewLayout(val paneCount: Int) {
     TWO_UP(2),
     THREE_UP(3),
     FOUR_UP(4),
     SIX_UP(6),
+    EIGHT_UP(8),
     SPORTS_MOSAIC(6),
 }
 
