@@ -157,8 +157,8 @@ private val AstraWaveTabletTypography = Typography(
 )
 
 private val AstraWaveTvTypography = Typography(
-    displayLarge = TextStyle(fontSize = 62.sp, lineHeight = 64.sp, fontWeight = FontWeight.Black),
-    headlineLarge = TextStyle(fontSize = 38.sp, lineHeight = 43.sp, fontWeight = FontWeight.Bold),
+    displayLarge = TextStyle(fontSize = 58.sp, lineHeight = 60.sp, fontWeight = FontWeight.Bold),
+    headlineLarge = TextStyle(fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold),
     headlineMedium = TextStyle(fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold),
     titleLarge = TextStyle(fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold),
     titleMedium = TextStyle(fontSize = 19.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold),
@@ -171,25 +171,25 @@ private val AstraWaveTvTypography = Typography(
 private val AstraWavePhoneShapes = Shapes(
     extraSmall = RoundedCornerShape(3.dp),
     small = RoundedCornerShape(5.dp),
-    medium = RoundedCornerShape(7.dp),
-    large = RoundedCornerShape(9.dp),
-    extraLarge = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(4.dp),
+    large = RoundedCornerShape(5.dp),
+    extraLarge = RoundedCornerShape(6.dp),
 )
 
 private val AstraWaveTabletShapes = Shapes(
     extraSmall = RoundedCornerShape(3.dp),
     small = RoundedCornerShape(4.dp),
-    medium = RoundedCornerShape(6.dp),
-    large = RoundedCornerShape(8.dp),
-    extraLarge = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(4.dp),
+    large = RoundedCornerShape(5.dp),
+    extraLarge = RoundedCornerShape(6.dp),
 )
 
 private val AstraWaveTvShapes = Shapes(
     extraSmall = RoundedCornerShape(3.dp),
     small = RoundedCornerShape(4.dp),
-    medium = RoundedCornerShape(6.dp),
-    large = RoundedCornerShape(8.dp),
-    extraLarge = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(3.dp),
+    large = RoundedCornerShape(4.dp),
+    extraLarge = RoundedCornerShape(5.dp),
 )
 
 @Composable
