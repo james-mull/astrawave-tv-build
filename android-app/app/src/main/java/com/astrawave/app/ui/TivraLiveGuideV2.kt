@@ -145,20 +145,35 @@ fun TivraLiveTvScreenV2(
                         }
                     }
                 } else {
-                    Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.width(205.dp).fillMaxHeight().background(AstraWaveColors.BackgroundRaised).padding(8.dp)) {
-                            Text("CHANNELS", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(8.dp))
+                    Row(
+                        Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Column(
+                            Modifier.width(170.dp).fillMaxHeight()
+                                .background(AstraWaveColors.BackgroundRaised)
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Text(
+                                "BROWSE",
+                                color = AstraWaveColors.TertiaryText,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            )
                             V2SideItem("All channels", category == null) { category = null }
                             categories.forEach { V2SideItem(it, category == it) { category = it } }
                         }
-                        LazyColumn(Modifier.width(410.dp).fillMaxHeight()) {
+                        Column(Modifier.weight(1f).fillMaxHeight()) {
+                            V2PreviewPane(preview, Modifier.fillMaxWidth().weight(1f))
+                            selected?.let { V2NowNextPanel(it) }
+                        }
+                        LazyColumn(
+                            Modifier.width(350.dp).fillMaxHeight()
+                                .background(AstraWaveColors.BackgroundRaised),
+                        ) {
                             items(filtered, key = { it.canonicalName }) { channel ->
                                 V2ChannelRow(channel, channel.canonicalName == selected?.canonicalName) { select(channel) }
                             }
-                        }
-                        Column(Modifier.weight(1f).fillMaxHeight()) {
-                            V2PreviewPane(preview, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-                            selected?.let { V2NowNextPanel(it) }
                         }
                     }
                 }
@@ -211,8 +226,8 @@ fun TivraGuideScreenV2(
                 if (phone) {
                     selected?.let { V2GuideSelectionBanner(it) }
                 } else {
-                    Row(Modifier.fillMaxWidth().height(190.dp).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        V2PreviewPane(preview, Modifier.width(340.dp).fillMaxHeight())
+                    Row(Modifier.fillMaxWidth().height(138.dp).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        V2PreviewPane(preview, Modifier.width(246.dp).fillMaxHeight())
                         selected?.let { V2GuideSelectionBanner(it, Modifier.weight(1f).fillMaxHeight()) }
                     }
                 }
