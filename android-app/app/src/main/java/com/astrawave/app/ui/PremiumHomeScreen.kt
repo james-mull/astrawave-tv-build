@@ -210,8 +210,8 @@ fun PremiumHomeScreen(profileId: String = "default") {
         verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 16.dp else 30.dp),
     ) {
         when {
-            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }
             heroProgress != null -> item(key = "resume-hero-${heroProgress.item.id}") { HomeHero(heroProgress, ::openItem) }
+            liveFeatured != null -> item(key = "live-sports-hero-${liveFeatured.event.id}") { HomeSportsHero(liveFeatured, ::playSports) }
             discoveryFeatured != null -> item(key = "discovery-hero-${discoveryFeatured.id}") { HomeDiscoveryHero(discoveryFeatured, ::openMetadata) }
             else -> item(key = "cinematic-home-hero") { HomeFallbackHero() }
         }
