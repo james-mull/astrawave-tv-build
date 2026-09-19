@@ -177,12 +177,12 @@ fun AstraWaveFocusableCard(
         label = "astrawave-focus-elevation",
     )
     val borderColor by animateColorAsState(
-        targetValue = if (focused) AstraWaveColors.FocusRing else AstraWaveColors.Divider.copy(alpha = 0.48f),
+        targetValue = if (focused) AstraWaveColors.FocusRing else Color.Transparent,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-focus-border",
     )
     val surfaceColor by animateColorAsState(
-        targetValue = if (focused && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.SurfaceFocus else AstraWaveColors.SurfaceRaised,
+        targetValue = if (focused && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.SurfaceFocus.copy(alpha = 0.72f) else Color.Transparent,
         animationSpec = tween(durationMillis = motion.focusMs),
         label = "astrawave-focus-surface",
     )
@@ -198,7 +198,7 @@ fun AstraWaveFocusableCard(
                 spotColor = if (focused && device != AstraWaveDeviceClass.PHONE) AstraWaveColors.Accent.copy(alpha = 0.66f) else Color.Black,
             )
             .border(
-                width = if (focused && device != AstraWaveDeviceClass.PHONE) 2.dp else 1.dp,
+                width = if (focused && device != AstraWaveDeviceClass.PHONE) 2.dp else 0.dp,
                 color = borderColor,
                 shape = MaterialTheme.shapes.large,
             )
@@ -208,9 +208,9 @@ fun AstraWaveFocusableCard(
             .focusable()
             .padding(
                 when (device) {
-                    AstraWaveDeviceClass.TV -> 12.dp
-                    AstraWaveDeviceClass.TABLET -> 14.dp
-                    AstraWaveDeviceClass.PHONE -> 12.dp
+                    AstraWaveDeviceClass.TV -> 6.dp
+                    AstraWaveDeviceClass.TABLET -> 6.dp
+                    AstraWaveDeviceClass.PHONE -> 4.dp
                 },
             ),
     ) { content() }
