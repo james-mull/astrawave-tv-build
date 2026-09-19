@@ -73,7 +73,7 @@ fun TvListsScreen(profileId: String = "default") {
                     .height(if (device == AstraWaveDeviceClass.PHONE) 320.dp else 380.dp)
                     .clickable { open(featured) },
             ) {
-                AstraWaveArtwork(featured.item.title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
+                AstraWaveArtwork(featured.item.title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop, flat = true)
                 Box(
                     Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
