@@ -36,7 +36,7 @@ import com.astrawave.app.core.MultiviewLayout
 import com.astrawave.app.core.MultiviewPane
 import com.astrawave.app.core.MultiviewSession
 
-/** Premium 2/3/4/6-pane Media3 multiview with one audible pane and hardware-aware sports mosaic mode. */
+/** Premium 2/3/4/6/8-pane Media3 multiview with one audible pane and hardware-aware fallback. */
 @Composable
 fun MultiviewScreen(
     session: MultiviewSession,
@@ -48,13 +48,20 @@ fun MultiviewScreen(
     val paneLimit = remember(context) { safeMultiviewPaneLimit(context) }
     val effectivePanes = remember(session.panes, paneLimit) { session.panes.take(paneLimit) }
     val effectiveLayout = remember(session.layout, paneLimit, effectivePanes.size) {
-        if (paneLimit < 6 && session.layout in setOf(MultiviewLayout.SIX_UP, MultiviewLayout.SPORTS_MOSAIC)) {
-            when (effectivePanes.size) {
+        when {
+            session.layout == MultiviewLayout.EIGHT_UP && paneLimit < 8 -> when {
+                effectivePanes.size <= 2 -> MultiviewLayout.TWO_UP
+                effectivePanes.size == 3 -> MultiviewLayout.THREE_UP
+                effectivePanes.size <= 4 -> MultiviewLayout.FOUR_UP
+                else -> MultiviewLayout.SIX_UP
+            }
+            paneLimit < 6 && session.layout in setOf(MultiviewLayout.SIX_UP, MultiviewLayout.SPORTS_MOSAIC) -> when (effectivePanes.size) {
                 0, 1, 2 -> MultiviewLayout.TWO_UP
                 3 -> MultiviewLayout.THREE_UP
                 else -> MultiviewLayout.FOUR_UP
             }
-        } else session.layout
+            else -> session.layout
+        }
     }
     val effectiveSession = remember(session, effectivePanes, effectiveLayout) {
         session.copy(layout = effectiveLayout, panes = effectivePanes)
@@ -75,7 +82,7 @@ fun MultiviewScreen(
         Text(if (effectiveLayout == MultiviewLayout.SPORTS_MOSAIC) "Sports Mosaic" else "Multiview", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(6.dp))
         Text(
-            if (effectiveLayout == MultiviewLayout.SPORTS_MOSAIC) "Event-first six-pane viewing. Select any pane to move audio instantly; open a pane for full-screen playback."
+            if (effectiveLayout == MultiviewLayout.SPORTS_MOSAIC) "Event-first mosaic viewing. Select any pane to move audio instantly; open a pane for full-screen playback."
             else "Watch multiple live channels or sports events at once. AstraWave automatically reduces pane count on memory-constrained devices.",
             color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyLarge,
         )
@@ -112,13 +119,22 @@ fun MultiviewScreen(
                     repeat(3) { col -> PaneOrEmpty(effectiveSession,row*3+col,Modifier.weight(1f),activeAudioPaneId,::activate,onOpenPane,onReplacePane) }
                 } }
             }
+            MultiviewLayout.EIGHT_UP -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(2) { row -> Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    repeat(4) { col -> PaneOrEmpty(effectiveSession,row*4+col,Modifier.weight(1f),activeAudioPaneId,::activate,onOpenPane,onReplacePane) }
+                } }
+            }
         }
     }
 }
 
 private fun safeMultiviewPaneLimit(context: Context): Int {
     val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return 4
-    return if (manager.isLowRamDevice || manager.memoryClass < 256) 4 else 6
+    return when {
+        manager.isLowRamDevice || manager.memoryClass < 256 -> 4
+        manager.memoryClass < 384 -> 6
+        else -> 8
+    }
 }
 
 @Composable
