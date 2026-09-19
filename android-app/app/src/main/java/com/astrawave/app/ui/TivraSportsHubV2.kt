@@ -77,6 +77,7 @@ fun TivraSportsHubV2(
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedTab by remember { mutableStateOf(TivraSportsV2Tab.SCORES) }
     var selectedSport by remember { mutableStateOf<String?>(null) }
+    var hideScores by remember { mutableStateOf(false) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var load by remember(sources, selectedDate, profileId) { mutableStateOf<TivraSportsV2Load>(TivraSportsV2Load.Loading) }
 
@@ -109,7 +110,7 @@ fun TivraSportsHubV2(
     }
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
-        SportsV2Header(selectedDate, selectedTab, onTab = { selectedTab = it })
+        SportsV2Header(selectedDate, selectedTab, hideScores, onTab = { selectedTab = it }, onToggleScores = { hideScores = !hideScores })
         SportsV2DateStrip(selectedDate) { selectedDate = it }
 
         when (val current = load) {
@@ -146,9 +147,9 @@ fun TivraSportsHubV2(
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                         item("hero") {
-                            SportsV2HeroPhone(selected, preview, context)
+                            SportsV2HeroPhone(selected, preview, context, hideScores)
                         }
-                        sportsLeagueSections(visibleEvents, selectedId, ::select, compact = true)
+                        sportsLeagueSections(visibleEvents, selectedId, ::select, compact = true, hideScores = hideScores)
                     }
                 } else {
                     Column(Modifier.fillMaxSize()) {
@@ -162,10 +163,10 @@ fun TivraSportsHubV2(
                                 modifier = Modifier.weight(1.08f).fillMaxHeight(),
                                 onFullScreen = { openSportsFullScreen(context, preview.state.urls) },
                             )
-                            SportsV2MatchupPanel(selected, Modifier.weight(0.92f).fillMaxHeight(), context)
+                            SportsV2MatchupPanel(selected, Modifier.weight(0.92f).fillMaxHeight(), context, hideScores)
                         }
                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 28.dp)) {
-                            sportsLeagueSections(visibleEvents, selectedId, ::select, compact = false)
+                            sportsLeagueSections(visibleEvents, selectedId, ::select, compact = false, hideScores = hideScores)
                         }
                     }
                 }
@@ -178,7 +179,9 @@ fun TivraSportsHubV2(
 private fun SportsV2Header(
     date: LocalDate,
     selectedTab: TivraSportsV2Tab,
+    hideScores: Boolean,
     onTab: (TivraSportsV2Tab) -> Unit,
+    onToggleScores: () -> Unit,
 ) {
     val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
     Column(Modifier.fillMaxWidth().padding(horizontal = if (phone) 16.dp else 20.dp, vertical = if (phone) 10.dp else 12.dp)) {
@@ -187,7 +190,15 @@ private fun SportsV2Header(
                 Text("SPORTS", color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black)
                 Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")).uppercase(), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
             }
-            Text("LIVE HUB", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("LIVE HUB", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    if (hideScores) "SHOW SCORES" else "HIDE SCORES",
+                    color = if (hideScores) AstraWaveColors.AccentStrong else AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.clickable(onClick = onToggleScores).padding(vertical = 6.dp),
+                )
+            }
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -258,19 +269,19 @@ private fun SportsV2DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit
 }
 
 @Composable
-private fun SportsV2HeroPhone(item: SportsGuideItem?, preview: LivePreviewController, context: Context) {
+private fun SportsV2HeroPhone(item: SportsGuideItem?, preview: LivePreviewController, context: Context, hideScores: Boolean) {
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         SportsPreviewV2(
             preview = preview,
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
             onFullScreen = { openSportsFullScreen(context, preview.state.urls) },
         )
-        SportsV2MatchupPanel(item, Modifier.fillMaxWidth(), context)
+        SportsV2MatchupPanel(item, Modifier.fillMaxWidth(), context, hideScores)
     }
 }
 
 @Composable
-private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, context: Context) {
+private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, context: Context, hideScores: Boolean) {
     val event = item?.event
     Column(modifier.background(AstraWaveColors.BackgroundRaised).padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -291,8 +302,8 @@ private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, con
             return@Column
         }
 
-        TeamScoreLine(event.awayTeam ?: event.name.substringBefore(" at ").substringBefore(" vs "), event.awayScore)
-        TeamScoreLine(event.homeTeam ?: event.name.substringAfter(" at ", event.name.substringAfter(" vs ", "")), event.homeScore)
+        TeamScoreLine(event.awayTeam ?: event.name.substringBefore(" at ").substringBefore(" vs "), if (hideScores) null else event.awayScore, hideScores)
+        TeamScoreLine(event.homeTeam ?: event.name.substringAfter(" at ", event.name.substringAfter(" vs ", "")), if (hideScores) null else event.homeScore, hideScores)
 
         if (event.homeTeam == null && event.awayTeam == null) {
             Text(event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)
@@ -323,10 +334,10 @@ private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, con
 }
 
 @Composable
-private fun TeamScoreLine(team: String, score: Int?) {
+private fun TeamScoreLine(team: String, score: Int?, hidden: Boolean = false) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(team.ifBlank { "Team" }, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 1, modifier = Modifier.weight(1f))
-        Text(score?.toString() ?: "—", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+        Text(if (hidden) "HIDDEN" else score?.toString() ?: "—", color = if (hidden) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText, style = if (hidden) MaterialTheme.typography.labelMedium else MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
     }
 }
 
@@ -335,6 +346,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsLeagueSections(
     selectedId: String?,
     onSelect: (SportsGuideItem) -> Unit,
     compact: Boolean,
+    hideScores: Boolean,
 ) {
     val liveNow = events.filter { it.event.isLive }
     if (liveNow.isNotEmpty()) {
@@ -355,7 +367,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsLeagueSections(
                 horizontalArrangement = Arrangement.spacedBy(if (compact) 9.dp else 12.dp),
             ) {
                 items(liveNow, key = { "live:" + it.event.id }) { game ->
-                    SportsScoreCardV2(game, game.event.id == selectedId, compact) { onSelect(game) }
+                    SportsScoreCardV2(game, game.event.id == selectedId, compact, hideScores) { onSelect(game) }
                 }
             }
         }
@@ -379,7 +391,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsLeagueSections(
                 horizontalArrangement = Arrangement.spacedBy(if (compact) 9.dp else 12.dp),
             ) {
                 items(games, key = { it.event.id }) { game ->
-                    SportsScoreCardV2(game, game.event.id == selectedId, compact) { onSelect(game) }
+                    SportsScoreCardV2(game, game.event.id == selectedId, compact, hideScores) { onSelect(game) }
                 }
             }
         }
@@ -392,13 +404,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sportsLeagueSections(
 }
 
 @Composable
-private fun SportsScoreCardV2(item: SportsGuideItem, selected: Boolean, compact: Boolean, onClick: () -> Unit) {
+private fun SportsScoreCardV2(item: SportsGuideItem, selected: Boolean, compact: Boolean, hideScores: Boolean, onClick: () -> Unit) {
     val event = item.event
     val width = if (compact) 268.dp else 294.dp
     Column(
         Modifier.width(width).height(if (compact) 154.dp else 166.dp)
             .background(if (selected) AstraWaveColors.SurfaceFocus else AstraWaveColors.Surface)
-            .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else AstraWaveColors.Divider)
+            .border(if (selected) 2.dp else 1.dp, if (selected) AstraWaveColors.FocusRing else AstraWaveColors.Divider)
             .clickable(onClick = onClick).padding(13.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -414,8 +426,8 @@ private fun SportsScoreCardV2(item: SportsGuideItem, selected: Boolean, compact:
             )
             Text(item.broadcasterNames.firstOrNull() ?: event.network ?: "TBD", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
         }
-        ScoreCardTeam(event.awayTeam ?: event.name.substringBefore(" at ").substringBefore(" vs "), event.awayScore)
-        ScoreCardTeam(event.homeTeam ?: event.name.substringAfter(" at ", event.name.substringAfter(" vs ", "")), event.homeScore)
+        ScoreCardTeam(event.awayTeam ?: event.name.substringBefore(" at ").substringBefore(" vs "), if (hideScores) null else event.awayScore, hideScores)
+        ScoreCardTeam(event.homeTeam ?: event.name.substringAfter(" at ", event.name.substringAfter(" vs ", "")), if (hideScores) null else event.homeScore, hideScores)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(event.sport?.uppercase() ?: event.league?.uppercase() ?: "SPORTS", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
             Text(if (item.watchCandidate != null) "WATCH" else "SCHEDULE", color = if (item.watchCandidate != null) AstraWaveColors.Success else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
@@ -424,10 +436,10 @@ private fun SportsScoreCardV2(item: SportsGuideItem, selected: Boolean, compact:
 }
 
 @Composable
-private fun ScoreCardTeam(team: String, score: Int?) {
+private fun ScoreCardTeam(team: String, score: Int?, hidden: Boolean = false) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(team.ifBlank { "Team" }, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium, maxLines = 1, modifier = Modifier.weight(1f))
-        Text(score?.toString() ?: "—", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+        Text(if (hidden) "•••" else score?.toString() ?: "—", color = if (hidden) AstraWaveColors.TertiaryText else AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
     }
 }
 
