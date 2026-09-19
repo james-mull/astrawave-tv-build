@@ -157,12 +157,12 @@ fun CatalogContentShelf(
                 AstraWaveFocusableCard(
                     Modifier.width(cardWidth).clickable { openItem(item) },
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(posterHeight)
-                                .clip(MaterialTheme.shapes.large)
+                                .clip(MaterialTheme.shapes.medium)
                                 .background(AstraWaveColors.BackgroundRaised),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -175,16 +175,6 @@ fun CatalogContentShelf(
                             if (item.posterUrl.isNullOrBlank() && item.backdropUrl.isNullOrBlank()) {
                                 Text(item.name.take(1), color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium)
                             }
-                            Text(
-                                typeLabel,
-                                color = AstraWaveColors.PrimaryText,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(8.dp)
-                                    .background(AstraWaveColors.Background.copy(alpha = 0.78f), MaterialTheme.shapes.small)
-                                    .padding(horizontal = 7.dp, vertical = 4.dp),
-                            )
                         }
                         Text(
                             item.name,
