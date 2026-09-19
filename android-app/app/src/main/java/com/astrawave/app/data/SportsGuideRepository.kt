@@ -172,7 +172,9 @@ class SportsGuideRepository(
                 time = startTime,
                 homeTeam = cloud.homeTeam,
                 awayTeam = cloud.awayTeam,
-                status = cloud.status,
+                homeScore = cloud.homeScore,
+                awayScore = cloud.awayScore,
+                status = cloud.statusDetail ?: cloud.status,
                 network = cloud.broadcasts.joinToString(" • ").takeIf(String::isNotBlank),
             )
 
