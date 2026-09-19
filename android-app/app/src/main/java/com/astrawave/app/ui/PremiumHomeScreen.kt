@@ -380,7 +380,7 @@ private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (Astr
     val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
     val hero: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(if (phone) 440.dp else 560.dp).clickable { onOpen(item) }) {
-            AstraWaveArtwork(item.name, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
+            AstraWaveArtwork(item.name, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop, flat = true)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.00f), AstraWaveColors.Background.copy(alpha = 0.28f), AstraWaveColors.Background)),
@@ -421,7 +421,7 @@ private fun HomeHero(progress: LocalLibraryStore.PlaybackProgress, onOpen: (Libr
     val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
     val hero: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(if (phone) 410.dp else 420.dp).clickable { onOpen(progress.item) }) {
-            AstraWaveArtwork(progress.item.title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
+            AstraWaveArtwork(progress.item.title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop, flat = true)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(listOf(AstraWaveColors.Background.copy(alpha = 0.00f), AstraWaveColors.Background.copy(alpha = 0.32f), AstraWaveColors.Background)),
