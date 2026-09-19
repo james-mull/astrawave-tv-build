@@ -48,6 +48,8 @@ import com.astrawave.app.data.SportsEvent
 import com.astrawave.app.data.SportsGuideItem
 import com.astrawave.app.data.SportsGuideRepository
 import com.astrawave.app.data.SportsGuideSnapshot
+import com.astrawave.app.data.SportsDetailRepository
+import com.astrawave.app.data.SportsEventDetail
 import com.astrawave.app.data.StremioLiveCatalogDiscovery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,12 +75,14 @@ fun TivraSportsHubV2(
     val device = LocalAstraWaveDeviceClass.current
     val phone = device == AstraWaveDeviceClass.PHONE
     val repository = remember { SportsGuideRepository() }
+    val detailRepository = remember { SportsDetailRepository() }
     val addonLive = remember { StremioLiveCatalogDiscovery(context) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedTab by remember { mutableStateOf(TivraSportsV2Tab.SCORES) }
     var selectedSport by remember { mutableStateOf<String?>(null) }
     var hideScores by remember { mutableStateOf(false) }
     var selectedId by remember { mutableStateOf<String?>(null) }
+    var selectedDetail by remember { mutableStateOf<SportsEventDetail?>(null) }
     var load by remember(sources, selectedDate, profileId) { mutableStateOf<TivraSportsV2Load>(TivraSportsV2Load.Loading) }
 
     LaunchedEffect(sources, selectedDate, profileId) {
@@ -107,6 +111,14 @@ fun TivraSportsHubV2(
             provider = item.watchCandidate?.source,
         )
         selectedId = item.event.id
+    }
+
+    LaunchedEffect(selectedId, previewData) {
+        selectedDetail = if (previewData || selectedId.isNullOrBlank()) {
+            null
+        } else {
+            withContext(Dispatchers.IO) { runCatching { detailRepository.load(selectedId.orEmpty()) }.getOrNull() }
+        }
     }
 
     Column(Modifier.fillMaxSize().background(AstraWaveColors.Background)) {
@@ -147,7 +159,7 @@ fun TivraSportsHubV2(
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                         item("hero") {
-                            SportsV2HeroPhone(selected, preview, context, hideScores)
+                            SportsV2HeroPhone(selected, preview, context, hideScores, selectedDetail)
                         }
                         sportsLeagueSections(visibleEvents, selectedId, ::select, compact = true, hideScores = hideScores)
                     }
@@ -163,7 +175,7 @@ fun TivraSportsHubV2(
                                 modifier = Modifier.weight(1.08f).fillMaxHeight(),
                                 onFullScreen = { openSportsFullScreen(context, preview.state.urls) },
                             )
-                            SportsV2MatchupPanel(selected, Modifier.weight(0.92f).fillMaxHeight(), context, hideScores)
+                            SportsV2MatchupPanel(selected, Modifier.weight(0.92f).fillMaxHeight(), context, hideScores, selectedDetail)
                         }
                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 28.dp)) {
                             sportsLeagueSections(visibleEvents, selectedId, ::select, compact = false, hideScores = hideScores)
@@ -269,21 +281,21 @@ private fun SportsV2DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit
 }
 
 @Composable
-private fun SportsV2HeroPhone(item: SportsGuideItem?, preview: LivePreviewController, context: Context, hideScores: Boolean) {
+private fun SportsV2HeroPhone(item: SportsGuideItem?, preview: LivePreviewController, context: Context, hideScores: Boolean, detail: SportsEventDetail?) {
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         SportsPreviewV2(
             preview = preview,
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
             onFullScreen = { openSportsFullScreen(context, preview.state.urls) },
         )
-        SportsV2MatchupPanel(item, Modifier.fillMaxWidth(), context, hideScores)
+        SportsV2MatchupPanel(item, Modifier.fillMaxWidth(), context, hideScores, detail)
     }
 }
 
 @Composable
-private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, context: Context, hideScores: Boolean) {
+private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, context: Context, hideScores: Boolean, detail: SportsEventDetail?) {
     val event = item?.event
-    Column(modifier.background(AstraWaveColors.BackgroundRaised).padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+    Column(modifier.background(AstraWaveColors.Background).padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 when {
@@ -311,6 +323,45 @@ private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, con
         val network = item.broadcasterNames.joinToString("  •  ").ifBlank { event.network ?: "Broadcast pending" }
         Text(network, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
         event.venue?.takeIf(String::isNotBlank)?.let { Text(it, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.bodySmall) }
+
+        detail?.let { loaded ->
+            if (!hideScores && loaded.lines.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised).padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    loaded.lines.take(2).forEach { line ->
+                        Column(Modifier.weight(1f)) {
+                            Text(line.abbreviation ?: line.team, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text(line.score?.toString() ?: "—", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                            if (line.periods.isNotEmpty()) {
+                                Text(
+                                    line.periods.joinToString("  ") { (label, value) -> "$label ${value ?: "—"}" },
+                                    color = AstraWaveColors.SecondaryText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            val leaders = loaded.leaders.take(2)
+            if (leaders.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    leaders.forEach { leader ->
+                        Column(Modifier.weight(1f)) {
+                            Text(leader.category.uppercase(), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Text(leader.athlete, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            Text(leader.value, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        }
+                    }
+                }
+            }
+            loaded.venue?.let { venue ->
+                Text(venue, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
+        }
 
         if (item.watchCandidate != null) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
