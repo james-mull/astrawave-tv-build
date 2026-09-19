@@ -230,28 +230,42 @@ private fun SportsV2Header(
 private fun SportsV2SportStrip(sports: List<String>, selected: String?, onSelect: (String?) -> Unit) {
     if (sports.isEmpty()) return
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         val allActive = selected == null
-        Text(
-            "ALL SPORTS",
-            color = if (allActive) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.background(if (allActive) AstraWaveColors.SurfaceFocus else Color.Transparent)
-                .border(if (allActive) 1.dp else 0.dp, if (allActive) AstraWaveColors.FocusRing else Color.Transparent)
-                .clickable { onSelect(null) }.padding(horizontal = 12.dp, vertical = 7.dp),
-        )
+        Column(
+            Modifier.clickable { onSelect(null) }.padding(horizontal = 6.dp, vertical = 5.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "ALL SPORTS",
+                color = if (allActive) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier.width(if (allActive) 28.dp else 0.dp).height(2.dp)
+                    .background(if (allActive) AstraWaveColors.FocusRing else Color.Transparent),
+            )
+        }
         sports.forEach { sport ->
             val active = sport == selected
-            Text(
-                sport.uppercase(),
-                color = if (active) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.background(if (active) AstraWaveColors.SurfaceFocus else Color.Transparent)
-                    .border(if (active) 1.dp else 0.dp, if (active) AstraWaveColors.FocusRing else Color.Transparent)
-                    .clickable { onSelect(sport) }.padding(horizontal = 12.dp, vertical = 7.dp),
-            )
+            Column(
+                Modifier.clickable { onSelect(sport) }.padding(horizontal = 6.dp, vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    sport.uppercase(),
+                    color = if (active) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Box(
+                    Modifier.width(if (active) 28.dp else 0.dp).height(2.dp)
+                        .background(if (active) AstraWaveColors.FocusRing else Color.Transparent),
+                )
+            }
         }
     }
 }
@@ -271,14 +285,21 @@ private fun SportsV2DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit
                 1L -> "TOMORROW"
                 else -> date.format(DateTimeFormatter.ofPattern("EEE d")).uppercase()
             }
-            Text(
-                label,
-                color = if (active) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.background(if (active) AstraWaveColors.SurfaceFocus else Color.Transparent)
-                    .border(if (active) 1.dp else 0.dp, if (active) AstraWaveColors.FocusRing else Color.Transparent)
-                    .clickable { onSelect(date) }.padding(horizontal = 12.dp, vertical = 7.dp),
-            )
+            Column(
+                Modifier.clickable { onSelect(date) }.padding(horizontal = 6.dp, vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    label,
+                    color = if (active) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Box(
+                    Modifier.width(if (active) 28.dp else 0.dp).height(2.dp)
+                        .background(if (active) AstraWaveColors.FocusRing else Color.Transparent),
+                )
+            }
         }
     }
 }
