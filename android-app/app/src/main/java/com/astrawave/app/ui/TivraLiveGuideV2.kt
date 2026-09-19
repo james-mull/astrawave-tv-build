@@ -283,7 +283,7 @@ private fun V2NowStrip(channel: LiveChannelGroup) {
 
 @Composable
 private fun V2CategoryRail(categories: List<String>, selected: String?, onSelect: (String?) -> Unit) {
-    LazyRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    LazyRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         item { V2Chip("ALL", selected == null) { onSelect(null) } }
         items(categories) { item -> V2Chip(item.uppercase(), selected == item) { onSelect(item) } }
     }
@@ -291,8 +291,21 @@ private fun V2CategoryRail(categories: List<String>, selected: String?, onSelect
 
 @Composable
 private fun V2Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(label, color = if (selected) Color.Black else AstraWaveColors.SecondaryText, style = MaterialTheme.typography.labelSmall,
-        modifier = Modifier.background(if (selected) AstraWaveColors.AccentStrong else AstraWaveColors.Surface).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp))
+    Column(
+        Modifier.clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            label,
+            color = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Spacer(Modifier.height(4.dp))
+        Box(
+            Modifier.width(if (selected) 26.dp else 0.dp).height(2.dp)
+                .background(if (selected) AstraWaveColors.FocusRing else Color.Transparent),
+        )
+    }
 }
 
 @Composable
