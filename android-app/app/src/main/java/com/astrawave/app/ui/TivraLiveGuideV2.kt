@@ -35,12 +35,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import coil3.compose.AsyncImage
 import com.astrawave.app.PlayerActivity
 import com.astrawave.app.core.IptvSource
 import com.astrawave.app.data.CombinedLiveTvRepository
@@ -226,8 +228,8 @@ fun TivraGuideScreenV2(
                 if (phone) {
                     selected?.let { V2GuideSelectionBanner(it) }
                 } else {
-                    Row(Modifier.fillMaxWidth().height(138.dp).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        V2PreviewPane(preview, Modifier.width(246.dp).fillMaxHeight())
+                    Row(Modifier.fillMaxWidth().height(112.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        V2PreviewPane(preview, Modifier.width(200.dp).fillMaxHeight())
                         selected?.let { V2GuideSelectionBanner(it, Modifier.weight(1f).fillMaxHeight()) }
                     }
                 }
@@ -240,9 +242,9 @@ fun TivraGuideScreenV2(
 
 @Composable
 private fun V2Header(title: String, subtitle: String, action: String, onAction: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
+            Text(title.lowercase().replaceFirstChar { it.uppercase() }, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.width(10.dp))
             Text(subtitle, color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
         }
@@ -343,7 +345,7 @@ private fun V2NowNextPanel(channel: LiveChannelGroup) {
 
 @Composable
 private fun V2DayRail(selected: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         (-1..5).forEach { offset ->
             val date = LocalDate.now().plusDays(offset.toLong())
             val label = when (offset) { -1 -> "YESTERDAY"; 0 -> "TODAY"; 1 -> "TOMORROW"; else -> date.format(DateTimeFormatter.ofPattern("EEE d")) }
@@ -373,8 +375,8 @@ private fun V2GuideGrid(
     onSelect: (GuideChannelRow) -> Unit,
     phone: Boolean,
 ) {
-    val channelWidth = if (phone) 108.dp else 180.dp
-    val slotWidth = if (phone) 112.dp else 132.dp
+    val channelWidth = if (phone) 112.dp else 168.dp
+    val slotWidth = if (phone) 116.dp else 126.dp
     val start = v2GuideWindowStart(dayOffset)
     val end = start + 6L * 60L * 60L * 1000L
     Column(Modifier.fillMaxSize()) {
@@ -391,10 +393,30 @@ private fun V2GuideGrid(
                     val pe = LiveTvRepository.parseXmlTvEpochMs(p.stop) ?: return@mapNotNull null
                     if (pe <= start || ps >= end) null else Triple(p, ps.coerceAtLeast(start), pe.coerceAtMost(end))
                 }
-                Row(Modifier.fillMaxWidth().height(if (phone) 70.dp else 66.dp).border(0.5.dp, AstraWaveColors.Divider)) {
-                    Column(Modifier.width(channelWidth).fillMaxHeight().background(if (row.id == selectedId) AstraWaveColors.SurfaceFocus else AstraWaveColors.BackgroundRaised).clickable { onSelect(row) }.padding(horizontal = 9.dp), verticalArrangement = Arrangement.Center) {
-                        Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                        Text(row.preferredSource ?: "Live TV", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Row(Modifier.fillMaxWidth().height(if (phone) 68.dp else 60.dp).border(0.5.dp, AstraWaveColors.Divider)) {
+                    Row(
+                        Modifier.width(channelWidth).fillMaxHeight()
+                            .background(if (row.id == selectedId) AstraWaveColors.SurfaceFocus else AstraWaveColors.BackgroundRaised)
+                            .border(if (row.id == selectedId) 1.dp else 0.dp, if (row.id == selectedId) AstraWaveColors.FocusRing else Color.Transparent)
+                            .clickable { onSelect(row) }
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (!row.logo.isNullOrBlank()) {
+                            Box(Modifier.width(34.dp).height(34.dp), contentAlignment = Alignment.Center) {
+                                AsyncImage(
+                                    model = row.logo,
+                                    contentDescription = row.name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit,
+                                )
+                            }
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                            Text(row.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                            Text(row.group ?: row.preferredSource ?: "Live TV", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        }
                     }
                     Row(Modifier.weight(1f).fillMaxHeight().horizontalScroll(timelineScroll)) {
                         if (programmes.isEmpty()) {
@@ -406,7 +428,7 @@ private fun V2GuideGrid(
                                 Column(
                                     Modifier.width(width).fillMaxHeight()
                                         .background(if (currentProgramme) AstraWaveColors.GuideNow else AstraWaveColors.GuideFuture)
-                                        .border(if (currentProgramme) 2.dp else 1.dp, if (currentProgramme) AstraWaveColors.FocusRing else AstraWaveColors.Background)
+                                        .border(if (currentProgramme) 1.dp else 0.dp, if (currentProgramme) AstraWaveColors.FocusRing else Color.Transparent)
                                         .clickable { onSelect(row) }
                                         .padding(8.dp),
                                 ) {
