@@ -166,16 +166,16 @@ fun TivraSportsHubV2(
                 } else {
                     Column(Modifier.fillMaxSize()) {
                         Row(
-                            Modifier.fillMaxWidth().height(if (device == AstraWaveDeviceClass.TV) 286.dp else 250.dp)
-                                .padding(horizontal = 18.dp, vertical = 8.dp),
+                            Modifier.fillMaxWidth().height(if (device == AstraWaveDeviceClass.TV) 318.dp else 272.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             SportsPreviewV2(
                                 preview = preview,
-                                modifier = Modifier.weight(1.08f).fillMaxHeight(),
+                                modifier = Modifier.weight(1.18f).fillMaxHeight(),
                                 onFullScreen = { openSportsFullScreen(context, preview.state.urls) },
                             )
-                            SportsV2MatchupPanel(selected, Modifier.weight(0.92f).fillMaxHeight(), context, hideScores, selectedDetail)
+                            SportsV2MatchupPanel(selected, Modifier.weight(0.82f).fillMaxHeight(), context, hideScores, selectedDetail)
                         }
                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 28.dp)) {
                             sportsLeagueSections(visibleEvents, selectedId, ::select, compact = false, hideScores = hideScores)
@@ -196,10 +196,10 @@ private fun SportsV2Header(
     onToggleScores: () -> Unit,
 ) {
     val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
-    Column(Modifier.fillMaxWidth().padding(horizontal = if (phone) 16.dp else 20.dp, vertical = if (phone) 10.dp else 12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = if (phone) 14.dp else 18.dp, vertical = if (phone) 8.dp else 8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Column {
-                Text("SPORTS", color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black)
+                Text("Sports", color = AstraWaveColors.PrimaryText, style = if (phone) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                 Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")).uppercase(), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -212,14 +212,14 @@ private fun SportsV2Header(
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        Spacer(Modifier.height(7.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(if (phone) 16.dp else 20.dp)) {
             TivraSportsV2Tab.entries.forEach { tab ->
                 val selected = tab == selectedTab
                 Column(Modifier.clickable { onTab(tab) }.padding(vertical = 4.dp)) {
-                    Text(tab.name.replace('_', ' '), color = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
+                    Text(tab.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, color = if (selected) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(5.dp))
-                    Box(Modifier.width(if (selected) 36.dp else 0.dp).height(2.dp).background(AstraWaveColors.PrimaryText))
+                    Box(Modifier.width(if (selected) 28.dp else 0.dp).height(2.dp).background(AstraWaveColors.FocusRing))
                 }
             }
         }
@@ -236,19 +236,21 @@ private fun SportsV2SportStrip(sports: List<String>, selected: String?, onSelect
         val allActive = selected == null
         Text(
             "ALL SPORTS",
-            color = if (allActive) Color.Black else AstraWaveColors.SecondaryText,
+            color = if (allActive) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.background(if (allActive) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
-                .clickable { onSelect(null) }.padding(horizontal = 13.dp, vertical = 8.dp),
+            modifier = Modifier.background(if (allActive) AstraWaveColors.SurfaceFocus else Color.Transparent)
+                .border(if (allActive) 1.dp else 0.dp, if (allActive) AstraWaveColors.FocusRing else Color.Transparent)
+                .clickable { onSelect(null) }.padding(horizontal = 12.dp, vertical = 7.dp),
         )
         sports.forEach { sport ->
             val active = sport == selected
             Text(
                 sport.uppercase(),
-                color = if (active) Color.Black else AstraWaveColors.SecondaryText,
+                color = if (active) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.background(if (active) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
-                    .clickable { onSelect(sport) }.padding(horizontal = 13.dp, vertical = 8.dp),
+                modifier = Modifier.background(if (active) AstraWaveColors.SurfaceFocus else Color.Transparent)
+                    .border(if (active) 1.dp else 0.dp, if (active) AstraWaveColors.FocusRing else Color.Transparent)
+                    .clickable { onSelect(sport) }.padding(horizontal = 12.dp, vertical = 7.dp),
             )
         }
     }
@@ -271,10 +273,11 @@ private fun SportsV2DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit
             }
             Text(
                 label,
-                color = if (active) Color.Black else AstraWaveColors.SecondaryText,
+                color = if (active) AstraWaveColors.PrimaryText else AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.background(if (active) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
-                    .clickable { onSelect(date) }.padding(horizontal = 13.dp, vertical = 8.dp),
+                modifier = Modifier.background(if (active) AstraWaveColors.SurfaceFocus else Color.Transparent)
+                    .border(if (active) 1.dp else 0.dp, if (active) AstraWaveColors.FocusRing else Color.Transparent)
+                    .clickable { onSelect(date) }.padding(horizontal = 12.dp, vertical = 7.dp),
             )
         }
     }
@@ -314,8 +317,11 @@ private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, con
             return@Column
         }
 
-        TeamScoreLine(event.awayTeam ?: event.name.substringBefore(" at ").substringBefore(" vs "), if (hideScores) null else event.awayScore, hideScores)
-        TeamScoreLine(event.homeTeam ?: event.name.substringAfter(" at ", event.name.substringAfter(" vs ", "")), if (hideScores) null else event.homeScore, hideScores)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            BroadcastTeamScore(event.awayTeam ?: event.name.substringBefore(" at ").substringBefore(" vs "), if (hideScores) null else event.awayScore, hideScores, Modifier.weight(1f))
+            Text("—", color = AstraWaveColors.Divider, style = MaterialTheme.typography.headlineMedium)
+            BroadcastTeamScore(event.homeTeam ?: event.name.substringAfter(" at ", event.name.substringAfter(" vs ", "")), if (hideScores) null else event.homeScore, hideScores, Modifier.weight(1f))
+        }
 
         if (event.homeTeam == null && event.awayTeam == null) {
             Text(event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge, maxLines = 2)
@@ -381,6 +387,19 @@ private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, con
         } else {
             Text("NO MATCHED CHANNEL YET", color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
         }
+    }
+}
+
+@Composable
+private fun BroadcastTeamScore(team: String, score: Int?, hidden: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(team.ifBlank { "Team" }, color = AstraWaveColors.SecondaryText, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        Text(
+            if (hidden) "—" else score?.toString() ?: "—",
+            color = AstraWaveColors.PrimaryText,
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+        )
     }
 }
 
