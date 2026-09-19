@@ -327,7 +327,7 @@ private fun V2ChannelRow(channel: LiveChannelGroup, selected: Boolean, onClick: 
 @Composable
 private fun V2SideItem(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(label, color = if (selected) Color.Black else AstraWaveColors.SecondaryText, maxLines = 1,
-        modifier = Modifier.fillMaxWidth().background(if (selected) Color.White else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp))
+        modifier = Modifier.fillMaxWidth().background(if (selected) AstraWaveColors.AccentStrong else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp))
 }
 
 @Composable
@@ -402,7 +402,17 @@ private fun V2GuideGrid(
                         } else {
                             programmes.forEach { (programme, ps, pe) ->
                                 val width = (((pe - ps).toFloat() / (30L * 60L * 1000L)) * slotWidth.value).coerceAtLeast(72f).dp
-                                Column(Modifier.width(width).fillMaxHeight().background(if (programme == row.now) AstraWaveColors.GuideNow else AstraWaveColors.GuideFuture).border(1.dp, AstraWaveColors.Background).clickable { onSelect(row) }.padding(8.dp)) {
+                                val currentProgramme = programme == row.now
+                                Column(
+                                    Modifier.width(width).fillMaxHeight()
+                                        .background(if (currentProgramme) AstraWaveColors.GuideNow else AstraWaveColors.GuideFuture)
+                                        .border(if (currentProgramme) 2.dp else 1.dp, if (currentProgramme) AstraWaveColors.FocusRing else AstraWaveColors.Background)
+                                        .clickable { onSelect(row) }
+                                        .padding(8.dp),
+                                ) {
+                                    if (currentProgramme) {
+                                        Text("NOW", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelSmall)
+                                    }
                                     Text(programme.title, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                                     Text(v2FormatTime(ps), color = AstraWaveColors.TertiaryText, style = MaterialTheme.typography.labelSmall)
                                 }
