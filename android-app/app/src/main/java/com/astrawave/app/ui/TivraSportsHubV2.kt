@@ -217,7 +217,7 @@ private fun SportsV2DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit
                 label,
                 color = if (active) Color.Black else AstraWaveColors.SecondaryText,
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.background(if (active) Color.White else AstraWaveColors.Surface)
+                modifier = Modifier.background(if (active) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
                     .clickable { onSelect(date) }.padding(horizontal = 13.dp, vertical = 8.dp),
             )
         }
@@ -278,7 +278,7 @@ private fun SportsV2MatchupPanel(item: SportsGuideItem?, modifier: Modifier, con
                     "WATCH  ▶",
                     color = Color.Black,
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.background(Color.White).clickable {
+                    modifier = Modifier.background(AstraWaveColors.AccentStrong).clickable {
                         openSportsFullScreen(context, item.resolution?.candidates.orEmpty().map { it.streamUrl }.filter(String::isNotBlank))
                     }.padding(horizontal = 16.dp, vertical = 11.dp),
                 )
