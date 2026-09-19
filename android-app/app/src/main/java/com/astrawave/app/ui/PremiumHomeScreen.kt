@@ -337,24 +337,40 @@ private fun HomeFallbackHero() {
 
 @Composable
 private fun HomeSportsHero(item: SportsGuideItem, onWatch: (SportsGuideItem) -> Unit) {
-    AstraWaveFocusableCard(Modifier.fillMaxWidth().clickable { onWatch(item) }) {
-        Box(
-            Modifier.fillMaxWidth().height(390.dp)
-                .background(
-                    Brush.verticalGradient(listOf(AstraWaveColors.SurfaceFocus, AstraWaveColors.BackgroundRaised, AstraWaveColors.Background)),
-                    RoundedCornerShape(26.dp),
+    val phone = LocalAstraWaveDeviceClass.current == AstraWaveDeviceClass.PHONE
+    Box(
+        Modifier.fillMaxWidth()
+            .height(if (phone) 420.dp else 500.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        AstraWaveColors.SurfaceFocus.copy(alpha = 0.68f),
+                        AstraWaveColors.BackgroundRaised.copy(alpha = 0.92f),
+                        AstraWaveColors.Background,
+                    ),
                 ),
+            )
+            .clickable { onWatch(item) },
+    ) {
+        Column(
+            Modifier.align(Alignment.BottomStart)
+                .padding(horizontal = if (phone) 18.dp else 34.dp, vertical = if (phone) 24.dp else 38.dp)
+                .width(if (phone) 350.dp else 760.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            Column(Modifier.align(Alignment.BottomStart).padding(30.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("● LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
-                Text(item.event.name, color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.displayLarge, maxLines = 2)
-                Text(
-                    listOfNotNull(item.event.league, item.watchCandidate?.channelName).joinToString(" • "),
-                    color = AstraWaveColors.SecondaryText,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text("▶ Watch", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.titleMedium)
-            }
+            Text("● LIVE NOW", color = AstraWaveColors.Live, style = MaterialTheme.typography.labelLarge)
+            Text(
+                item.event.name,
+                color = AstraWaveColors.PrimaryText,
+                style = if (phone) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
+                maxLines = 2,
+            )
+            Text(
+                listOfNotNull(item.event.league, item.watchCandidate?.channelName).joinToString(" • "),
+                color = AstraWaveColors.SecondaryText,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text("WATCH  ▶", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -383,7 +399,7 @@ private fun HomeDiscoveryHero(item: AstraWaveMetadataGateway.Item, onOpen: (Astr
             }
         }
     }
-    if (phone) hero() else AstraWaveFocusableCard(Modifier.fillMaxWidth()) { hero() }
+    hero()
 }
 
 @Composable
@@ -423,7 +439,7 @@ private fun HomeHero(progress: LocalLibraryStore.PlaybackProgress, onOpen: (Libr
             }
         }
     }
-    if (phone) hero() else AstraWaveFocusableCard(Modifier.fillMaxWidth()) { hero() }
+    hero()
 }
 
 @Composable
