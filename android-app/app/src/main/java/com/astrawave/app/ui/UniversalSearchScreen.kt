@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -147,11 +148,19 @@ fun UniversalSearchScreen(profileId: String = "default") {
         contentPadding = PaddingValues(horizontal = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 24.dp, vertical = if (device == AstraWaveDeviceClass.PHONE) 8.dp else 20.dp),
         verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 10.dp else 14.dp),
     ) {
-        if (device != AstraWaveDeviceClass.PHONE) {
-            item {
-                AstraWavePageHeader(
-                    title = if (isKids) "Kids Search" else "Search",
-                    subtitle = if (isKids) "Find movies and shows allowed for this profile." else "Find movies, shows, live TV, sports, music and your own media.",
+        item {
+            Column(Modifier.fillMaxWidth().padding(top = if (device == AstraWaveDeviceClass.PHONE) 4.dp else 10.dp)) {
+                Text(
+                    if (isKids) "KIDS SEARCH" else "SEARCH",
+                    color = AstraWaveColors.PrimaryText,
+                    style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
+                    fontWeight = FontWeight.Black,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (isKids) "Movies and shows approved for this profile." else "One search across movies, shows, live TV, sports, audio and your media.",
+                    color = AstraWaveColors.TertiaryText,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
@@ -180,9 +189,18 @@ fun UniversalSearchScreen(profileId: String = "default") {
         }
 
         item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(filters) { filter ->
-                    FilterChip(selected = selectedFilter == filter, onClick = { selectedFilter = filter }, label = { Text(filter.label) })
+                    val active = selectedFilter == filter
+                    Text(
+                        filter.label.uppercase(),
+                        color = if (active) Color.Black else AstraWaveColors.SecondaryText,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier
+                            .background(if (active) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
+                            .clickable { selectedFilter = filter }
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                    )
                 }
             }
         }
