@@ -55,13 +55,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val AstraWaveColors.Background = Color(0xFF080A0F)
-private val AstraWaveColors.BackgroundRaised = Color(0xFF141924)
-private val AstraWaveColors.PrimaryText = Color(0xFFF7F8FB)
-private val AstraWaveColors.SecondaryText = Color(0xFFA7AEBB)
-private val DetailsAccent = Color(0xFFF7F8FB)
-private val AstraWaveColors.Success = Color(0xFF39D98A)
-
 class TitleDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
