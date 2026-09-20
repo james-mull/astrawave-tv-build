@@ -107,7 +107,7 @@ private fun PremiumVodDetailScreen(
     val tmdbId = remember(sourceId) { sourceId?.takeIf { it.startsWith("tmdb:") }?.substringAfterLast(':')?.toLongOrNull() }
     val seriesMode = mediaType.equals("SERIES", true) || mediaType.equals("TV", true)
     val pagePadding = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 34.dp
-    val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 430.dp else 590.dp
+    val heroHeight = if (device == AstraWaveDeviceClass.PHONE) 420.dp else 520.dp
     val heroTextWidth = if (device == AstraWaveDeviceClass.PHONE) 340.dp else 760.dp
 
     var details by remember { mutableStateOf<TmdbTitleDetails?>(null) }
@@ -219,7 +219,7 @@ private fun PremiumVodDetailScreen(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(AstraWaveColors.Background)) {
         Box(Modifier.fillMaxWidth().height(heroHeight)) {
-            AstraWaveArtwork(title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop)
+            AstraWaveArtwork(title, Modifier.fillMaxSize(), AstraWaveArtworkKind.Backdrop, flat = true)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(
@@ -240,7 +240,7 @@ private fun PremiumVodDetailScreen(
                     title,
                     color = AstraWaveColors.PrimaryText,
                     style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.width(heroTextWidth),
