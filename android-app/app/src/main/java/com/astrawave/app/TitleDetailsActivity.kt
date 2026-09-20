@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -42,16 +43,24 @@ import com.astrawave.app.data.TvDetailContextRepository
 import com.astrawave.app.data.UnifiedVodSourceRepository
 import com.astrawave.app.data.VodPlaybackCoordinator
 import com.astrawave.app.data.VodPlaybackRequest
+import com.astrawave.app.ui.AstraWaveArtwork
+import com.astrawave.app.ui.AstraWaveArtworkKind
+import com.astrawave.app.ui.AstraWaveColors
+import com.astrawave.app.ui.AstraWaveDeviceClass
+import com.astrawave.app.ui.AstraWavePrimaryButton
+import com.astrawave.app.ui.AstraWaveSecondaryButton
+import com.astrawave.app.ui.AstraWaveTheme
+import com.astrawave.app.ui.LocalAstraWaveDeviceClass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val DetailsBg = Color(0xFF080A0F)
-private val DetailsPanel = Color(0xFF141924)
-private val DetailsPrimary = Color(0xFFF7F8FB)
-private val DetailsMuted = Color(0xFFA7AEBB)
+private val AstraWaveColors.Background = Color(0xFF080A0F)
+private val AstraWaveColors.BackgroundRaised = Color(0xFF141924)
+private val AstraWaveColors.PrimaryText = Color(0xFFF7F8FB)
+private val AstraWaveColors.SecondaryText = Color(0xFFA7AEBB)
 private val DetailsAccent = Color(0xFFF7F8FB)
-private val DetailsSuccess = Color(0xFF39D98A)
+private val AstraWaveColors.Success = Color(0xFF39D98A)
 
 class TitleDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,8 +74,8 @@ class TitleDetailsActivity : ComponentActivity() {
         val tmdbId = parseTmdbId(sourceId)
 
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = DetailsAccent, background = DetailsBg, surface = DetailsPanel)) {
-                Surface(color = DetailsBg) {
+            AstraWaveTheme {
+                Surface(color = AstraWaveColors.Background) {
                     TitleDetailsScreen(
                         title = title,
                         year = year,
@@ -138,6 +147,7 @@ private fun TitleDetailsScreen(
     onPlay: (List<String>, StremioEpisode?) -> Unit,
 ) {
     val context = LocalContext.current
+    val device = LocalAstraWaveDeviceClass.current
     val sourceRepository = remember { UnifiedVodSourceRepository(context) }
     val quickPlayCoordinator = remember { VodPlaybackCoordinator(context) }
     val quickPlayScope = rememberCoroutineScope()
@@ -314,81 +324,140 @@ private fun TitleDetailsScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(AstraWaveColors.Background),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = {
-                if (sourcesMode) {
-                    sourcesMode = false
-                    selectedEpisode = null
-                    sources = emptyList()
-                    error = null
-                } else onBack()
-            }) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Column(Modifier.weight(1f)) {
-                Text(title, color = DetailsPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Box(
+            Modifier.fillMaxWidth().height(if (device == AstraWaveDeviceClass.PHONE) 420.dp else 520.dp),
+        ) {
+            AstraWaveArtwork(
+                title = title,
+                modifier = Modifier.fillMaxSize(),
+                kind = AstraWaveArtworkKind.Backdrop,
+                flat = true,
+            )
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        listOf(
+                            AstraWaveColors.Background.copy(alpha = 0.06f),
+                            AstraWaveColors.Background.copy(alpha = 0.22f),
+                            AstraWaveColors.Background.copy(alpha = 0.72f),
+                            AstraWaveColors.Background,
+                        ),
+                    ),
+                ),
+            )
+            IconButton(
+                onClick = {
+                    if (sourcesMode) {
+                        sourcesMode = false
+                        selectedEpisode = null
+                        sources = emptyList()
+                        error = null
+                    } else onBack()
+                },
+                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(8.dp),
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = AstraWaveColors.PrimaryText)
+            }
+
+            Column(
+                Modifier.align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 18.dp else 34.dp, vertical = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
                 Text(
-                    when {
-                        selectedEpisode != null -> "Season ${selectedEpisode!!.season} • Episode ${selectedEpisode!!.episode} • ${selectedEpisode!!.title}"
-                        sourcesMode && seriesMode -> "Episodes"
-                        sourcesMode -> "Watch Options"
-                        details?.releaseDate?.isNotBlank() == true -> details!!.releaseDate.orEmpty()
-                        year != null -> year.toString()
-                        else -> if (seriesMode) "Series details" else "Movie details"
-                    },
-                    color = DetailsMuted,
-                    fontSize = 13.sp,
+                    title,
+                    color = AstraWaveColors.PrimaryText,
+                    style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displayLarge,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.width(if (device == AstraWaveDeviceClass.PHONE) 350.dp else 760.dp),
                 )
+
+                val detailMeta = listOfNotNull(
+                    details?.releaseDate?.take(4) ?: year?.toString(),
+                    details?.runtimeMinutes?.let { "${it} min" },
+                    details?.genres?.take(3)?.joinToString(" • ")?.takeIf { it.isNotBlank() },
+                ).joinToString("  •  ")
+                Text(
+                    when {
+                        selectedEpisode != null -> "S${selectedEpisode!!.season} E${selectedEpisode!!.episode}  •  ${selectedEpisode!!.title}"
+                        detailMeta.isNotBlank() -> detailMeta
+                        seriesMode -> "Series"
+                        else -> "Movie"
+                    },
+                    color = AstraWaveColors.SecondaryText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                details?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                    Text(
+                        overview,
+                        color = AstraWaveColors.SecondaryText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = if (device == AstraWaveDeviceClass.PHONE) 2 else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(if (device == AstraWaveDeviceClass.PHONE) 350.dp else 760.dp),
+                    )
+                }
+
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (!seriesMode) {
+                        AstraWavePrimaryButton(
+                            label = if (quickPlayLoading) "Finding…" else "Play",
+                            onClick = { playBest() },
+                            enabled = !quickPlayLoading,
+                        )
+                    }
+                    if (hasEpisodeCatalog && firstUnwatched != null) {
+                        val saved = progressByEpisode[firstUnwatched.id]
+                        val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
+                        AstraWavePrimaryButton(
+                            label = if (quickPlayLoading) "Finding…" else "$prefix S${firstUnwatched.season}E${firstUnwatched.episode}",
+                            onClick = { playBest(firstUnwatched) },
+                            enabled = !quickPlayLoading,
+                        )
+                    }
+                    AstraWaveSecondaryButton(
+                        if (hasEpisodeCatalog) "Episodes & Sources" else if (sourcesMode) "Hide Sources" else "Watch Options",
+                    ) {
+                        if (sourcesMode) {
+                            sourcesMode = false
+                            selectedEpisode = null
+                            sources = emptyList()
+                            error = null
+                        } else sourcesMode = true
+                    }
+                    if (sourcesMode) {
+                        AstraWaveSecondaryButton("Refresh") { refreshToken++ }
+                    }
+                }
+                quickPlayError?.let {
+                    Text(it, color = AstraWaveColors.Warning, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                }
             }
-            if (sourcesMode) IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh watch options") }
         }
 
         if (!sourcesMode) {
-            if (!seriesMode) {
-                Button(
-                    onClick = { playBest() },
-                    enabled = !quickPlayLoading,
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(6.dp),
-                ) {
-                    Text(if (quickPlayLoading) "Finding a Stream…" else "▶ Play", fontWeight = FontWeight.Bold)
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = if (device == AstraWaveDeviceClass.PHONE) 18.dp else 34.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                when {
+                    detailsLoading -> LoadingRow("Loading title details…")
+                    details != null -> PremiumInfoPanel(details = details!!, seriesMode = seriesMode)
+                    else -> InfoPanel(title = title, year = year, seriesMode = seriesMode)
                 }
-            }
-
-            if (hasEpisodeCatalog && firstUnwatched != null) {
-                Button(
-                    onClick = { playBest(firstUnwatched) },
-                    enabled = !quickPlayLoading,
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(6.dp),
-                ) {
-                    val saved = progressByEpisode[firstUnwatched.id]
-                    val prefix = if (saved != null && saved.positionMs > 0 && !saved.completed) "Continue" else "Start"
-                    Text(
-                        if (quickPlayLoading) "Finding Episode…"
-                        else "$prefix • S${firstUnwatched.season}E${firstUnwatched.episode} ${firstUnwatched.title}",
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-
-            OutlinedButton(
-                onClick = { sourcesMode = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(6.dp),
-            ) { Text(if (hasEpisodeCatalog) "Episodes & Watch Options" else "Watch Options", fontWeight = FontWeight.Bold) }
-            quickPlayError?.let { Text(it, color = DetailsMuted, fontSize = 12.sp) }
-
-            when {
-                detailsLoading -> LoadingRow("Loading title details…")
-                details != null -> PremiumInfoPanel(details = details!!, seriesMode = seriesMode)
-                else -> InfoPanel(title = title, year = year, seriesMode = seriesMode)
-            }
 
             if (!seriesMode) {
                 when {
@@ -430,7 +499,7 @@ private fun TitleDetailsScreen(
             } else {
                 "Choose from the available playback options below. AstraWave puts its recommended option first."
             },
-            color = DetailsMuted,
+            color = AstraWaveColors.SecondaryText,
             fontSize = 14.sp,
             lineHeight = 20.sp,
         )
@@ -458,10 +527,10 @@ private fun TitleDetailsScreen(
                 )
                 else -> {
                     val allUrls = sources.map { it.link.url }.distinct()
-                    Text("Watch Options", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Watch Options", color = AstraWaveColors.PrimaryText, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "${allUrls.size} option${if (allUrls.size == 1) "" else "s"} available • backups used automatically",
-                        color = DetailsSuccess,
+                        color = AstraWaveColors.Success,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -478,9 +547,9 @@ private fun TitleDetailsScreen(
 @Composable
 private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.ListMembership>, profileId: String) {
     val context = LocalContext.current
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("In These AstraWave Lists", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("Tap any list to jump directly into that collection.", color = DetailsMuted, fontSize = 12.sp)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("In These AstraWave Lists", color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Tap any list to jump directly into that collection.", color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         lists.forEach { item ->
             Row(
                 Modifier.fillMaxWidth().clickable {
@@ -497,8 +566,8 @@ private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.Li
             ) {
                 Text(item.title, color = DetailsAccent, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.42f))
                 Column(Modifier.weight(0.58f)) {
-                    Text("${item.category} • Open list →", color = DetailsPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    if (item.reason.isNotBlank()) Text(item.reason, color = DetailsMuted, fontSize = 11.sp)
+                    Text("${item.category} • Open list →", color = AstraWaveColors.PrimaryText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (item.reason.isNotBlank()) Text(item.reason, color = AstraWaveColors.SecondaryText, fontSize = 11.sp)
                 }
             }
         }
@@ -508,9 +577,9 @@ private fun MovieListMembershipPanel(lists: List<MovieDetailContextRepository.Li
 @Composable
 private fun TvListMembershipPanel(lists: List<TvDetailContextRepository.ListMembership>, profileId: String) {
     val context = LocalContext.current
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("In These AstraWave TV Lists", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("Genre, creator, network, era and universe lists are directly browsable.", color = DetailsMuted, fontSize = 12.sp)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("In These AstraWave TV Lists", color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Genre, creator, network, era and universe lists are directly browsable.", color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         lists.forEach { item ->
             Row(
                 Modifier.fillMaxWidth().clickable {
@@ -527,8 +596,8 @@ private fun TvListMembershipPanel(lists: List<TvDetailContextRepository.ListMemb
             ) {
                 Text(item.title, color = DetailsAccent, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.42f))
                 Column(Modifier.weight(0.58f)) {
-                    Text("${item.category} • Open list →", color = DetailsPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    if (item.reason.isNotBlank()) Text(item.reason, color = DetailsMuted, fontSize = 11.sp)
+                    Text("${item.category} • Open list →", color = AstraWaveColors.PrimaryText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (item.reason.isNotBlank()) Text(item.reason, color = AstraWaveColors.SecondaryText, fontSize = 11.sp)
                 }
             }
         }
@@ -537,29 +606,29 @@ private fun TvListMembershipPanel(lists: List<TvDetailContextRepository.ListMemb
 
 @Composable
 private fun MovieCollectionPanel(collection: MovieDetailContextRepository.MovieCollection, currentMovieId: String?, profileId: String) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Movie Series / Collection", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Movie Series / Collection", color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(collection.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text("${collection.parts.size} movie${if (collection.parts.size == 1) "" else "s"} • official collection • release order", color = DetailsMuted, fontSize = 12.sp)
+        Text("${collection.parts.size} movie${if (collection.parts.size == 1) "" else "s"} • official collection • release order", color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         MovieCards(collection.parts, currentMovieId, profileId)
     }
 }
 
 @Composable
 private fun MovieUniversePanel(universe: MovieDetailContextRepository.MovieUniverse, currentMovieId: String?, profileId: String) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Connected Universe", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Connected Universe", color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(universe.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text(if (universe.editorial) "AstraWave editorial universe grouping • broader than one official TMDB collection" else "Connected collection", color = DetailsMuted, fontSize = 12.sp)
+        Text(if (universe.editorial) "AstraWave editorial universe grouping • broader than one official TMDB collection" else "Connected collection", color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         MovieCards(universe.parts, currentMovieId, profileId)
     }
 }
 
 @Composable
 private fun RelatedMoviePanel(title: String, subtitle: String, movies: List<MovieDetailContextRepository.CollectionMovie>, profileId: String) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = DetailsMuted, fontSize = 12.sp)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         MovieCards(movies, null, profileId)
     }
 }
@@ -587,9 +656,9 @@ private fun MovieCards(movies: List<MovieDetailContextRepository.CollectionMovie
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().height(210.dp).background(Color(0xFF202736), RoundedCornerShape(12.dp)),
                 )
-                Text("${index + 1}. ${movie.title}", color = DetailsPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("${index + 1}. ${movie.title}", color = AstraWaveColors.PrimaryText, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val year = movie.releaseDate?.take(4)
-                Text(listOfNotNull(year, if (movie.id == currentMovieId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" }, color = if (movie.id == currentMovieId) DetailsSuccess else DetailsMuted, fontSize = 11.sp)
+                Text(listOfNotNull(year, if (movie.id == currentMovieId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" }, color = if (movie.id == currentMovieId) AstraWaveColors.Success else AstraWaveColors.SecondaryText, fontSize = 11.sp)
             }
         }
     }
@@ -598,9 +667,9 @@ private fun MovieCards(movies: List<MovieDetailContextRepository.CollectionMovie
 @Composable
 private fun TvNetworksPanel(networks: List<TvDetailContextRepository.Network>, profileId: String) {
     val context = LocalContext.current
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Networks & Studios", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("Tap a network to browse more series associated with it.", color = DetailsMuted, fontSize = 12.sp)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Networks & Studios", color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("Tap a network to browse more series associated with it.", color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             networks.forEach { network ->
                 Column(
@@ -627,19 +696,19 @@ private fun TvNetworksPanel(networks: List<TvDetailContextRepository.Network>, p
 
 @Composable
 private fun TvUniversePanel(universe: TvDetailContextRepository.Universe, currentShowId: String?, profileId: String) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Connected Universe / Spinoffs", color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Connected Universe / Spinoffs", color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text(universe.name, color = DetailsAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text("AstraWave editorial relationship grouping for connected series and spinoffs.", color = DetailsMuted, fontSize = 12.sp)
+        Text("AstraWave editorial relationship grouping for connected series and spinoffs.", color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         ShowCards(universe.parts, currentShowId, profileId)
     }
 }
 
 @Composable
 private fun RelatedShowPanel(title: String, subtitle: String, shows: List<TvDetailContextRepository.ShowItem>, profileId: String) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, color = DetailsPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = DetailsMuted, fontSize = 12.sp)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = AstraWaveColors.PrimaryText, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         ShowCards(shows, null, profileId)
     }
 }
@@ -667,10 +736,10 @@ private fun ShowCards(shows: List<TvDetailContextRepository.ShowItem>, currentSh
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().height(210.dp).background(Color(0xFF202736), RoundedCornerShape(12.dp)),
                 )
-                Text(show.title, color = DetailsPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(show.title, color = AstraWaveColors.PrimaryText, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
                     listOfNotNull(show.firstAirDate?.take(4), if (show.id == currentShowId) "CURRENT" else null).joinToString(" • ").ifBlank { "Open details" },
-                    color = if (show.id == currentShowId) DetailsSuccess else DetailsMuted,
+                    color = if (show.id == currentShowId) AstraWaveColors.Success else AstraWaveColors.SecondaryText,
                     fontSize = 11.sp,
                 )
             }
@@ -680,37 +749,37 @@ private fun ShowCards(shows: List<TvDetailContextRepository.ShowItem>, currentSh
 
 @Composable
 private fun PremiumInfoPanel(details: TmdbTitleDetails, seriesMode: Boolean) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(if (seriesMode) "SERIES" else "MOVIE", color = DetailsAccent, fontSize = 11.sp, fontWeight = FontWeight.Black)
-        Text(details.title, color = DetailsPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(details.title, color = AstraWaveColors.PrimaryText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         val metadata = buildList {
             details.releaseDate?.takeIf { it.isNotBlank() }?.let { add(it.take(4)) }
             details.runtimeMinutes?.let { add("${it} min") }
             if (details.genres.isNotEmpty()) add(details.genres.take(3).joinToString(" • "))
         }
-        if (metadata.isNotEmpty()) Text(metadata.joinToString("  •  "), color = DetailsMuted, fontSize = 13.sp)
-        Text(details.overview.ifBlank { "No synopsis is available yet." }, color = DetailsPrimary, fontSize = 14.sp, lineHeight = 21.sp)
+        if (metadata.isNotEmpty()) Text(metadata.joinToString("  •  "), color = AstraWaveColors.SecondaryText, fontSize = 13.sp)
+        Text(details.overview.ifBlank { "No synopsis is available yet." }, color = AstraWaveColors.PrimaryText, fontSize = 14.sp, lineHeight = 21.sp)
         val creators = details.crew.take(4)
         if (creators.isNotEmpty()) {
-            Text(creators.joinToString("  •  ") { person -> listOfNotNull(person.name, person.role).joinToString(" — ") }, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(creators.joinToString("  •  ") { person -> listOfNotNull(person.name, person.role).joinToString(" — ") }, color = AstraWaveColors.SecondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (details.cast.isNotEmpty()) {
-            Text("Top Cast", color = DetailsPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(details.cast.take(8).joinToString("  •  ") { it.name }, color = DetailsMuted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text("Top Cast", color = AstraWaveColors.PrimaryText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(details.cast.take(8).joinToString("  •  ") { it.name }, color = AstraWaveColors.SecondaryText, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
 private fun InfoPanel(title: String, year: Int?, seriesMode: Boolean) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(20.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(20.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(if (seriesMode) "SERIES" else "MOVIE", color = DetailsAccent, fontSize = 11.sp, fontWeight = FontWeight.Black)
-        Text(title, color = DetailsPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        year?.let { Text(it.toString(), color = DetailsMuted, fontSize = 14.sp) }
+        Text(title, color = AstraWaveColors.PrimaryText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        year?.let { Text(it.toString(), color = AstraWaveColors.SecondaryText, fontSize = 14.sp) }
         Text(
             if (seriesMode) "Browse episodes, resume where you left off, or let AstraWave continue with the next unfinished episode."
             else "Press Play for one-tap viewing, or open Watch Options when you want to choose manually.",
-            color = DetailsMuted,
+            color = AstraWaveColors.SecondaryText,
             fontSize = 14.sp,
             lineHeight = 20.sp,
         )
@@ -721,7 +790,7 @@ private fun InfoPanel(title: String, year: Int?, seriesMode: Boolean) {
 private fun LoadingRow(label: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-        Text(label, color = DetailsPrimary)
+        Text(label, color = AstraWaveColors.PrimaryText)
     }
 }
 
@@ -737,9 +806,9 @@ private fun SeriesEpisodeBrowser(
     val currentSeasonEpisodes = episodes.filter { it.season == selectedSeason }
     val currentSeasonWatched = currentSeasonEpisodes.count { progress[it.id]?.completed == true }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Season $selectedSeason", color = DetailsPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Season $selectedSeason", color = AstraWaveColors.PrimaryText, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         if (currentSeasonEpisodes.isNotEmpty()) {
-            Text("$currentSeasonWatched of ${currentSeasonEpisodes.size} episodes watched", color = DetailsMuted, fontSize = 12.sp)
+            Text("$currentSeasonWatched of ${currentSeasonEpisodes.size} episodes watched", color = AstraWaveColors.SecondaryText, fontSize = 12.sp)
         }
     }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -755,7 +824,7 @@ private fun SeriesEpisodeBrowser(
         val saved = progress[episode.id]
         val percent = saved?.takeIf { it.durationMs > 0L }?.let { ((it.positionMs * 100L) / it.durationMs).coerceIn(0L, 100L) }
         Row(
-            Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(16.dp)).clickable { onEpisode(episode) }.padding(12.dp),
+            Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(16.dp)).clickable { onEpisode(episode) }.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -763,16 +832,16 @@ private fun SeriesEpisodeBrowser(
                 AsyncImage(model = episode.thumbnail, contentDescription = episode.title, contentScale = ContentScale.Crop, modifier = Modifier.width(150.dp).height(84.dp).background(Color(0xFF202736), RoundedCornerShape(10.dp)))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Episode ${episode.episode} • ${episode.title}", color = DetailsPrimary, fontWeight = FontWeight.Bold)
-                episode.released?.takeIf { it.isNotBlank() }?.let { Text(it.take(10), color = DetailsMuted, fontSize = 11.sp) }
-                episode.overview?.let { Text(it, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                Text("Episode ${episode.episode} • ${episode.title}", color = AstraWaveColors.PrimaryText, fontWeight = FontWeight.Bold)
+                episode.released?.takeIf { it.isNotBlank() }?.let { Text(it.take(10), color = AstraWaveColors.SecondaryText, fontSize = 11.sp) }
+                episode.overview?.let { Text(it, color = AstraWaveColors.SecondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 Text(
                     when {
                         saved?.completed == true -> "Watched • Play again"
                         percent != null && percent > 0 -> "Resume • $percent% watched"
                         else -> "Play episode"
                     },
-                    color = if (percent != null && percent > 0) DetailsSuccess else DetailsAccent,
+                    color = if (percent != null && percent > 0) AstraWaveColors.Success else DetailsAccent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -780,7 +849,7 @@ private fun SeriesEpisodeBrowser(
                     LinearProgressIndicator(
                         progress = { percent / 100f },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
-                        color = DetailsSuccess,
+                        color = AstraWaveColors.Success,
                         trackColor = Color(0xFF2A3140),
                     )
                 }
@@ -791,16 +860,16 @@ private fun SeriesEpisodeBrowser(
 
 @Composable
 private fun EmptyPanel(title: String, message: String) {
-    Column(Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(18.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, color = DetailsPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text(message, color = DetailsMuted, fontSize = 13.sp)
+    Column(Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = AstraWaveColors.PrimaryText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(message, color = AstraWaveColors.SecondaryText, fontSize = 13.sp)
     }
 }
 
 @Composable
 private fun SourceCard(index: Int, source: ResolvedSource, onPlay: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().background(DetailsPanel, RoundedCornerShape(18.dp)).clickable { onPlay() }.padding(17.dp),
+        Modifier.fillMaxWidth().background(AstraWaveColors.BackgroundRaised, RoundedCornerShape(18.dp)).clickable { onPlay() }.padding(17.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -809,12 +878,12 @@ private fun SourceCard(index: Int, source: ResolvedSource, onPlay: () -> Unit) {
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(source.link.sourceName, color = DetailsPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(source.link.sourceName, color = AstraWaveColors.PrimaryText, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (index == 0) Text("RECOMMENDED", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(DetailsAccent, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
             }
             val details = listOfNotNull(source.link.quality, source.contentType, source.link.licenseLabel).joinToString(" • ")
-            Text(details, color = DetailsMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("Ready to watch • backups available", color = DetailsSuccess, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(details, color = AstraWaveColors.SecondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("Ready to watch • backups available", color = AstraWaveColors.Success, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
