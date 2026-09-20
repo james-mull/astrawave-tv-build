@@ -237,9 +237,9 @@ fun MyAstraWaveHub(
                         label,
                         color = AstraWaveColors.PrimaryText,
                         style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.background(AstraWaveColors.Surface)
+                        modifier = Modifier
                             .clickable { destinationLauncher(route) }
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                            .padding(horizontal = 7.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -263,13 +263,12 @@ fun MyAstraWaveHub(
             Text("My Lists", color = AstraWaveColors.PrimaryText, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.weight(1f))
             Row(
-                Modifier.background(AstraWaveColors.SurfaceRaised, RoundedCornerShape(12.dp))
-                    .clickable { createList = true }.padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.clickable { createList = true }.padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Default.Add, null, tint = AstraWaveColors.Accent, modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(5.dp))
-                Text("New list", color = AstraWaveColors.Accent, style = MaterialTheme.typography.labelLarge)
+                Text("New list", color = AstraWaveColors.AccentStrong, style = MaterialTheme.typography.labelLarge)
             }
         }
 
