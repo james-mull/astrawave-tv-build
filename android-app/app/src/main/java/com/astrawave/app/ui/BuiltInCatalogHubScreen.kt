@@ -80,7 +80,7 @@ fun BuiltInCatalogHubScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(AstraWaveColors.Background),
         contentPadding = PaddingValues(bottom = 36.dp),
-        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 10.dp else 18.dp),
+        verticalArrangement = Arrangement.spacedBy(if (device == AstraWaveDeviceClass.PHONE) 12.dp else 22.dp),
     ) {
         item("cinematic-header") {
             Row(
@@ -106,18 +106,14 @@ fun BuiltInCatalogHubScreen(
         }
 
         if (!manageMode) {
-            catalogSections(visible, mediaType).forEach { (section, definitions) ->
-                item("section-$section") {
-                    Text(
-                        section,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
-                        color = AstraWaveColors.PrimaryText,
-                        style = if (device == AstraWaveDeviceClass.PHONE) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
+            catalogSections(visible, mediaType).forEach { (_, definitions) ->
                 items(definitions, key = { "rail-${it.id}" }) { definition ->
-                    Column(Modifier.padding(start = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp)) {
+                    Column(
+                        Modifier.padding(
+                            start = if (device == AstraWaveDeviceClass.PHONE) 16.dp else 22.dp,
+                            top = if (device == AstraWaveDeviceClass.PHONE) 2.dp else 4.dp,
+                        ),
+                    ) {
                         CatalogContentShelf(definition = definition, profileId = profileId)
                     }
                 }
