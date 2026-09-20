@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -189,18 +188,24 @@ fun UniversalSearchScreen(profileId: String = "default") {
         }
 
         item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(filters) { filter ->
                     val active = selectedFilter == filter
-                    Text(
-                        filter.label.uppercase(),
-                        color = if (active) Color.Black else AstraWaveColors.SecondaryText,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier
-                            .background(if (active) AstraWaveColors.AccentStrong else AstraWaveColors.Surface)
-                            .clickable { selectedFilter = filter }
-                            .padding(horizontal = 14.dp, vertical = 9.dp),
-                    )
+                    Column(
+                        Modifier.clickable { selectedFilter = filter }.padding(horizontal = 5.dp, vertical = 5.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            filter.label.uppercase(),
+                            color = if (active) AstraWaveColors.PrimaryText else AstraWaveColors.TertiaryText,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Box(
+                            Modifier.width(if (active) 28.dp else 0.dp).height(2.dp)
+                                .background(if (active) AstraWaveColors.FocusRing else Color.Transparent),
+                        )
+                    }
                 }
             }
         }
@@ -214,7 +219,15 @@ fun UniversalSearchScreen(profileId: String = "default") {
             }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(recents) { recent -> FilterChip(selected = false, onClick = { query = recent; searchNonce++ }, label = { Text(recent) }) }
+                    items(recents) { recent ->
+                        Text(
+                            recent,
+                            color = AstraWaveColors.SecondaryText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.clickable { query = recent; searchNonce++ }
+                                .padding(horizontal = 6.dp, vertical = 7.dp),
+                        )
+                    }
                 }
             }
         }
@@ -223,7 +236,15 @@ fun UniversalSearchScreen(profileId: String = "default") {
             item { AstraWaveSectionHeader("Try Searching") }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(suggestions.take(10)) { suggestion -> FilterChip(selected = false, onClick = { query = suggestion; searchNonce++ }, label = { Text(suggestion) }) }
+                    items(suggestions.take(10)) { suggestion ->
+                        Text(
+                            suggestion,
+                            color = AstraWaveColors.SecondaryText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.clickable { query = suggestion; searchNonce++ }
+                                .padding(horizontal = 6.dp, vertical = 7.dp),
+                        )
+                    }
                 }
             }
         }
